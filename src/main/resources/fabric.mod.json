@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "takeitout",
+  "version": "${version}",
+  "name": "TakeItOut",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/takeitout/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "client": [
+      "net.maxbel.takeitout.client.TakeitoutClient"
+    ],
+    "main": [
+      "net.maxbel.takeitout.Takeitout"
+    ]
+  },
+  "mixins": [
+    "takeitout.mixins.json",
+    {
+      "config": "takeitout.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

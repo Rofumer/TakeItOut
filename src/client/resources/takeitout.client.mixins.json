@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.maxbel.takeitout.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "PickBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
