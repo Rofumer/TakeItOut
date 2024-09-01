@@ -11,15 +11,20 @@ extends SimpleInventory {
     protected final int SIZE;
 
     public ItemStackInventory(ItemStack stack, int SIZE) {
-        super((ItemStack[])ItemStackInventory.getStacks(stack, SIZE).toArray((Object[])new ItemStack[SIZE]));
+        super((ItemStack[])ItemStackInventory.getStacks(stack).toArray((Object[])new ItemStack[SIZE]));
         this.itemStack = stack;
         this.SIZE = SIZE;
     }
 
-    public static DefaultedList<Object> getStacks(ItemStack usedStack, int SIZE) {
+    public static DefaultedList<Object> getStacks(ItemStack usedStack) {
         DefaultedList<Object> itemStacks = DefaultedList.of();
         itemStacks.addAll(usedStack.get(DataComponentTypes.CONTAINER).stream().toList());
         return itemStacks;
+    }
+
+    public static ItemStackInventory getInventoryFromShulker(ItemStack stack) {
+
+        return new ItemStackInventory(stack, 27);
     }
 
 }

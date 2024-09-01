@@ -7,34 +7,15 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 
 public class Util {
-    public static int getShulkerWithStack(PlayerInventory playerInventory, ItemStack stack) {
-        for (int i = 0; i < InventoryHelper.getSize(playerInventory); ++i) {
-            ItemStack item = playerInventory.getStack(i);
 
-            if (isShulkerItem(item) && getSlotWithStack(ShulkerUtils.getInventoryFromShulker(item), stack) > -1) {
+    public static int getShulkerWithStack(PlayerInventory playerInventory, ItemStack stack) {
+        for (int i = 0; i < getSize(playerInventory); ++i) {
+            ItemStack item = playerInventory.getStack(i);
+            if (isShulkerItem(item) && getSlotWithStack(ItemStackInventory.getInventoryFromShulker(item), stack) > -1) {
                 return i;
             }
         }
         return -1;
-    }
-
-    public static int getHotBarSlot(PlayerInventory inventory, int shulkerSlot) {
-        int i;
-        for (i = 0; i < 9; ++i) {
-            if (!inventory.getStack(i).isEmpty()) continue;
-            return i;
-        }
-        if (inventory.selectedSlot != shulkerSlot) {
-            return inventory.selectedSlot;
-        }
-        for (i = 0; i < 9; ++i) {
-            if (inventory.getStack(i).hasEnchantments() || Util.isShulkerItem(inventory.getStack(i))) continue;
-            return i;
-        }
-        if (shulkerSlot == inventory.selectedSlot) {
-            return inventory.selectedSlot == 8 ? 0 : inventory.selectedSlot + 1;
-        }
-        return inventory.selectedSlot;
     }
 
     public static boolean isShulkerItem(ItemStack item) {
@@ -42,8 +23,7 @@ public class Util {
     }
 
     public static int getSlotWithStack(Inventory inventory, ItemStack stack) {
-
-        for (int i = 0; i < InventoryHelper.getSize(inventory); ++i) {
+        for (int i = 0; i < getSize(inventory); ++i) {
             if(inventory.getStack(i) == null) continue;
             if (inventory.getStack(i).isEmpty() || !Util.areItemsEqual(stack, inventory.getStack(i))) continue;
             return i;
@@ -53,6 +33,13 @@ public class Util {
 
     public static boolean areItemsEqual(ItemStack stack1, ItemStack stack2) {
         return stack1.getItem() == stack2.getItem() && ItemStack.areItemsEqual((ItemStack)stack1, (ItemStack)stack2);
+    }
+
+    public static int getSize(Inventory inventory) {
+        if (inventory instanceof PlayerInventory) {
+            return Math.min(36, inventory.size());
+        }
+        return inventory.size();
     }
 }
 
