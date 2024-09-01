@@ -13,7 +13,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
-
 import java.util.List;
 
 public class Takeitout implements ModInitializer {
