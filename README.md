@@ -1,0 +1,1 @@
+This utility picks a block from  a shulker by pressing the pick block button ( the mouse wheel by default). This mod also works with litematica schematics.  With litematica you can toggle on/off auto pick mode.
