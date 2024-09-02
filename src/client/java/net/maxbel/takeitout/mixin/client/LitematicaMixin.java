@@ -37,15 +37,13 @@ public class LitematicaMixin {
             if (world != null) {
                 BlockState state = world.getBlockState(pos);
                 ItemStack stack = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
+                if (mc.player.getInventory().getSlotWithStack(stack) != -1) {
+                    return;
+                }
                 int shulker = getShulkerWithStack(mc.player.getInventory(), stack);
-
-
-                if (shulker > -1) {
-
+                if (shulker != -1) {
                     int slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) mc.player.getInventory().getStack(shulker))), stack);
-
-                    if (slot > -1) {
-
+                    if (slot != -1) {
                         ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
                     }
                 }
