@@ -22,6 +22,13 @@ public class Util {
         return item.getItem() instanceof BlockItem && ((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock;
     }
 
+    public static int getSlotWithNoShulker(Inventory inventory) {
+        for (int i = getSize(inventory)-1; i >= 0; --i) {
+            if(isShulkerItem(inventory.getStack(i))) return i;
+        }
+        return -1;
+    }
+
     public static int getSlotWithStack(Inventory inventory, ItemStack stack) {
         for (int i = 0; i < getSize(inventory); ++i) {
             if(inventory.getStack(i) == null) continue;

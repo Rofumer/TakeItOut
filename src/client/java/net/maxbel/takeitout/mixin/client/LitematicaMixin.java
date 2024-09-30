@@ -16,11 +16,9 @@ import fi.dy.masa.litematica.materials.MaterialCache;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
-
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
-
 
 @Mixin(WorldUtils.class)
 public class LitematicaMixin {

@@ -15,7 +15,6 @@ import net.minecraft.item.ItemStack;
 import fi.dy.masa.litematica.util.WorldUtils;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
-
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import org.lwjgl.glfw.GLFW;
@@ -48,7 +47,6 @@ public class TakeitoutClient implements ClientModInitializer {
             }
         });
     }
-
 
     protected static int getSlotWithItem(ClientPlayerEntity player, Item item) {
         PlayerInventory inventory = player.getInventory();

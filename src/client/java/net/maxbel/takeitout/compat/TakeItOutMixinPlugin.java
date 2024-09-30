@@ -14,7 +14,8 @@ public class TakeItOutMixinPlugin implements IMixinConfigPlugin {
     private static final Supplier<Boolean> TRUE = () -> true;
 
     private static final Map<String, Supplier<Boolean>> CONDITIONS = ImmutableMap.of(
-            "net.maxbel.takeitout.mixin.client.LitematicaMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"));
+            "net.maxbel.takeitout.mixin.client.LitematicaMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
+            "net.maxbel.takeitout.mixin.client.MouseMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"));
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
