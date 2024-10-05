@@ -1,1 +1,3 @@
-This utility picks a block from  a shulker by pressing the pick block button ( the mouse wheel by default). This mod also works with litematica schematics.  With litematica you can toggle on/off auto pick mode.
+This utility picks a block from a shulker by pressing the pick block button ( the mouse wheel by default). This mod also works with litematica schematics. With litematica you can toggle on/off auto pick mode ("R" button by default). It will help you build very quick with any litematica printer. You can also pick block if you right click on it in the schematic (trying the place it down). Mod must be installed on a  server side too if you want to play with that on a public server! Or use added here plugin-companion for Paper/Purpur/Spigot/Bukkit servers.
+
+Take a look at the small Youtube Guide - https://www.youtube.com/watch?v=ZIMq0n-fFDM
