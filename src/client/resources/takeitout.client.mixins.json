@@ -8,7 +8,9 @@
     "PickBlockMixin",
     "LitematicaMixin",
     "MixinClientPlayerEntity",
-    "MouseMixin"
+    "MouseMixin",
+    "PrinterMixin",
+    "PrinterV1_21Mixin"
   ],
   "injectors": {
     "defaultRequire": 1

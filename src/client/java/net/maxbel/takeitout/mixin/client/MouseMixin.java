@@ -1,6 +1,8 @@
 package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.util.WorldUtils;
+import fi.dy.masa.litematica.world.SchematicWorldHandler;
+import fi.dy.masa.litematica.world.WorldSchematic;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import org.spongepowered.asm.mixin.Final;
@@ -21,8 +23,16 @@ public class MouseMixin {
             //System.out.println("Left Button");
         }
         if (button == 1 && action == 1) {
-            WorldUtils.doSchematicWorldPickBlock(false,client);
-            //System.out.println("Right Button");
+            try {
+                Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
+            } catch (ClassNotFoundException e) {
+                return;
+            }
+            WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
+            if (world != null) {
+                WorldUtils.doSchematicWorldPickBlock(false, client);
+                //System.out.println("Right Button");
+            }
         }
     }
 }

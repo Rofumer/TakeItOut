@@ -40,6 +40,8 @@ dependencies {
 
     modImplementation  "curse.maven:litematica-308892:5523424"
     //compileOnly("curse.maven:litematica-308892:5523424")
+    modImplementation files('libs/litematica-printer-1.21-3.5.0-sakura.4.jar')
+    modImplementation files('libs/litematica-printer-1.21-3.2.1.jar')
 
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
