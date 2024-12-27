@@ -22,7 +22,7 @@ import org.lwjgl.glfw.GLFW;
 public class TakeitoutClient implements ClientModInitializer {
 
     private static KeyBinding keyBinding;
-    private static boolean AUTOTAKEOUT;
+    public static boolean AUTOTAKEOUT;
 
     @Override
     public void onInitializeClient() {
@@ -70,9 +70,16 @@ public class TakeitoutClient implements ClientModInitializer {
             } catch (ClassNotFoundException e) {
                 return false;
             }
-        /*
-        if (!LitematicaMixinMod.PRINT_MODE.getBooleanValue() && !LitematicaMixinMod.PRINT.getKeybind().isPressed())
-            return false;*/
+
+            try {
+                Class.forName("me.aleksilassila.litematica.printer.Printer");
+                return false;
+            } catch (ClassNotFoundException e) {
+                //return false;
+            }
+
+            //System.out.println("CommonMixin");
+
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             if (worldSchematic == null) return false;
             MinecraftClient mc = MinecraftClient.getInstance();

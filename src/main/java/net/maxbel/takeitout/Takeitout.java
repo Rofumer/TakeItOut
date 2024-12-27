@@ -54,7 +54,7 @@ public class Takeitout implements ModInitializer {
                     ItemStack item;
                     for (int i = Math.min(36, player.getInventory().size())-1 ; i >=0; --i) {
                         item = player.getInventory().getStack(i);
-                        if(!(item.getItem() instanceof ToolItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
+                        if(!(item.getItem() instanceof MiningToolItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
                         {
                             ItemStack stackInShulker = (player.getInventory().getStack(shulkerSlot).get(DataComponentTypes.CONTAINER)).stream().toList().get(slotInShulker);
                             if (stackInShulker == null || stackInShulker.isEmpty()) {
