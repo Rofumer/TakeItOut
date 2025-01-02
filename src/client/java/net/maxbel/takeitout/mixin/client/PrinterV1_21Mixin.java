@@ -2,7 +2,7 @@ package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import me.aleksilassila.litematica.printer.SchematicBlockState;
+import me.aleksilassila.litematica.printer.v1_21.SchematicBlockState;
 import me.aleksilassila.litematica.printer.v1_21.Printer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
