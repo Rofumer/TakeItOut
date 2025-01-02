@@ -8,7 +8,8 @@
     "LitematicaMixin",
     "MixinClientPlayerEntity",
     "MouseMixin",
-    "PickBlockMixin"
+    "PickBlockMixin",
+    "UpdatedSlot"
   ],
   "injectors": {
     "defaultRequire": 1
