@@ -23,12 +23,13 @@ public class TakeitoutClient implements ClientModInitializer {
 
     private static KeyBinding keyBinding;
     public static boolean AUTOTAKEOUT;
+    public static ItemStack awaitingStack;
 
     @Override
     public void onInitializeClient() {
 
         AUTOTAKEOUT = false;
-
+        awaitingStack = ItemStack.EMPTY;
         keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "Toggle auto take out", // The translation key of the keybinding's name
                 InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
@@ -40,6 +41,7 @@ public class TakeitoutClient implements ClientModInitializer {
                 if (AUTOTAKEOUT) {
                     client.player.sendMessage(Text.literal("Auto Take Out is OFF"), false);
                     AUTOTAKEOUT = false;
+                    awaitingStack = ItemStack.EMPTY;
                 } else {
                     client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
                     AUTOTAKEOUT = true;
@@ -63,7 +65,7 @@ public class TakeitoutClient implements ClientModInitializer {
 
     public static boolean onGameTick() {
 
-        if (AUTOTAKEOUT) {
+        if (AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
 
             try {
                 Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
@@ -72,6 +74,12 @@ public class TakeitoutClient implements ClientModInitializer {
             }
             try {
                 Class.forName("me.aleksilassila.litematica.printer.Printer");
+                return false;
+            } catch (ClassNotFoundException e) {
+                //return false;
+            }
+
+            try {
                 Class.forName("me.aleksilassila.litematica.printer.v1_21.Printer");
                 return false;
             } catch (ClassNotFoundException e) {

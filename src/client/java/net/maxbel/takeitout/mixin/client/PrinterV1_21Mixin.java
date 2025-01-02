@@ -21,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.List;
 
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
+import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
@@ -36,14 +37,14 @@ public abstract class PrinterV1_21Mixin {
 
 
     @Inject(method = "me.aleksilassila.litematica.printer.v1_21.Printer.onGameTick", at = @At("TAIL"), remap = false)
-    public void method1_21Hook(CallbackInfoReturnable<Boolean> cir) {
+    public void method1_21HookTail(CallbackInfoReturnable<Boolean> cir) {
 
         //System.out.println("PrinterMixin");
 
-        if (TakeitoutClient.AUTOTAKEOUT) {
+        if (TakeitoutClient.AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
 
 
-            //System.out.println("PrinterMixin");
+            //System.out.println("PrinterMixin121");
 
             ItemStack itemStack;
             int slot;
@@ -53,6 +54,9 @@ public abstract class PrinterV1_21Mixin {
             for (BlockPos position : positions) {
                 SchematicBlockState state = new SchematicBlockState(this.player.getWorld(), worldSchematic, position);
                 if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
+                    continue;
+                }
+                if (!state.targetState.equals(state.currentState) && !state.currentState.isAir()) {
                     continue;
                 }
                 itemStack = new ItemStack(state.targetState.getBlock().asItem());
@@ -67,6 +71,16 @@ public abstract class PrinterV1_21Mixin {
                 }
             }
 
+        }
+
+    }
+
+    @Inject(method = "me.aleksilassila.litematica.printer.v1_21.Printer.onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
+    public void methodHookHead(CallbackInfoReturnable<Boolean> cir) {
+
+        if (awaitingStack != ItemStack.EMPTY) {
+            cir.setReturnValue(false);
+            cir.cancel();
         }
 
     }

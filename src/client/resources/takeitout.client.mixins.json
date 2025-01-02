@@ -5,12 +5,13 @@
   "plugin": "net.maxbel.takeitout.compat.TakeItOutMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "PickBlockMixin",
     "LitematicaMixin",
     "MixinClientPlayerEntity",
     "MouseMixin",
+    "PickBlockMixin",
     "PrinterMixin",
-    "PrinterV1_21Mixin"
+    "PrinterV1_21Mixin",
+    "UpdatedSlot"
   ],
   "injectors": {
     "defaultRequire": 1
