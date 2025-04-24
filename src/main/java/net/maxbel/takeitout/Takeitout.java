@@ -47,7 +47,8 @@ public class Takeitout implements ModInitializer {
                     itemStacks.addAll(shulker.get(DataComponentTypes.CONTAINER).stream().toList());
                     itemStacks.set(slotInShulker, ItemStack.EMPTY);
                     shulker.set(net.minecraft.component.DataComponentTypes.CONTAINER, net.minecraft.component.type.ContainerComponent.fromStacks(itemStacks));
-                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getSelectedStack());
+                    //player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getSelectedStack());
+                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getStackInHand(Hand.MAIN_HAND));
                     player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
 
                     /*ItemStack singleItem = stackInShulker.copy();
@@ -86,7 +87,8 @@ public class Takeitout implements ModInitializer {
                             itemStacks.addAll(shulker.get(DataComponentTypes.CONTAINER).stream().toList());
                             itemStacks.set(slotInShulker, item);
                             shulker.set(net.minecraft.component.DataComponentTypes.CONTAINER, net.minecraft.component.type.ContainerComponent.fromStacks(itemStacks));
-                            player.getInventory().setStack(i, player.getInventory().getSelectedStack());
+                            //player.getInventory().setStack(i, player.getInventory().getSelectedStack());
+                            player.getInventory().setStack(i, player.getStackInHand(Hand.MAIN_HAND));
                             player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
                             break;
                         }
