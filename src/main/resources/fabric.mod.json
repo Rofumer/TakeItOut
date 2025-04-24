@@ -28,7 +28,7 @@
     "fabricloader": ">=${loader_version}",
     "fabric": "*",
     "minecraft": [
-      "1.21.4"
+      "1.21.5"
     ]
   }
 }

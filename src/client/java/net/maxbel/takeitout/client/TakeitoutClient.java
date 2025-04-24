@@ -1,6 +1,6 @@
 package net.maxbel.takeitout.client;
 
-import fi.dy.masa.litematica.util.RayTraceUtils;
+//import fi.dy.masa.litematica.util.RayTraceUtils;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -12,11 +12,11 @@ import net.minecraft.entity.player.PlayerAbilities;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import fi.dy.masa.litematica.util.WorldUtils;
+//import fi.dy.masa.litematica.util.WorldUtils;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
-import fi.dy.masa.litematica.world.SchematicWorldHandler;
-import fi.dy.masa.litematica.world.WorldSchematic;
+//import fi.dy.masa.litematica.world.SchematicWorldHandler;
+//import fi.dy.masa.litematica.world.WorldSchematic;
 import org.lwjgl.glfw.GLFW;
 
 public class TakeitoutClient implements ClientModInitializer {
@@ -45,6 +45,7 @@ public class TakeitoutClient implements ClientModInitializer {
                 } else {
                     client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
                     AUTOTAKEOUT = true;
+                    awaitingStack = ItemStack.EMPTY;
                 }
             }
         });
@@ -53,9 +54,9 @@ public class TakeitoutClient implements ClientModInitializer {
     protected static int getSlotWithItem(ClientPlayerEntity player, Item item) {
         PlayerInventory inventory = player.getInventory();
 
-        for (int i = 0; i < inventory.main.size(); ++i) {
-            if (inventory.main.get(i).isOf(item)) return i;
-            if (!inventory.main.get(i).isEmpty() && ItemStack.areItemsEqual(inventory.main.get(i), item.getDefaultStack())) {
+        for (int i = 0; i < inventory.size(); ++i) {
+            if (inventory.getStack(i).isOf(item)) return i;
+            if (!inventory.getStack(i).isEmpty() && ItemStack.areItemsEqual(inventory.getStack(i), item.getDefaultStack())) {
                 return i;
             }
         }
@@ -81,7 +82,7 @@ public class TakeitoutClient implements ClientModInitializer {
             }
 
             //System.out.println("CommonMixin");
-
+            /*
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             if (worldSchematic == null) return false;
             MinecraftClient mc = MinecraftClient.getInstance();
@@ -99,7 +100,7 @@ public class TakeitoutClient implements ClientModInitializer {
                         }
                     }
                 }
-            }
+            }*/
             return false;
         }
         return false;

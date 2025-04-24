@@ -58,6 +58,8 @@ public abstract class PrinterMixin {
                     continue;
                 }
                 itemStack = new ItemStack(state.targetState.getBlock().asItem());
+                slot = player.getInventory().getSlotWithStack(itemStack);
+                if(slot != -1) return;
                 int shulker = getShulkerWithStack(player.getInventory(), itemStack);
 
                 if (shulker != -1) {

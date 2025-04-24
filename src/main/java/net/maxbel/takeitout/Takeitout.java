@@ -41,20 +41,33 @@ public class Takeitout implements ModInitializer {
                     if (stackInShulker == null || stackInShulker.isEmpty()) {
                         return;
                     }
+
+                    ItemStack singleItem = stackInShulker.copy();
+                    singleItem.setCount(1);
+
+                    ItemStack remainingStack = stackInShulker.copy();
+                    if (stackInShulker.getCount() > 1) {
+                        remainingStack.setCount(stackInShulker.getCount() - 1);
+                    } else {
+                        remainingStack = ItemStack.EMPTY; // Пустой стек
+                    }
+
                     ItemStack shulker = player.getInventory().getStack(shulkerSlot);
                     List<ItemStack> itemStacks = DefaultedList.of();
                     itemStacks.addAll(shulker.get(DataComponentTypes.CONTAINER).stream().toList());
-                    itemStacks.set(slotInShulker, ItemStack.EMPTY);
+                    //itemStacks.set(slotInShulker, ItemStack.EMPTY);
+                    itemStacks.set(slotInShulker, remainingStack);
                     shulker.set(net.minecraft.component.DataComponentTypes.CONTAINER, net.minecraft.component.type.ContainerComponent.fromStacks(itemStacks));
-                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getMainHandStack());
-                    player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
+                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getSelectedStack());
+                    //player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
+                    player.setStackInHand(Hand.MAIN_HAND, singleItem);
                 }
                 else
                 {
                     ItemStack item;
                     for (int i = Math.min(36, player.getInventory().size())-1 ; i >=0; --i) {
                         item = player.getInventory().getStack(i);
-                        if(!(item.getItem() instanceof MiningToolItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
+                        if(!(item.getItem() instanceof HoeItem || item.getItem() instanceof AxeItem || item.getItem() instanceof ShovelItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
                         {
                             ItemStack stackInShulker = (player.getInventory().getStack(shulkerSlot).get(DataComponentTypes.CONTAINER)).stream().toList().get(slotInShulker);
                             if (stackInShulker == null || stackInShulker.isEmpty()) {
@@ -65,7 +78,7 @@ public class Takeitout implements ModInitializer {
                             itemStacks.addAll(shulker.get(DataComponentTypes.CONTAINER).stream().toList());
                             itemStacks.set(slotInShulker, item);
                             shulker.set(net.minecraft.component.DataComponentTypes.CONTAINER, net.minecraft.component.type.ContainerComponent.fromStacks(itemStacks));
-                            player.getInventory().setStack(i, player.getInventory().getMainHandStack());
+                            player.getInventory().setStack(i, player.getInventory().getSelectedStack());
                             player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
                             break;
                         }
