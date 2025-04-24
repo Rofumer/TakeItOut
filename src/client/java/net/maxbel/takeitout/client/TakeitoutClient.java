@@ -1,6 +1,10 @@
 package net.maxbel.takeitout.client;
 
 //import fi.dy.masa.litematica.util.RayTraceUtils;
+import fi.dy.masa.litematica.util.RayTraceUtils;
+import fi.dy.masa.litematica.util.WorldUtils;
+import fi.dy.masa.litematica.world.SchematicWorldHandler;
+import fi.dy.masa.litematica.world.WorldSchematic;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -82,7 +86,7 @@ public class TakeitoutClient implements ClientModInitializer {
             }
 
             //System.out.println("CommonMixin");
-            /*
+
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             if (worldSchematic == null) return false;
             MinecraftClient mc = MinecraftClient.getInstance();
@@ -100,7 +104,7 @@ public class TakeitoutClient implements ClientModInitializer {
                         }
                     }
                 }
-            }*/
+            }
             return false;
         }
         return false;

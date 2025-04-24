@@ -3,9 +3,24 @@
   "id": "takeitout",
   "version": "${version}",
   "name": "TakeItOut",
-  "description": "",
-  "authors": [],
-  "contact": {},
+  "description": "This utility picks a block from a shulker",
+  "authors": ["Max Bel"],
+  "website": "https://www.curseforge.com/minecraft/mc-mods/takeitout",
+  "discord": "https://discord.gg/TR8tUk4WNF",
+  "contact": {
+    "homepage": "https://www.curseforge.com/minecraft/mc-mods/takeitout",
+    "email": "rofumer@gmail.com",
+    "discord": "https://discord.gg/TR8tUk4WNF",
+    "issues": "https://legacy.curseforge.com/minecraft/mc-mods/takeitout/issues"
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "modmenu.discord": "https://discord.gg/TR8tUk4WNF"
+      }
+    }
+  },
+
   "license": "All-Rights-Reserved",
   "icon": "assets/takeitout/icon.png",
   "environment": "*",
