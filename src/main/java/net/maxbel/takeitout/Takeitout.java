@@ -47,7 +47,7 @@ public class Takeitout implements ModInitializer {
                     itemStacks.addAll(shulker.get(DataComponentTypes.CONTAINER).stream().toList());
                     itemStacks.set(slotInShulker, ItemStack.EMPTY);
                     shulker.set(net.minecraft.component.DataComponentTypes.CONTAINER, net.minecraft.component.type.ContainerComponent.fromStacks(itemStacks));
-                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getStack(shulkerSlot));
+                    player.getInventory().setStack(player.getInventory().getEmptySlot(), player.getInventory().getSelectedStack());
                     player.setStackInHand(Hand.MAIN_HAND, stackInShulker);
 
                     /*ItemStack singleItem = stackInShulker.copy();
