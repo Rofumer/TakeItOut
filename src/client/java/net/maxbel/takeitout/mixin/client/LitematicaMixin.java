@@ -7,6 +7,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -49,5 +50,12 @@ public class LitematicaMixin {
                 //cir.cancel();
             }
         }
+    }
+
+    @Inject(method = "doEasyPlaceAction", at = @At("RETURN"))
+    private static void onEasyPlaceActionEnd(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
+        // Этот код выполнится после `return ActionResult.SUCCESS`
+        WorldUtils.doSchematicWorldPickBlock(true, mc);
+        System.out.println("Easy Place завершено");
     }
 }

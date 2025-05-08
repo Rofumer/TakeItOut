@@ -25,6 +25,7 @@
   "icon": "assets/takeitout/icon.png",
   "environment": "*",
   "entrypoints": {
+    "modmenu": [ "net.maxbel.takeitout.client.ModMenuCompat" ],
     "client": [
       "net.maxbel.takeitout.client.TakeitoutClient"
     ],
