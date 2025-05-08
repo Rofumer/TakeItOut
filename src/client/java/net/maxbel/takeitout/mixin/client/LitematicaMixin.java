@@ -56,6 +56,6 @@ public class LitematicaMixin {
     private static void onEasyPlaceActionEnd(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
         // Этот код выполнится после `return ActionResult.SUCCESS`
         WorldUtils.doSchematicWorldPickBlock(true, mc);
-        System.out.println("Easy Place завершено");
+        //System.out.println("Easy Place завершено");
     }
 }

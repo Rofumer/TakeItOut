@@ -51,6 +51,7 @@ dependencies {
     ///////modImplementation files('libs/litematica-printer-1.21.4-3.2.1.jar')
     modImplementation files('libs/litematica-printer-1.21.5-3.2.1-sakura.5.jar')
     modImplementation files('libs/litematica-fabric-1.21.5-0.22.0.jar')
+    modImplementation files('libs/malilib-fabric-1.21.5-0.24.0.jar')
     modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
 
     ////modImplementation  "curse.maven:litematica-308892:5523424"

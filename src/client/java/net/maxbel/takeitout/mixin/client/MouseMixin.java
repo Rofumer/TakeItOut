@@ -3,6 +3,9 @@ package net.maxbel.takeitout.mixin.client;
 //import fi.dy.masa.litematica.util.WorldUtils;
 //import fi.dy.masa.litematica.world.SchematicWorldHandler;
 //import fi.dy.masa.litematica.world.WorldSchematic;
+import fi.dy.masa.litematica.config.Configs;
+import fi.dy.masa.litematica.config.Hotkeys;
+import fi.dy.masa.malilib.config.options.ConfigBoolean;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
@@ -42,8 +45,10 @@ public class MouseMixin {
             }
             WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
             if (world != null) {
-                WorldUtils.doSchematicWorldPickBlock(false, client);
-                //System.out.println("Right Button");
+                if(!(Configs.Generic.EASY_PLACE_MODE.getBooleanValue() && Configs.Generic.EASY_PLACE_HOLD_ENABLED.getBooleanValue() && Hotkeys.EASY_PLACE_ACTIVATION.getKeybind().isKeybindHeld())) {
+                    WorldUtils.doSchematicWorldPickBlock(false, client);
+                    //System.out.println("Right Button");
+                }
             }
         }
     }
