@@ -49,6 +49,7 @@ dependencies {
     //modImplementation 'com.github.sakura-ryoko:litematica:1.21.4'
     modImplementation "curse.maven:litematica-${project.litematica_projectid}:${project.litematica_fileid}"
     //compileOnly("curse.maven:litematica-308892:5523424")
+    modImplementation files('libs/malilib-fabric-1.21.4-0.23.3.jar')
 
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"

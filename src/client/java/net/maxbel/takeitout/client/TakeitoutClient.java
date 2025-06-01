@@ -45,6 +45,7 @@ public class TakeitoutClient implements ClientModInitializer {
                 } else {
                     client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
                     AUTOTAKEOUT = true;
+                    awaitingStack = ItemStack.EMPTY;
                 }
             }
         });
