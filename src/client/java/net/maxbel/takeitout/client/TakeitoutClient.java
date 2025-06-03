@@ -51,7 +51,7 @@ public class TakeitoutClient implements ClientModInitializer {
         });
     }
 
-    protected static int getSlotWithItem(ClientPlayerEntity player, Item item) {
+    public static int getSlotWithItem(ClientPlayerEntity player, Item item) {
         PlayerInventory inventory = player.getInventory();
 
         for (int i = 0; i < inventory.main.size(); ++i) {

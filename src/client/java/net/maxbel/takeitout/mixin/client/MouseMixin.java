@@ -36,7 +36,8 @@ public class MouseMixin {
             if (world != null) {
                 //WorldUtils.doSchematicWorldPickBlock(false, client);
 
-                if(!(Generic.EASY_PLACE_MODE.getBooleanValue() && Generic.EASY_PLACE_HOLD_ENABLED.getBooleanValue() && Hotkeys.EASY_PLACE_ACTIVATION.getKeybind().isKeybindHeld())) {
+                //if(!(Generic.EASY_PLACE_MODE.getBooleanValue() && Generic.EASY_PLACE_HOLD_ENABLED.getBooleanValue() && Hotkeys.EASY_PLACE_ACTIVATION.getKeybind().isKeybindHeld())) {
+                    if(!Generic.EASY_PLACE_MODE.getBooleanValue()) {
                     WorldUtils.doSchematicWorldPickBlock(false, client);
                 }
                 //System.out.println("Right Button");
