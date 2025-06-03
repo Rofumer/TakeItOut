@@ -45,10 +45,9 @@ public class MouseMixin {
             }
             WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
             if (world != null) {
-                if(!(Configs.Generic.EASY_PLACE_MODE.getBooleanValue() && Configs.Generic.EASY_PLACE_HOLD_ENABLED.getBooleanValue() && Hotkeys.EASY_PLACE_ACTIVATION.getKeybind().isKeybindHeld())) {
-                    WorldUtils.doSchematicWorldPickBlock(false, client);
-                    //System.out.println("Right Button");
-                }
+                    if(!Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
+                        WorldUtils.doSchematicWorldPickBlock(false, client);
+                    }
             }
         }
     }
