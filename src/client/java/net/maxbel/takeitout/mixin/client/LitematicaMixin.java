@@ -37,7 +37,7 @@ public class LitematicaMixin {
 
 
     @Unique
-    private static final int MAX_WAIT_TICKS = 20; // примерно 1 секунда
+    private static final int MAX_WAIT_TICKS = 40; // примерно 1 секунда
     @Unique
     private static int waitTicks = 0;
     @Unique
@@ -102,7 +102,7 @@ public class LitematicaMixin {
                 waitTicks++;
 
                 // Повторная попытка после 2 тиков, если не пробовали
-                if (!retried && waitTicks == 10) {
+                if (!retried && waitTicks == 20) {
                     WorldUtils.doSchematicWorldPickBlock(false, client);
                     retried = true;
                 }
