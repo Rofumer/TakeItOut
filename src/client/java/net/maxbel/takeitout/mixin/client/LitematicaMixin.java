@@ -5,6 +5,7 @@ import fi.dy.masa.litematica.config.Hotkeys;
 import fi.dy.masa.litematica.util.EntityUtils;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.malilib.hotkeys.KeybindMulti;
+import fi.dy.masa.malilib.util.InventoryUtils;
 import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
@@ -20,6 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import fi.dy.masa.litematica.materials.MaterialCache;
@@ -35,96 +37,87 @@ public class LitematicaMixin {
 
 
     @Unique
-    private static int cancelCooldownTicks = 0;
+    private static final int MAX_WAIT_TICKS = 20; // примерно 1 секунда
     @Unique
-    private static boolean delayActive = false;
+    private static int waitTicks = 0;
+    @Unique
+    private static boolean waitingForItem = false;
+    @Unique
+    private static BlockState waitingState = null;
+    @Unique
+    private static boolean retried = false;
 
-    @Inject(method = "easyPlaceOnUseTick", at = @At("HEAD"), cancellable = true)
-    /*@Inject(
+    @Inject(
             method = "doEasyPlaceAction",
-            cancellable = true,
             at = @At(
                     value = "INVOKE_ASSIGN",
-                    target = "Lfi/dy/masa/litematica/materials/MaterialCache;getRequiredBuildItemForState(Lnet/minecraft/block/BlockState;)Lnet/minecraft/item/ItemStack;"
+                    target = "Lfi/dy/masa/litematica/materials/MaterialCache;getRequiredBuildItemForState(Lnet/minecraft/block/BlockState;)Lnet/minecraft/item/ItemStack;",
+                    shift = At.Shift.AFTER
+            ),
+            cancellable = true
+    )
+    private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
+        if (mc.player == null) return;
+
+        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
+        if (result == null) return;
+
+        BlockPos pos = result.getBlockPos();
+        WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
+        BlockState state = schematic.getBlockState(pos);
+        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
+        ItemStack inHand = mc.player.getMainHandStack();
+
+        // Если нет нужного стака — инициируем процесс
+        if (!InventoryUtils.areStacksEqual(inHand, required)) {
+            if (!waitingForItem) {
+                WorldUtils.doSchematicWorldPickBlock(false, mc);
+                waitingForItem = true;
+                waitingState = state;
+            }
+            cir.setReturnValue(ActionResult.FAIL);
+        }
+    }
+
+
+    @ModifyArg(
+            method = "easyPlaceOnUseTick",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
             )
-    )*/
-    private static void onEasyPlaceActionEnd(MinecraftClient mc, CallbackInfo ci) {
-        if (mc.player != null && Configs.Generic.EASY_PLACE_HOLD_ENABLED.getBooleanValue() && Configs.Generic.EASY_PLACE_MODE.getBooleanValue() && Hotkeys.EASY_PLACE_ACTIVATION.getKeybind().isKeybindHeld() && KeybindMulti.isKeyDown(KeybindMulti.getKeyCode(mc.options.useKey))) {
+    )
+    private static MinecraftClient checkItemAndTick(MinecraftClient client) {
+        if (waitingForItem && client.player != null && waitingState != null) {
+            ItemStack inHand = client.player.getMainHandStack();
+            ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
 
-            if (delayActive) {
-                cancelCooldownTicks--;
-                if (cancelCooldownTicks <= 0) {
-                    delayActive = false;
+            if (InventoryUtils.areStacksEqual(inHand, required)) {
+                // Предмет появился — продолжаем
+                waitingForItem = false;
+                waitingState = null;
+                waitTicks = 0;
+                retried = false;
+            } else {
+                waitTicks++;
+
+                // Повторная попытка после 2 тиков, если не пробовали
+                if (!retried && waitTicks == 10) {
+                    WorldUtils.doSchematicWorldPickBlock(false, client);
+                    retried = true;
                 }
-                ci.cancel(); // отменяем каждый тик, пока delayActive = true
-                return;
+
+                // Таймаут ожидания
+                if (waitTicks >= MAX_WAIT_TICKS) {
+                    System.out.println("[TakeItOut] Failed to receive item from shulker within timeout.");
+                    waitingForItem = false;
+                    waitingState = null;
+                    waitTicks = 0;
+                    retried = false;
+                }
             }
-
-            BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
-
-
-            if (result != null) {
-                if (result.getBlockPos() != null) {
-
-                    BlockPos position = result.getBlockPos();
-
-                    WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
-
-
-                    if (position != null) {
-
-                        SchematicBlockState state = new SchematicBlockState(mc.player.getWorld(), worldSchematic, position);
-                        if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
-                            //ci.setReturnValue(ActionResult.FAIL);
-                            ci.cancel();
-                            return;
-                        }
-                        if (!state.targetState.equals(state.currentState) && !state.currentState.isAir()) {
-                            //ci.setReturnValue(ActionResult.FAIL);
-                            ci.cancel();
-                            return;
-                        }
-
-                        Hand hand = EntityUtils.getUsedHandForItem(mc.player, state.targetState.getBlock().asItem().getDefaultStack());
-                        if (hand == null) {
-                           /*     ItemStack itemStack;
-                                int slot;
-                            itemStack = new ItemStack(state.targetState.getBlock().asItem());
-                            slot = mc.player.getInventory().getSlotWithStack(itemStack);
-                            if(slot != -1) return;
-                            int shulker = getShulkerWithStack(mc.player.getInventory(), itemStack);
-
-                            if (shulker != -1) {
-                                slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) mc.player.getInventory().getStack(shulker))), itemStack);
-                                if (slot != -1) {
-                                    ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
-                                    System.out.println(itemStack.toString()+ "Slot" +slot+ "Shulker"+ shulker);
-                                    ci.cancel();
-                                }
-                            }
-                            */
-
-                            //System.out.println(state);
-
-                            // запустить задержку
-                            delayActive = true;
-                            cancelCooldownTicks = 2;
-
-                            WorldUtils.doSchematicWorldPickBlock(false, mc);
-                            //cir.setReturnValue(ActionResult.FAIL);
-                            ci.cancel();
-
-                        }
-
-                    }else{//cir.setReturnValue(ActionResult.FAIL);
-                        ci.cancel();}
-                }else{//cir.setReturnValue(ActionResult.FAIL);
-                    ci.cancel();}
-            }
-            else{//cir.setReturnValue(ActionResult.FAIL);
-                ci.cancel();}
-        }else{//cir.setReturnValue(ActionResult.FAIL);
-            ci.cancel();}
+        }
+        return client;
     }
 
     @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), remap = true, cancellable = true)
