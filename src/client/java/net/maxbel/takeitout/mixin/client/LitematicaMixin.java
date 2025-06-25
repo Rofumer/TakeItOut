@@ -1,12 +1,7 @@
 package net.maxbel.takeitout.mixin.client;
 
-import fi.dy.masa.litematica.config.Configs;
-import fi.dy.masa.litematica.config.Hotkeys;
-import fi.dy.masa.litematica.util.EntityUtils;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import fi.dy.masa.malilib.hotkeys.KeybindMulti;
 import fi.dy.masa.malilib.util.InventoryUtils;
-import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.BlockState;
@@ -14,7 +9,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +16,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import fi.dy.masa.litematica.materials.MaterialCache;
 import fi.dy.masa.litematica.util.RayTraceUtils;
@@ -103,7 +96,7 @@ public class LitematicaMixin {
 
                 // Повторная попытка после 2 тиков, если не пробовали
                 if (!retried && waitTicks == 20) {
-                    WorldUtils.doSchematicWorldPickBlock(false, client);
+                    WorldUtils.doSchematicWorldPickBlock(true, client);
                     retried = true;
                 }
 
