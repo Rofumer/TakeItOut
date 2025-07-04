@@ -49,9 +49,14 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     ///////modImplementation files('libs/litematica-printer-1.21.4-3.2.1.jar')
-    modImplementation files('libs/litematica-printer-1.21.6-3.2.1-sakura.6.jar')
-    modImplementation files('libs/malilib-fabric-1.21.6-0.25.0.jar')
-    modImplementation files('libs/litematica-fabric-1.21.6-0.23.0.jar')
+
+    modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')
+    modImplementation files('libs/malilib-fabric-1.21.7-0.25.1.jar')
+    modImplementation files('libs/litematica-fabric-1.21.7-0.23.1.jar')
+
+    ///modImplementation files('libs/litematica-printer-1.21.6-3.2.1-sakura.6.jar')
+    ///modImplementation files('libs/malilib-fabric-1.21.6-0.25.0.jar')
+    ///modImplementation files('libs/litematica-fabric-1.21.6-0.23.0.jar')
     modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
 
     ////modImplementation  "curse.maven:litematica-308892:5523424"
