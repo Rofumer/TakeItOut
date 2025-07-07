@@ -46,7 +46,7 @@ public class MouseMixin {
             WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
             if (world != null) {
                     if(!Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
-                        WorldUtils.doSchematicWorldPickBlock(false, client);
+                        WorldUtils.doSchematicWorldPickBlock(true, client);
                     }
             }
         }

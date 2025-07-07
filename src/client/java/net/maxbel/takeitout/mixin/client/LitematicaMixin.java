@@ -59,7 +59,7 @@ public class LitematicaMixin {
     private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
         if (mc.player == null) return;
 
-        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
+        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
         if (result == null) return;
 
         BlockPos pos = result.getBlockPos();
@@ -71,7 +71,7 @@ public class LitematicaMixin {
         // Если нет нужного стака — инициируем процесс
         if (!InventoryUtils.areStacksEqual(inHand, required)) {
             if (!waitingForItem) {
-                WorldUtils.doSchematicWorldPickBlock(false, mc);
+                WorldUtils.doSchematicWorldPickBlock(true, mc);
                 waitingForItem = true;
                 waitingState = state;
             }
@@ -103,7 +103,7 @@ public class LitematicaMixin {
 
                 // Повторная попытка после 2 тиков, если не пробовали
                 if (!retried && waitTicks == 20) {
-                    WorldUtils.doSchematicWorldPickBlock(false, client);
+                    WorldUtils.doSchematicWorldPickBlock(true, client);
                     retried = true;
                 }
 
