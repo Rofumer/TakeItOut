@@ -1,0 +1,6 @@
+{
+  "key.takeitout.toggle": "Включить автовытаскивание",
+  "message.takeitout.on": "Автовытаскивание Включено",
+  "message.takeitout.off": "Автовытаскивание Выключено",
+  "category.takeitout": "TakeItOut"
+}

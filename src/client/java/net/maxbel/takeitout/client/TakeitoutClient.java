@@ -35,19 +35,19 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         awaitingStack = ItemStack.EMPTY;
         keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "Toggle auto take out", // The translation key of the keybinding's name
+                "key.takeitout.toggle", // The translation key of the keybinding's name
                 InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
                 GLFW.GLFW_KEY_R, // The keycode of the key
-                "TakeItOut" // The translation key of the keybinding's category.
+                "category.takeitout" // The translation key of the keybinding's category.
         ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (keyBinding.wasPressed()) {
                 if (AUTOTAKEOUT) {
-                    client.player.sendMessage(Text.literal("Auto Take Out is OFF"), false);
+                    client.player.sendMessage(Text.translatable("message.takeitout.off"), false);
                     AUTOTAKEOUT = false;
                     awaitingStack = ItemStack.EMPTY;
                 } else {
-                    client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
+                    client.player.sendMessage(Text.translatable("message.takeitout.on"), false);
                     AUTOTAKEOUT = true;
                     awaitingStack = ItemStack.EMPTY;
                 }

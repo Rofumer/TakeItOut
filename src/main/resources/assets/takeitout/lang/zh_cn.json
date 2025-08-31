@@ -1,0 +1,6 @@
+{
+  "key.takeitout.toggle": "切换自动取物",
+  "message.takeitout.on": "潜影盒自动取物已开启",
+  "message.takeitout.off": "潜影盒自动取物已关闭",
+  "category.takeitout": "TakeItOut"
+}
