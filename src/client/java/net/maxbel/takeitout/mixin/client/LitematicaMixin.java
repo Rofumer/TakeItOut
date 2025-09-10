@@ -28,7 +28,136 @@ import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 @Mixin(WorldUtils.class)
 public class LitematicaMixin {
 
+    @Unique
+    private static int waitTicks = 0;
+    @Unique
+    private static boolean waitingForItem = false;
+    @Unique
+    private static BlockState waitingState = null;
+    @Unique
+    private static int retryCount = 0;
+    @Unique
+    private static int expectedWaitTicks = 40; // пересчитается динамически
+    @Unique
+    private static long requestTsMs = 0L;
 
+    /** Оценка нужного ожидания с учётом пинга (в тиках). */
+    @Unique
+    private static int computeExpectedWaitTicks(MinecraftClient mc) {
+        int pingMs = 0;
+        try {
+            if (mc != null && mc.getNetworkHandler() != null && mc.player != null) {
+                var entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
+                if (entry != null) pingMs = entry.getLatency(); // ms
+            }
+        } catch (Throwable ignored) {}
+
+        // Если пинг неизвестен — примем 180 мс как «типичную Европу»
+        if (pingMs <= 0) pingMs = 180;
+
+        // Нужно 2–3 round-trip: возьмём 2.5 RTT + небольшой запас
+        int ms = (int) Math.round(pingMs * 2.5 + 200);
+
+        // Перевод в тики: 1 тик = 50 мс
+        int ticks = (ms + 49) / 50;
+
+        // Ограничим разумными пределами
+        ticks = Math.max(20, Math.min(ticks, 200)); // от 1 до 10 секунд
+        return ticks;
+    }
+
+    /** Небольшой джиттер, чтобы не «бить» ровно в границу тиков сервера. */
+    @Unique
+    private static int jitter(int baseTicks, int percent) {
+        int spread = Math.max(1, baseTicks * percent / 100);
+        return baseTicks + (int) (System.nanoTime() % (2L * spread + 1)) - spread;
+    }
+
+    @Inject(
+            method = "doEasyPlaceAction",
+            at = @At(
+                    value = "INVOKE_ASSIGN",
+                    target = "Lfi/dy/masa/litematica/materials/MaterialCache;getRequiredBuildItemForState(Lnet/minecraft/block/BlockState;)Lnet/minecraft/item/ItemStack;",
+                    shift = At.Shift.AFTER
+            ),
+            cancellable = true
+    )
+    private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
+        if (mc.player == null) return;
+
+        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
+        if (result == null) return;
+
+        BlockPos pos = result.getBlockPos();
+        WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
+        BlockState state = schematic.getBlockState(pos);
+        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
+        ItemStack inHand = mc.player.getMainHandStack();
+
+        // Если нет нужного стака — инициируем процесс
+        if (!InventoryUtils.areStacksEqual(inHand, required)) {
+            if (!waitingForItem) {
+                WorldUtils.doSchematicWorldPickBlock(true, mc);
+                waitingForItem = true;
+                waitingState = state;
+                waitTicks = 0;
+                retryCount = 0;
+                expectedWaitTicks = computeExpectedWaitTicks(mc);
+                requestTsMs = System.currentTimeMillis();
+            }
+            cir.setReturnValue(ActionResult.FAIL);
+        }
+    }
+
+    @ModifyArg(
+            method = "easyPlaceOnUseTick",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
+            )
+    )
+    private static MinecraftClient checkItemAndTick(MinecraftClient client) {
+        if (waitingForItem && client.player != null && waitingState != null) {
+            ItemStack inHand = client.player.getMainHandStack();
+            ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
+
+            if (InventoryUtils.areStacksEqual(inHand, required)) {
+                // Успешно: сброс состояния
+                waitingForItem = false;
+                waitingState = null;
+                waitTicks = 0;
+                retryCount = 0;
+            } else {
+                waitTicks++;
+
+                // Первая повторная попытка примерно на половине ожидаемого времени
+                if (retryCount == 0 && waitTicks >= jitter(expectedWaitTicks / 2, 10)) {
+                    WorldUtils.doSchematicWorldPickBlock(true, client);
+                    retryCount = 1;
+                }
+                // Вторая повторная попытка ближе к ожидаемому времени
+                else if (retryCount == 1 && waitTicks >= jitter(expectedWaitTicks, 10)) {
+                    WorldUtils.doSchematicWorldPickBlock(true, client);
+                    retryCount = 2;
+                }
+
+                // Окончательный таймаут: ожидаемое время + половина
+                int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
+                if (waitTicks >= hardTimeout) {
+                    System.out.println("[TakeItOut] Timeout while waiting item from shulker. ping-based " +
+                            expectedWaitTicks + "t, waited " + waitTicks + "t, retries " + retryCount);
+                    waitingForItem = false;
+                    waitingState = null;
+                    waitTicks = 0;
+                    retryCount = 0;
+                }
+            }
+        }
+        return client;
+    }
+
+
+    /*
     @Unique
     private static final int MAX_WAIT_TICKS = 40; // примерно 1 секунда
     @Unique
@@ -112,6 +241,8 @@ public class LitematicaMixin {
         }
         return client;
     }
+
+    */
 
     @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), remap = true, cancellable = true)
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc, CallbackInfoReturnable<Boolean> cir) {
