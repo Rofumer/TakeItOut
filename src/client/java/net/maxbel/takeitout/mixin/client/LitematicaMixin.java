@@ -10,6 +10,7 @@ import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -21,6 +22,8 @@ import fi.dy.masa.litematica.materials.MaterialCache;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
+
+import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
@@ -244,7 +247,7 @@ public class LitematicaMixin {
 
     */
 
-    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), remap = true, cancellable = true)
+    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), remap = true, cancellable = true)
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc, CallbackInfoReturnable<Boolean> cir) {
 
         // pickblock from shulker
@@ -270,7 +273,61 @@ public class LitematicaMixin {
                 //cir.cancel();
             }
         }
+    }*/
+
+    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
+    private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
+                                                      CallbackInfoReturnable<Boolean> cir) {
+        if (mc == null || mc.player == null) return;
+
+        // 1) наш хит в схемо-мир с учетом жидкостей
+        final int range = (int) getValidBlockRange(mc);
+        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
+                mc.player, range, /*includeFluids=*/true, /*allowAir=*/true
+        );
+        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            cir.setReturnValue(false);
+            cir.cancel();
+            return;
+        }
+
+        BlockPos pos = hit.getBlockPos();
+        WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
+        if (world == null) { cir.setReturnValue(false); cir.cancel(); return; }
+
+        BlockState state = world.getBlockState(pos);
+        ItemStack required = MaterialCache.getInstance()
+                .getRequiredBuildItemForState(state, world, pos);
+
+        // 2) если не в руке — попробуем взять из инвентаря/шалкера
+        if (!fi.dy.masa.malilib.util.InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
+            int slot = fi.dy.masa.malilib.util.InventoryUtils.findSlotWithItem(
+                    mc.player.playerScreenHandler, required, true
+            );
+            if (slot != -1) {
+                // переложим в руку
+                fi.dy.masa.malilib.util.InventoryUtils.swapItemToMainHand(required, mc);
+            } else {
+                // твоя логика с шалкером
+                int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
+                if (shulkerSlot != -1) {
+                    Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
+                    int inner = getSlotWithStack(shInv, required);
+                    if (inner != -1) {
+                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                    }
+                }
+            }
+        }
+
+        // 3) вызов именно litematica-версии InventoryUtils
+        fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
+
+        cir.setReturnValue(true);
+        cir.cancel();
     }
+
+
 
     /*@Inject(method = "doEasyPlaceAction", at = @At("RETURN"))
     private static void onEasyPlaceActionEnd(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {

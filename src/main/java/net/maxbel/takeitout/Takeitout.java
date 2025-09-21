@@ -3,6 +3,7 @@ package net.maxbel.takeitout;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.block.EnderChestBlock;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.*;
@@ -76,7 +77,7 @@ public class Takeitout implements ModInitializer {
                     ItemStack item;
                     for (int i = Math.min(36, player.getInventory().size())-1 ; i >=0; --i) {
                         item = player.getInventory().getStack(i);
-                        if(!(item.getItem() instanceof HoeItem || item.getItem() instanceof AxeItem || item.getItem() instanceof ShovelItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
+                        if(!(((BlockItem)item.getItem()).getBlock() instanceof EnderChestBlock || item.getItem() instanceof HoeItem || item.getItem() instanceof AxeItem || item.getItem() instanceof ShovelItem) && (item.getItem() instanceof BlockItem && !(((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock)))
                         {
                             ItemStack stackInShulker = (player.getInventory().getStack(shulkerSlot).get(DataComponentTypes.CONTAINER)).stream().toList().get(slotInShulker);
                             if (stackInShulker == null || stackInShulker.isEmpty()) {
