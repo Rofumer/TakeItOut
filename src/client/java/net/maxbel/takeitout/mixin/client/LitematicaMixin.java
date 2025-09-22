@@ -280,10 +280,58 @@ public class LitematicaMixin {
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
 
+        final int range = (int) getValidBlockRange(mc);
+        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
+                mc.player, range, true, true
+        );
+        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            cir.setReturnValue(false);
+            cir.cancel();
+            return;
+        }
+
+        BlockPos pos = hit.getBlockPos();
+        WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
+        if (world == null) { cir.setReturnValue(false); cir.cancel(); return; }
+
+        BlockState state = world.getBlockState(pos);
+        ItemStack required = MaterialCache.getInstance()
+                .getRequiredBuildItemForState(state, world, pos);
+
+        // Если в руке уже нужный стак — ничего
+        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
+            int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
+            if (slot != -1) {
+                InventoryUtils.swapItemToMainHand(required, mc);
+            } else {
+                // Логика с шалкером
+                int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
+                if (shulkerSlot != -1) {
+                    Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
+                    int inner = getSlotWithStack(shInv, required);
+                    if (inner != -1) {
+                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                    }
+                }
+            }
+        }
+
+        // ВСЕГДА вызывать litematica-версию pickblock для Easy Place
+        fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
+
+        cir.setReturnValue(true);
+        cir.cancel();
+    }
+
+    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
+    private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
+                                                      CallbackInfoReturnable<Boolean> cir) {
+        if (mc == null || mc.player == null) return;
+
         // 1) наш хит в схемо-мир с учетом жидкостей
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
-                mc.player, range, /*includeFluids=*/true, /*allowAir=*/true
+                mc.player, range, true, true
         );
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
             cir.setReturnValue(false);
@@ -326,7 +374,7 @@ public class LitematicaMixin {
         cir.setReturnValue(true);
         cir.cancel();
     }
-
+    last22.09.2025,15:00*/
 
 
     /*@Inject(method = "doEasyPlaceAction", at = @At("RETURN"))

@@ -1,0 +1,7 @@
+{
+  "key.takeitout.toggle": "切换自动取物",
+  "message.takeitout.on": "潜影盒自动取物已开启",
+  "message.takeitout.off": "潜影盒自动取物已关闭",
+  "category.takeitout": "TakeItOut",
+  "takeitout.msg.stacked_shulker_skipped": "操作已取消 (Take It Out Mod)：发现堆叠的潜影盒"
+}

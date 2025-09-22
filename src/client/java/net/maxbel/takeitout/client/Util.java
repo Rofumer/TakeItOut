@@ -22,8 +22,8 @@ public class Util {
             // стаканый шалкер (Carpet/Carpet Extra) — пропускаем и сообщаем в action bar
             if (item.getCount() != 1) {
                 playerInventory.player.sendMessage(
-                        Text.literal("Action prevented (Take It Out Mod): Stacked shulkers").formatted(Formatting.YELLOW),
-                        //Text.translatable("takeitout.msg.stacked_shulker_skipped", i).formatted(Formatting.YELLOW),
+                        //Text.literal("Action prevented (Take It Out Mod): Stacked shulkers").formatted(Formatting.YELLOW),
+                        Text.translatable("takeitout.msg.stacked_shulker_skipped", i).formatted(Formatting.YELLOW),
                         true // action bar
                 );
                 continue;

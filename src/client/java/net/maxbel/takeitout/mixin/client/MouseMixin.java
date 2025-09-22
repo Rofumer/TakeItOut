@@ -10,9 +10,12 @@ import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import me.aleksilassila.litematica.printer.SchematicBlockState;
+//import me.aleksilassila.litematica.printer.SchematicBlockState;
+import net.maxbel.takeitout.client.SchematicBlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import org.lwjgl.glfw.GLFW;
@@ -27,9 +30,57 @@ import static net.maxbel.takeitout.client.TakeitoutClient.getSlotWithItem;
 
 @Mixin(Mouse.class)
 public class MouseMixin {
+
     @Shadow @Final private MinecraftClient client;
 
+    /** Проверка, что предмет в руке можно ставить как блок */
+    private static boolean isPlaceableBlock(ItemStack stack) {
+        return stack != null && !stack.isEmpty() && stack.getItem() instanceof BlockItem;
+    }
+
     @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
+    private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
+        // интересует только нажатие правой кнопки (GLFW_PRESS = 1)
+        if (button != 1 || action != 1) return;
+
+        if (client == null || client.player == null || client.world == null || client.currentScreen != null) return;
+
+        // проверяем, что Litematica есть и есть мир схемы
+        WorldSchematic schematicWorld;
+        try {
+            Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
+            schematicWorld = SchematicWorldHandler.getSchematicWorld();
+        } catch (ClassNotFoundException e) {
+            return;
+        }
+        if (schematicWorld == null) return;
+
+        // если включён Easy Place — не вмешиваемся
+        if (Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) return;
+
+        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(client.player, 5, true, true);
+        if (hit == null || hit.getBlockPos() == null) return;
+
+        // берём наше состояние: мир + схема
+        SchematicBlockState st = new SchematicBlockState(client.world, schematicWorld, hit.getBlockPos());
+
+        boolean schematicWantsBlockHere = !st.targetState.isAir();
+        boolean mismatchHere = schematicWantsBlockHere && !st.targetState.equals(st.currentState);
+
+        // 1) если игрок держит ставимый блок — не мешаем ванильному клику
+        if (isPlaceableBlock(client.player.getMainHandStack())) {
+            return;
+        }
+
+        // 2) если схема хочет другой блок — подбираем его, но не отменяем клик
+        if (mismatchHere) {
+            WorldUtils.doSchematicWorldPickBlock(true, client);
+            return; // не cancel → ваниль поставит блок
+        }
+
+        // иначе — ничего не делаем, пусть ваниль обработает как обычно
+    }
+    /*@Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
     private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
 
@@ -50,7 +101,7 @@ public class MouseMixin {
                     }
             }
         }
-    }
+    }*/
 
     /*@Inject(method = "tick", at = @At("HEAD"))
     private void onCursorMove(CallbackInfo ci) {
