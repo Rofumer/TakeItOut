@@ -275,7 +275,7 @@ public class LitematicaMixin {
         }
     }*/
 
-    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
+    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
@@ -321,9 +321,9 @@ public class LitematicaMixin {
 
         cir.setReturnValue(true);
         cir.cancel();
-    }
+    }* /*last07.10.2025*/
 
-    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
@@ -374,7 +374,7 @@ public class LitematicaMixin {
         cir.setReturnValue(true);
         cir.cancel();
     }
-    last22.09.2025,15:00*/
+    /*last22.09.2025,15:00*/
 
 
     /*@Inject(method = "doEasyPlaceAction", at = @At("RETURN"))

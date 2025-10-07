@@ -12,12 +12,17 @@ import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
 //import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.maxbel.takeitout.client.SchematicBlockState;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,8 +38,98 @@ public class MouseMixin {
 
     @Shadow @Final private MinecraftClient client;
 
+    @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
+    private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
+        // Интересует только нажатие правой кнопки (GLFW_PRESS = 1)
+        if (button != 1 || action != 1) {
+            return;
+        }
+
+        // 🔹 НОВАЯ ПРОВЕРКА: если автоподбор выключен — ничего не делаем
+        if (!TakeitoutClient.AUTOTAKEOUT) {
+            return;
+        }
+
+        // Базовые проверки окружения
+        if (client == null || client.player == null || client.world == null) {
+            return;
+        }
+
+        // Если открыт какой-то экран — не вмешиваемся
+        if (client.currentScreen != null) {
+            return;
+        }
+
+        // Проверяем, что Litematica доступна и есть мир схемы
+        try {
+            Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
+        } catch (ClassNotFoundException e) {
+            return;
+        }
+        WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
+        if (schematicWorld == null) {
+            return;
+        }
+
+        // Если включён Easy Place — не вмешиваемся
+        if (Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
+            return;
+        }
+
+        // 1) Рейкаст в мир схемы С УЧЁТОМ видимости слоёв/срезов
+        BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(client.player, 5, true, true);
+        if (schematicHit == null || schematicHit.getBlockPos() == null) {
+            return;
+        }
+
+        // 2) Ванильный рейкаст по реальному миру — блокируем "прострел"
+        final double reach = 5.0D;
+        final float tickDelta = 1.0F;
+
+        Vec3d start = client.player.getCameraPosVec(tickDelta);
+        Vec3d look = client.player.getRotationVec(tickDelta);
+        Vec3d end = start.add(look.x * reach, look.y * reach, look.z * reach);
+
+        HitResult worldHit = client.world.raycast(new RaycastContext(
+                start,
+                end,
+                RaycastContext.ShapeType.COLLIDER, // только коллизионные формы
+                RaycastContext.FluidHandling.NONE, // жидкости игнорируем
+                client.player
+        ));
+
+        if (worldHit != null && worldHit.getType() == HitResult.Type.BLOCK) {
+            BlockPos worldPos = ((BlockHitResult) worldHit).getBlockPos();
+            BlockPos schemPos = schematicHit.getBlockPos();
+
+            // ★ КЛЮЧЕВАЯ ПРОВЕРКА:
+            // Если реальный хит в том же самом блоке (напр. полублок/ступень внутри блока),
+            // считаем голограмму закрытой и выходим.
+            if (worldPos.equals(schemPos)) {
+                return;
+            }
+
+            // Иначе — обычное сравнение расстояний (реальный блок ближе по лучу?)
+            double worldDist = start.distanceTo(worldHit.getPos());
+            double schematicDist = start.distanceTo(schematicHit.getPos());
+            if (worldDist + 1.0e-6 < schematicDist) {
+                return;
+            }
+        }
+
+        // 3) Убедимся, что схема действительно "что-то" хочет в этой точке (не воздух)
+        SchematicBlockState st = new SchematicBlockState(client.world, schematicWorld, schematicHit.getBlockPos());
+        if (st.targetState == null || st.targetState.isAir()) {
+            return;
+        }
+
+        // 4) Подбираем нужный блок из схемы; событие не отменяем — ваниль обработает клик дальше
+        WorldUtils.doSchematicWorldPickBlock(true, client);
+    }
+
+
     /** Проверка, что предмет в руке можно ставить как блок */
-    private static boolean isPlaceableBlock(ItemStack stack) {
+    /*private static boolean isPlaceableBlock(ItemStack stack) {
         return stack != null && !stack.isEmpty() && stack.getItem() instanceof BlockItem;
     }
 
@@ -79,7 +174,8 @@ public class MouseMixin {
         }
 
         // иначе — ничего не делаем, пусть ваниль обработает как обычно
-    }
+    }*//*last07.10.2025*/
+
     /*@Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
     private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
         MinecraftClient client = MinecraftClient.getInstance();
