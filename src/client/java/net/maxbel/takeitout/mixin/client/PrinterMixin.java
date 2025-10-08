@@ -50,7 +50,7 @@ public abstract class PrinterMixin {
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             List<BlockPos> positions = this.getReachablePositions();
             for (BlockPos position : positions) {
-                SchematicBlockState state = new SchematicBlockState(this.player.getWorld(), worldSchematic, position);
+                SchematicBlockState state = new SchematicBlockState(this.player.getEntityWorld(), worldSchematic, position);
                 if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
                     continue;
                 }

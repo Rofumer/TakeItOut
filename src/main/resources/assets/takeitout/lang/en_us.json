@@ -2,6 +2,6 @@
   "key.takeitout.toggle": "Toggle auto take out",
   "message.takeitout.on": "Auto Take Out is ON",
   "message.takeitout.off": "Auto Take Out is OFF",
-  "category.takeitout": "TakeItOut",
+  "key.category.takeitout.key_category": "TakeItOut",
   "takeitout.msg.stacked_shulker_skipped":"Action prevented (Take It Out Mod): Stacked shulkers"
 }
