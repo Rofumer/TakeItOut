@@ -23,7 +23,7 @@ import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 
-import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
+//import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
@@ -329,7 +329,10 @@ public class LitematicaMixin {
         if (mc == null || mc.player == null) return;
 
         // 1) наш хит в схемо-мир с учетом жидкостей
-        final int range = (int) getValidBlockRange(mc);
+        //final int range = (int) getValidBlockRange(mc);
+
+        final int range = 6;
+
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
                 mc.player, range, true, true
         );
