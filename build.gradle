@@ -51,10 +51,10 @@ dependencies {
     ///////modImplementation files('libs/litematica-printer-1.21.4-3.2.1.jar')
 
 
-    modImplementation files('libs/litematica-printer-1.20.6-3.4.0-sakura.9.jar')
-    modImplementation files('libs/litematica-fabric-1.20.6-0.18.1.jar')
-    modImplementation files('libs/malilib-fabric-1.20.6-0.19.0.jar')
-    modImplementation files('libs/tweakeroo-fabric-1.20.6-0.20.0.jar')
+    modImplementation files('libs/litematica-printer-1.21-3.5.0-sakura.4.jar')
+    modImplementation files('libs/litematica-fabric-1.21-0.19.59.jar')
+    modImplementation files('libs/malilib-fabric-1.21-0.21.9.jar')
+    modImplementation files('libs/tweakeroo-fabric-1.21-0.21.59.jar')
 
     ///modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')
     ///modImplementation files('libs/malilib-fabric-1.21.7-0.25.1.jar')
