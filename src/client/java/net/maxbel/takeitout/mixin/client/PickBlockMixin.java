@@ -1,7 +1,10 @@
 package net.maxbel.takeitout.mixin.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.ItemStackInventory;
+import net.maxbel.takeitout.client.Util;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -9,6 +12,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.Nullable;
@@ -16,45 +20,53 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import net.maxbel.takeitout.client.*;
 
-@Mixin(value = {MinecraftClient.class})
+@Mixin(MinecraftClient.class)
 public abstract class PickBlockMixin {
-    @Shadow
-    public ClientPlayerEntity player;
-
+    @Shadow public ClientPlayerEntity player;
     @Shadow @Nullable public ClientWorld world;
 
-    //@Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerInventory;getSlotWithStack(Lnet/minecraft/item/ItemStack;)I"))
-    @Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/util/hit/BlockHitResult;getBlockPos()Lnet/minecraft/util/math/BlockPos;"))
+    // Перехватываем вызов BlockHitResult#getBlockPos() внутри MinecraftClient#doItemPick()
+    @Redirect(
+            method = "doItemPick",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/util/hit/BlockHitResult;getBlockPos()Lnet/minecraft/util/math/BlockPos;")
+    )
+    private BlockPos takeItOut$pickFromShulker(BlockHitResult hit) {
+        if (this.world == null || this.player == null) {
+            return hit.getBlockPos();
+        }
 
-    //public int pickFromShulker(PlayerInventory playerInventory, ItemStack stack) {
-    public BlockPos pickFromShulker(BlockHitResult instance) {
+        // Нужный предмет из блока под курсором
+        BlockState state = this.world.getBlockState(hit.getBlockPos());
+        Block block = state.getBlock();
+        ItemStack needed = block.asItem().getDefaultStack();
 
-        ItemStack stack;
-
-        BlockState blockState =  this.world.getBlockState(instance.getBlockPos());
-        Block block = blockState.getBlock();
-        stack = block.asItem().getDefaultStack();
-
-        PlayerInventory playerInventory = this.player.getInventory();
-        int slot = playerInventory.getSlotWithStack(stack);
-
+        PlayerInventory inv = this.player.getInventory();
         if (this.player.getAbilities().creativeMode) {
-            return instance.getBlockPos();
+            return hit.getBlockPos(); // в креативе не трогаем
         }
 
-        if (slot != -1) {
-            return instance.getBlockPos();
+        // Если предмет уже есть в инвентаре — ничего не делаем
+        if (inv.getSlotWithStack(needed) != -1) {
+            return hit.getBlockPos();
         }
-        int shulker = Util.getShulkerWithStack(playerInventory, stack);
-        if (shulker != -1) {
-            slot = Util.getSlotWithStack(ItemStackInventory.getInventoryFromShulker(this.player.getInventory().getStack(shulker)), stack);
-            if (slot != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
+
+        // Поищем в шалкере и попросим сервер переложить
+        int shulkerSlot = Util.getShulkerWithStack(inv, needed);
+        if (shulkerSlot != -1) {
+            int inner = Util.getSlotWithStack(
+                    ItemStackInventory.getInventoryFromShulker(inv.getStack(shulkerSlot)),
+                    needed
+            );
+            if (inner != -1) {
+                PacketByteBuf buf = PacketByteBufs.create();
+                buf.writeVarInt(inner);
+                buf.writeVarInt(shulkerSlot);
+                ClientPlayNetworking.send(Takeitout.GETSTACK, buf);
             }
         }
 
-        return instance.getBlockPos();
+        return hit.getBlockPos();
     }
 }

@@ -17,7 +17,7 @@ public class TakeItOutMixinPlugin implements IMixinConfigPlugin {
             "net.maxbel.takeitout.mixin.client.LitematicaMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.MouseMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.TweakerooMixin", () -> FabricLoader.getInstance().isModLoaded("tweakeroo"),
-            "net.maxbel.takeitout.mixin.client.PrinterMixin", () -> FabricLoader.getInstance().isModLoaded("litematica-printer"));
+            "net.maxbel.takeitout.mixin.client.PrinterMixin", () -> FabricLoader.getInstance().isModLoaded("litematica_printer"));
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
