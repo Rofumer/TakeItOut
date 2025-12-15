@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.11-SNAPSHOT'
+    id 'fabric-loom' version '1.14-SNAPSHOT'
     id 'maven-publish'
 }
 
@@ -51,10 +51,10 @@ dependencies {
     ///////modImplementation files('libs/litematica-printer-1.21.4-3.2.1.jar')
 
 
-    modImplementation files('libs/litematica-printer-1.21.10-rc1-3.2.1.jar')
-    modImplementation files('libs/litematica-fabric-1.21.10-rc1-0.24.1.jar')
-    modImplementation files('libs/malilib-fabric-1.21.10-rc1-0.26.2.jar')
-    modImplementation files('libs/tweakeroo-fabric-1.21.10-rc1-0.26.1.jar')
+    modImplementation files('libs/litematica-printer-1.21.11-3.2.1.jar')
+    modImplementation files('libs/litematica-fabric-1.21.11-0.25.1.jar')
+    modImplementation files('libs/malilib-fabric-1.21.11-0.27.1.jar')
+    modImplementation files('libs/tweakeroo-fabric-1.21.11-0.27.0.jar')
 
     ///modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')
     ///modImplementation files('libs/malilib-fabric-1.21.7-0.25.1.jar')
