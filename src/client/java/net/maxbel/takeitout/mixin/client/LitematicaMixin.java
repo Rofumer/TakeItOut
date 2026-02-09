@@ -1,5 +1,6 @@
 package net.maxbel.takeitout.mixin.client;
 
+import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -328,35 +329,41 @@ public class LitematicaMixin {
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
 
-        // 1) наш хит в схемо-мир с учетом жидкостей
+        // Если текущий слот запрещён pickBlockableSlots — НЕ вмешиваемся вообще.
+        // Важно: НЕ cancel, иначе Easy Place перестанет работать.
+        if (!isSelectedHotbarSlotAllowedByLitematica()) {
+            return; // пусть оригинальный doSchematicWorldPickBlock от Litematica отработает сам
+        }
+
+        // 1) наш хит в схемо-мир
         final int range = (int) getValidBlockRange(mc);
-        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
-                mc.player, range, true, true
-        );
+        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
+
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
-            cir.setReturnValue(false);
-            cir.cancel();
+            // Мы начали перехват, но тут делать нечего — лучше НЕ ломать оригинал.
+            // Просто не вмешиваемся.
             return;
         }
 
         BlockPos pos = hit.getBlockPos();
         WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
-        if (world == null) { cir.setReturnValue(false); cir.cancel(); return; }
+        if (world == null) {
+            return;
+        }
 
         BlockState state = world.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance()
                 .getRequiredBuildItemForState(state, world, pos);
 
-        // 2) если не в руке — попробуем взять из инвентаря/шалкера
+        // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
         if (!fi.dy.masa.malilib.util.InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
             int slot = fi.dy.masa.malilib.util.InventoryUtils.findSlotWithItem(
                     mc.player.playerScreenHandler, required, true
             );
+
             if (slot != -1) {
-                // переложим в руку
                 fi.dy.masa.malilib.util.InventoryUtils.swapItemToMainHand(required, mc);
             } else {
-                // твоя логика с шалкером
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
                 if (shulkerSlot != -1) {
                     Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
@@ -368,9 +375,10 @@ public class LitematicaMixin {
             }
         }
 
-        // 3) вызов именно litematica-версии InventoryUtils
+        // 3) дальше выполняем pickblock лайтематики как и раньше
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
 
+        // Мы полностью обработали вызов -> отменяем оригинал
         cir.setReturnValue(true);
         cir.cancel();
     }
@@ -383,4 +391,40 @@ public class LitematicaMixin {
         WorldUtils.doSchematicWorldPickBlock(true, mc);
         //System.out.println("Easy Place завершено");
     }*/
+
+    @Unique
+    private static boolean isSelectedHotbarSlotAllowedByLitematica() {
+        try {
+            String raw = Configs.Generic.PICK_BLOCKABLE_SLOTS.getStringValue(); // например "1,2,3,4,5"
+
+            System.out.println("slots:"+raw);
+
+            if (raw == null || raw.trim().isEmpty()) {
+                return true; // пусто = не ограничено
+            }
+
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.player == null) return true;
+
+            int selected = mc.player.getInventory().getSelectedSlot(); // 0..8
+
+            for (String part : raw.split(",")) {
+                part = part.trim();
+                if (part.isEmpty()) continue;
+
+                try {
+                    int oneBased = Integer.parseInt(part);
+                    int zeroBased = oneBased - 1;
+                    if (zeroBased == selected) return true;
+                } catch (NumberFormatException ignored) {}
+            }
+
+            return false;
+        } catch (Throwable ignored) {
+            // если Litematica/Configs недоступны или что-то пошло не так — не ломаем работу
+            return true;
+        }
+    }
+
+
 }
