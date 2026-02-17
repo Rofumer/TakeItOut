@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'fabric-loom' version '1.15-SNAPSHOT'
     id 'maven-publish'
 }
 
@@ -12,6 +12,10 @@ base {
 
 loom {
     splitEnvironmentSourceSets()
+
+    mixin {
+        defaultRefmapName = "takeitout.refmap.json"
+    }
 
     mods {
         "takeitout" {
@@ -51,9 +55,12 @@ dependencies {
     ///////modImplementation files('libs/litematica-printer-1.21.4-3.2.1.jar')
 
 
-    modImplementation files('libs/litematica-printer-1.21.11-3.2.1.jar')
-    modImplementation files('libs/litematica-fabric-1.21.11-0.25.1.jar')
-    modImplementation files('libs/malilib-fabric-1.21.11-0.27.1.jar')
+    modImplementation files('libs/litematica-printer-1.21.11-3.2.1B.jar')
+    //modImplementation files('libs/litematica-printer-1.21.11-3.2.1.jar')
+    //modImplementation files('libs/litematica-fabric-1.21.11-0.25.1.jar')
+    modImplementation files('libs/litematica-fabric-1.21.11-0.26.0.jar')
+    //modImplementation files('libs/malilib-fabric-1.21.11-0.27.1.jar')
+    modImplementation files('libs/malilib-fabric-1.21.11-0.27.6.jar')
     modImplementation files('libs/tweakeroo-fabric-1.21.11-0.27.0.jar')
 
     ///modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')

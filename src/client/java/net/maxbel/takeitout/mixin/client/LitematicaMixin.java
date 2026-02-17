@@ -1,7 +1,11 @@
 package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.config.Configs;
+import fi.dy.masa.litematica.materials.MaterialCache;
+import fi.dy.masa.litematica.util.RayTraceUtils;
+import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.WorldSchematic;
+import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
@@ -19,31 +23,21 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import fi.dy.masa.litematica.materials.MaterialCache;
-import fi.dy.masa.litematica.util.RayTraceUtils;
-import fi.dy.masa.litematica.util.WorldUtils;
-import fi.dy.masa.litematica.world.SchematicWorldHandler;
 
 import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
-@Mixin(WorldUtils.class)
+@Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
 
-    @Unique
-    private static int waitTicks = 0;
-    @Unique
-    private static boolean waitingForItem = false;
-    @Unique
-    private static BlockState waitingState = null;
-    @Unique
-    private static int retryCount = 0;
-    @Unique
-    private static int expectedWaitTicks = 40; // пересчитается динамически
-    @Unique
-    private static long requestTsMs = 0L;
+    @Unique private static int waitTicks = 0;
+    @Unique private static boolean waitingForItem = false;
+    @Unique private static BlockState waitingState = null;
+    @Unique private static int retryCount = 0;
+    @Unique private static int expectedWaitTicks = 40; // пересчитается динамически
+    @Unique private static long requestTsMs = 0L;
 
     /** Оценка нужного ожидания с учётом пинга (в тиках). */
     @Unique
@@ -77,28 +71,25 @@ public class LitematicaMixin {
         return baseTicks + (int) (System.nanoTime() % (2L * spread + 1)) - spread;
     }
 
-    @Inject(
-            method = "doEasyPlaceAction",
-            at = @At(
-                    value = "INVOKE_ASSIGN",
-                    target = "Lfi/dy/masa/litematica/materials/MaterialCache;getRequiredBuildItemForState(Lnet/minecraft/block/BlockState;)Lnet/minecraft/item/ItemStack;",
-                    shift = At.Shift.AFTER
-            ),
-            cancellable = true
-    )
+    /**
+     * Перехват Easy Place: если в руке не тот предмет — инициируем pick block и ждём.
+     * Делается на HEAD, чтобы не зависеть от внутренних вызовов Litematica (они часто меняются между версиями).
+     */
+    @Inject(method = "doEasyPlaceAction", at = @At("HEAD"), cancellable = true, remap = false)
     private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
-        if (mc.player == null) return;
+        if (mc == null || mc.player == null) return;
 
         BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
         if (result == null) return;
 
         BlockPos pos = result.getBlockPos();
         WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
+        if (schematic == null) return;
+
         BlockState state = schematic.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandStack();
 
-        // Если нет нужного стака — инициируем процесс
         if (!InventoryUtils.areStacksEqual(inHand, required)) {
             if (!waitingForItem) {
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
@@ -110,6 +101,7 @@ public class LitematicaMixin {
                 requestTsMs = System.currentTimeMillis();
             }
             cir.setReturnValue(ActionResult.FAIL);
+            cir.cancel();
         }
     }
 
@@ -118,10 +110,11 @@ public class LitematicaMixin {
             at = @At(
                     value = "INVOKE",
                     target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
-            )
+            ),
+            remap = false
     )
     private static MinecraftClient checkItemAndTick(MinecraftClient client) {
-        if (waitingForItem && client.player != null && waitingState != null) {
+        if (waitingForItem && client != null && client.player != null && waitingState != null) {
             ItemStack inHand = client.player.getMainHandStack();
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
 
@@ -160,171 +153,7 @@ public class LitematicaMixin {
         return client;
     }
 
-
-    /*
-    @Unique
-    private static final int MAX_WAIT_TICKS = 40; // примерно 1 секунда
-    @Unique
-    private static int waitTicks = 0;
-    @Unique
-    private static boolean waitingForItem = false;
-    @Unique
-    private static BlockState waitingState = null;
-    @Unique
-    private static boolean retried = false;
-
-    @Inject(
-            method = "doEasyPlaceAction",
-            at = @At(
-                    value = "INVOKE_ASSIGN",
-                    target = "Lfi/dy/masa/litematica/materials/MaterialCache;getRequiredBuildItemForState(Lnet/minecraft/block/BlockState;)Lnet/minecraft/item/ItemStack;",
-                    shift = At.Shift.AFTER
-            ),
-            cancellable = true
-    )
-    private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
-        if (mc.player == null) return;
-
-        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
-        if (result == null) return;
-
-        BlockPos pos = result.getBlockPos();
-        WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
-        BlockState state = schematic.getBlockState(pos);
-        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
-        ItemStack inHand = mc.player.getMainHandStack();
-
-        // Если нет нужного стака — инициируем процесс
-        if (!InventoryUtils.areStacksEqual(inHand, required)) {
-            if (!waitingForItem) {
-                WorldUtils.doSchematicWorldPickBlock(true, mc);
-                waitingForItem = true;
-                waitingState = state;
-            }
-            cir.setReturnValue(ActionResult.FAIL);
-        }
-    }
-
-
-    @ModifyArg(
-            method = "easyPlaceOnUseTick",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
-            )
-    )
-    private static MinecraftClient checkItemAndTick(MinecraftClient client) {
-        if (waitingForItem && client.player != null && waitingState != null) {
-            ItemStack inHand = client.player.getMainHandStack();
-            ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
-
-            if (InventoryUtils.areStacksEqual(inHand, required)) {
-                // Предмет появился — продолжаем
-                waitingForItem = false;
-                waitingState = null;
-                waitTicks = 0;
-                retried = false;
-            } else {
-                waitTicks++;
-
-                // Повторная попытка после 2 тиков, если не пробовали
-                if (!retried && waitTicks == 20) {
-                    WorldUtils.doSchematicWorldPickBlock(true, client);
-                    retried = true;
-                }
-
-                // Таймаут ожидания
-                if (waitTicks >= MAX_WAIT_TICKS) {
-                    System.out.println("[TakeItOut] Failed to receive item from shulker within timeout.");
-                    waitingForItem = false;
-                    waitingState = null;
-                    waitTicks = 0;
-                    retried = false;
-                }
-            }
-        }
-        return client;
-    }
-
-    */
-
-    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), remap = true, cancellable = true)
-    private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc, CallbackInfoReturnable<Boolean> cir) {
-
-        // pickblock from shulker
-
-        BlockPos pos;
-        pos = RayTraceUtils.getSchematicWorldTraceIfClosest(mc.world, mc.player, 6);
-        if (pos != null) {
-            WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
-            if (world != null) {
-                BlockState state = world.getBlockState(pos);
-                ItemStack stack = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
-                if (mc.player.getInventory().getSlotWithStack(stack) != -1) {
-                    return;
-                }
-                int shulker = getShulkerWithStack(mc.player.getInventory(), stack);
-                if (shulker != -1) {
-                    int slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) mc.player.getInventory().getStack(shulker))), stack);
-                    if (slot != -1) {
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
-                    }
-                }
-                //cir.setReturnValue(true);
-                //cir.cancel();
-            }
-        }
-    }*/
-
-    /*@Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
-    private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
-                                                      CallbackInfoReturnable<Boolean> cir) {
-        if (mc == null || mc.player == null) return;
-
-        final int range = (int) getValidBlockRange(mc);
-        BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(
-                mc.player, range, true, true
-        );
-        if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
-            cir.setReturnValue(false);
-            cir.cancel();
-            return;
-        }
-
-        BlockPos pos = hit.getBlockPos();
-        WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
-        if (world == null) { cir.setReturnValue(false); cir.cancel(); return; }
-
-        BlockState state = world.getBlockState(pos);
-        ItemStack required = MaterialCache.getInstance()
-                .getRequiredBuildItemForState(state, world, pos);
-
-        // Если в руке уже нужный стак — ничего
-        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
-            int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
-            if (slot != -1) {
-                InventoryUtils.swapItemToMainHand(required, mc);
-            } else {
-                // Логика с шалкером
-                int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
-                if (shulkerSlot != -1) {
-                    Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
-                    int inner = getSlotWithStack(shInv, required);
-                    if (inner != -1) {
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
-                    }
-                }
-            }
-        }
-
-        // ВСЕГДА вызывать litematica-версию pickblock для Easy Place
-        fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
-
-        cir.setReturnValue(true);
-        cir.cancel();
-    }* /*last07.10.2025*/
-
-    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true, remap = false)
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
@@ -335,34 +164,26 @@ public class LitematicaMixin {
             return; // пусть оригинальный doSchematicWorldPickBlock от Litematica отработает сам
         }
 
-        // 1) наш хит в схемо-мир
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
-            // Мы начали перехват, но тут делать нечего — лучше НЕ ломать оригинал.
-            // Просто не вмешиваемся.
             return;
         }
 
         BlockPos pos = hit.getBlockPos();
         WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
-        if (world == null) {
-            return;
-        }
+        if (world == null) return;
 
         BlockState state = world.getBlockState(pos);
-        ItemStack required = MaterialCache.getInstance()
-                .getRequiredBuildItemForState(state, world, pos);
+        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
 
         // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
-        if (!fi.dy.masa.malilib.util.InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
-            int slot = fi.dy.masa.malilib.util.InventoryUtils.findSlotWithItem(
-                    mc.player.playerScreenHandler, required, true
-            );
+        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
+            int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
 
             if (slot != -1) {
-                fi.dy.masa.malilib.util.InventoryUtils.swapItemToMainHand(required, mc);
+                InventoryUtils.swapItemToMainHand(required, mc);
             } else {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
                 if (shulkerSlot != -1) {
@@ -378,12 +199,9 @@ public class LitematicaMixin {
         // 3) дальше выполняем pickblock лайтематики как и раньше
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
 
-        // Мы полностью обработали вызов -> отменяем оригинал
         cir.setReturnValue(true);
         cir.cancel();
     }
-
-    /*last22.09.2025,15:00*/
 
     @Unique
     private static boolean isSelectedHotbarSlotAllowedByLitematica() {
@@ -415,12 +233,4 @@ public class LitematicaMixin {
             return true;
         }
     }
-
-
-    /*@Inject(method = "doEasyPlaceAction", at = @At("RETURN"))
-    private static void onEasyPlaceActionEnd(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
-        // Этот код выполнится после `return ActionResult.SUCCESS`
-        WorldUtils.doSchematicWorldPickBlock(true, mc);
-        //System.out.println("Easy Place завершено");
-    }*/
 }
