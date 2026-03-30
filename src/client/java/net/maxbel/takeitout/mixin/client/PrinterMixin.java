@@ -7,10 +7,10 @@ import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -21,7 +21,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.List;
 
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
-import static net.maxbel.takeitout.client.TakeitoutClient.AUTOTAKEOUT;
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
@@ -34,36 +33,40 @@ public abstract class PrinterMixin {
 
     @Shadow
     @Final
-    public ClientPlayerEntity player;
+    public LocalPlayer player;
 
-    @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("TAIL"), remap = false)
+    @Inject(method = "onGameTick", at = @At("TAIL"), remap = false)
     public void methodHookTail(CallbackInfoReturnable<Boolean> cir) {
-
-        if (TakeitoutClient.AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
-
-
-            //System.out.println("PrinterMixin");
-
+        if (TakeitoutClient.AUTOTAKEOUT && awaitingStack.isEmpty()) {
             ItemStack itemStack;
             int slot;
 
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
+            if (worldSchematic == null) {
+                return;
+            }
+
             List<BlockPos> positions = this.getReachablePositions();
             for (BlockPos position : positions) {
-                SchematicBlockState state = new SchematicBlockState(this.player.getEntityWorld(), worldSchematic, position);
+                SchematicBlockState state = new SchematicBlockState(this.player.level(), worldSchematic, position);
+
                 if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
                     continue;
                 }
                 if (!state.targetState.equals(state.currentState) && !state.currentState.isAir()) {
                     continue;
                 }
-                itemStack = new ItemStack(state.targetState.getBlock().asItem());
-                slot = player.getInventory().getSlotWithStack(itemStack);
-                if(slot != -1) return;
-                int shulker = getShulkerWithStack(player.getInventory(), itemStack);
 
+                itemStack = new ItemStack(state.targetState.getBlock().asItem());
+                slot = player.getInventory().findSlotMatchingItem(itemStack);
+                if (slot != -1) {
+                    return;
+                }
+
+                int shulker = getShulkerWithStack(player.getInventory(), itemStack);
                 if (shulker != -1) {
-                    slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) player.getInventory().getStack(shulker))), itemStack);
+                    Container shInv = getInventoryFromShulker(player.getInventory().getItem(shulker));
+                    slot = getSlotWithStack(shInv, itemStack);
                     if (slot != -1) {
                         awaitingStack = itemStack;
                         ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
@@ -71,17 +74,14 @@ public abstract class PrinterMixin {
                     }
                 }
             }
-
         }
     }
 
-    @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
+    @Inject(method = "onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
     public void methodHookHead(CallbackInfoReturnable<Boolean> cir) {
-
-        if (awaitingStack != ItemStack.EMPTY) {
+        if (!awaitingStack.isEmpty()) {
             cir.setReturnValue(false);
             cir.cancel();
         }
-
     }
 }

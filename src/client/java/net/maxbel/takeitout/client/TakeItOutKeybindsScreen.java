@@ -1,13 +1,13 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.option.ControlsOptionsScreen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.option.GameOptions;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.OptionsScreen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.Options;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.network.chat.Component;
 
 import java.util.Arrays;
 import java.util.List;
@@ -15,11 +15,11 @@ import java.util.stream.Collectors;
 
 public class TakeItOutKeybindsScreen extends Screen {
     private final Screen parent;
-    private final GameOptions options;
-    private List<KeyBinding> modKeyBindings;
+    private final Options options;
+    private List<KeyMapping> modKeyBindings;
 
-    public TakeItOutKeybindsScreen(Screen parent, GameOptions options) {
-        super(Text.literal("TakeItOut Keybindings"));
+    public TakeItOutKeybindsScreen(Screen parent, Options options) {
+        super(Component.literal("TakeItOut Keybindings"));
         this.parent = parent;
         this.options = options;
     }
@@ -29,28 +29,29 @@ public class TakeItOutKeybindsScreen extends Screen {
         int y = 40;
         int spacing = 24;
 
-        modKeyBindings = Arrays.stream(options.allKeys)
-                .filter(kb -> kb.getCategory().equals("TakeItOut"))
+        modKeyBindings = Arrays.stream(options.keyMappings)
+                .filter(kb -> kb.getCategory().equals("key.category.takeitout"))
                 .collect(Collectors.toList());
 
         for (int i = 0; i < modKeyBindings.size(); i++) {
-            KeyBinding key = modKeyBindings.get(i);
-            addDrawableChild(ButtonWidget.builder(Text.literal("Change keybind setting: "+key.getBoundKeyLocalizedText().getString()), b -> {
-                // Откройте экран редактирования бинда
-                // Предполагается, что вы реализуете KeyBindingEditScreen
-                MinecraftClient.getInstance().setScreen(new ControlsOptionsScreen(this, client.options));
-            }).position(this.width / 2 - 100, y + i * spacing).size(200, 20).build());
+            KeyMapping key = modKeyBindings.get(i);
+
+            addRenderableWidget(Button.builder(
+                    Component.literal("Change keybind: " + key.getTranslatedKeyMessage().getString()),
+                    b -> Minecraft.getInstance().setScreen(new OptionsScreen(this, options))
+            ).bounds(this.width / 2 - 100, y + i * spacing, 200, 20).build());
         }
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> {
-            client.setScreen(parent);
-        }).position(this.width / 2 - 100, this.height - 30).size(200, 20).build());
+        addRenderableWidget(Button.builder(
+                Component.literal("Done"),
+                b -> Minecraft.getInstance().setScreen(parent)
+        ).bounds(this.width / 2 - 100, this.height - 30, 200, 20).build());
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        //this.renderBackground(context,mouseX,mouseY,delta);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 15, 0xFFFFFF);
-        super.render(context, mouseX, mouseY, delta);
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+        this.renderBackground(graphics, mouseX, mouseY, delta);
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, 15, 0xFFFFFF);
+        super.render(graphics, mouseX, mouseY, delta);
     }
 }

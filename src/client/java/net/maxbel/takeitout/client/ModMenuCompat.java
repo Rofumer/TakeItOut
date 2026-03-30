@@ -2,14 +2,13 @@ package net.maxbel.takeitout.client;
 
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.option.ControlsOptionsScreen;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.Minecraft;
 
 public class ModMenuCompat implements ModMenuApi {
 
     @Override
     public ConfigScreenFactory<Screen> getModConfigScreenFactory() {
-        return parent -> new TakeItOutKeybindsScreen(parent,MinecraftClient.getInstance().options);
+        return parent -> new TakeItOutKeybindsScreen(parent, Minecraft.getInstance().options);
     }
 }

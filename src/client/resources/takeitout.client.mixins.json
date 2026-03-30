@@ -9,9 +9,9 @@
     "LitematicaMixin",
     "TweakerooMixin",
     "MixinClientPlayerEntity",
-    "MouseMixin",
     "PickBlockMixin",
-    "UpdatedSlot"
+    "UpdatedSlot",
+    "MouseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,6 +1,6 @@
 package net.maxbel.takeitout.client;
 
-//import fi.dy.masa.litematica.util.RayTraceUtils;
+import com.mojang.blaze3d.platform.InputConstants;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
@@ -8,57 +8,49 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.player.PlayerAbilities;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-//import fi.dy.masa.litematica.util.WorldUtils;
-import net.minecraft.text.Text;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.client.option.KeyBinding;
-//import fi.dy.masa.litematica.world.SchematicWorldHandler;
-//import fi.dy.masa.litematica.world.WorldSchematic;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Abilities;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
 import org.lwjgl.glfw.GLFW;
 
 public class TakeitoutClient implements ClientModInitializer {
 
-    private static KeyBinding keyBinding;
+    private static KeyMapping keyBinding;
     public static boolean AUTOTAKEOUT;
     public static ItemStack awaitingStack;
 
-    // id категории
-    public static final Identifier CATEGORY_ID = Identifier.of("takeitout", "key_category");
-
-    // сама категория
-    private static final KeyBinding.Category CATEGORY =
-            KeyBinding.Category.create(CATEGORY_ID);
+    private static final KeyMapping.Category CATEGORY = KeyMapping.Category.INVENTORY;
 
     @Override
     public void onInitializeClient() {
-
         AUTOTAKEOUT = false;
         awaitingStack = ItemStack.EMPTY;
-        keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "key.takeitout.toggle", // The translation key of the keybinding's name
-                InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
-                GLFW.GLFW_KEY_R, // The keycode of the key
-                CATEGORY // The translation key of the keybinding's category.
+
+        keyBinding = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.takeitout.toggle",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_R,
+                CATEGORY
         ));
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (keyBinding.wasPressed()) {
+            while (keyBinding.consumeClick()) {
+                if (client.player == null) {
+                    continue;
+                }
+
                 if (AUTOTAKEOUT) {
-                    //client.player.sendMessage(Text.literal("Auto Take Out is OFF"), false);
-                    client.player.sendMessage(Text.translatable("message.takeitout.off"), false);
+                    client.player.displayClientMessage(Component.translatable("message.takeitout.off"), false);
                     AUTOTAKEOUT = false;
                     awaitingStack = ItemStack.EMPTY;
                 } else {
-                    //client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
-                    client.player.sendMessage(Text.translatable("message.takeitout.on"), false);
+                    client.player.displayClientMessage(Component.translatable("message.takeitout.on"), false);
                     AUTOTAKEOUT = true;
                     awaitingStack = ItemStack.EMPTY;
                 }
@@ -66,12 +58,17 @@ public class TakeitoutClient implements ClientModInitializer {
         });
     }
 
-    public static int getSlotWithItem(ClientPlayerEntity player, Item item) {
-        PlayerInventory inventory = player.getInventory();
+    public static int getSlotWithItem(LocalPlayer player, Item item) {
+        Inventory inventory = player.getInventory();
 
-        for (int i = 0; i < inventory.size(); ++i) {
-            if (inventory.getStack(i).isOf(item)) return i;
-            if (!inventory.getStack(i).isEmpty() && ItemStack.areItemsEqual(inventory.getStack(i), item.getDefaultStack())) {
+        for (int i = 0; i < inventory.getContainerSize(); ++i) {
+            ItemStack stack = inventory.getItem(i);
+
+            if (stack.is(item)) {
+                return i;
+            }
+
+            if (!stack.isEmpty() && ItemStack.isSameItem(stack, item.getDefaultInstance())) {
                 return i;
             }
         }
@@ -80,44 +77,56 @@ public class TakeitoutClient implements ClientModInitializer {
     }
 
     public static boolean onGameTick() {
-
-        if (AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
-
-            try {
-                Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
-            } catch (ClassNotFoundException e) {
-                return false;
-            }
-
-            try {
-                Class.forName("me.aleksilassila.litematica.printer.Printer");
-                return false;
-            } catch (ClassNotFoundException e) {
-                //return false;
-            }
-
-            //System.out.println("CommonMixin");
-
-            WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
-            if (worldSchematic == null) return false;
-            MinecraftClient mc = MinecraftClient.getInstance();
-            PlayerAbilities abilities = mc.player.getAbilities();
-            if (!abilities.allowModifyWorld)
-                return false;
-            BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
-            if (result != null) {
-                if (result.getBlockPos() != null) {
-                    SchematicBlockState state = new SchematicBlockState(mc.player.getEntityWorld(), worldSchematic, result.getBlockPos());
-                    if (!state.targetState.isAir()) {
-                        if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
-                            WorldUtils.doSchematicWorldPickBlock(true, mc);
-                            return true;
-                        }
-                    }
-                }
-            }
+        if (!AUTOTAKEOUT || !awaitingStack.isEmpty()) {
             return false;
         }
+
+        try {
+            Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+
+        try {
+            Class.forName("me.aleksilassila.litematica.printer.Printer");
+            return false;
+        } catch (ClassNotFoundException e) {
+            // ignore
+        }
+
+        WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
+        if (worldSchematic == null) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return false;
+        }
+
+        Abilities abilities = mc.player.getAbilities();
+        if (!abilities.mayBuild) {
+            return false;
+        }
+
+        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
+        if (result == null) {
+            return false;
+        }
+
+        SchematicBlockState state = new SchematicBlockState(
+                mc.player.level(),
+                worldSchematic,
+                result.getBlockPos()
+        );
+
+        if (!state.targetState.isAir()) {
+            if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
+                WorldUtils.doSchematicWorldPickBlock(true, mc);
+                return true;
+            }
+        }
+
         return false;
     }
 }

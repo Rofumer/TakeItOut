@@ -1,10 +1,9 @@
 package net.maxbel.takeitout.mixin.client;
 
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
-import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
-import net.minecraft.screen.PlayerScreenHandler;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.world.inventory.InventoryMenu;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -12,18 +11,28 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 
-
-@Mixin(ClientPlayNetworkHandler.class)
+@Mixin(ClientPacketListener.class)
 public abstract class UpdatedSlot {
 
-    @Inject(method = "onScreenHandlerSlotUpdate(Lnet/minecraft/network/packet/s2c/play/ScreenHandlerSlotUpdateS2CPacket;)V", at = @At("TAIL"), remap = true)
-    public void methodHook(ScreenHandlerSlotUpdateS2CPacket packet, CallbackInfo ci) {
+    @Inject(
+            method = "handleContainerSetSlot",
+            at = @At("TAIL")
+    )
+    private void methodHook(ClientboundContainerSetSlotPacket packet, CallbackInfo ci) {
 
-        if(awaitingStack.getItem() == packet.getStack().copyWithCount(1).getItem() && packet.getSyncId() == 0 && PlayerScreenHandler.isInHotbar(packet.getSlot())) {
-            awaitingStack = ItemStack.EMPTY;
-            //System.out.println("---"+packet.getStack()+"---"+packet.getSlot()+"---"+packet.getSyncId());
+        if (awaitingStack.isEmpty()) {
+            return;
         }
 
-    }
+        ItemStack stack = packet.getItem();
 
+        // syncId == 0 → инвентарь игрока
+        if (packet.getContainerId() == 0 &&
+                InventoryMenu.isHotbarSlot(packet.getSlot()) &&
+                ItemStack.isSameItem(awaitingStack, stack) &&
+                ItemStack.matches(awaitingStack, stack)) {
+
+            awaitingStack = ItemStack.EMPTY;
+        }
+    }
 }

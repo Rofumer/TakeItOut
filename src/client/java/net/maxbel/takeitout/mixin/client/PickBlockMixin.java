@@ -2,56 +2,68 @@ package net.maxbel.takeitout.mixin.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
+import net.maxbel.takeitout.client.ItemStackInventory;
+import net.maxbel.takeitout.client.Util;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import net.maxbel.takeitout.client.*;
 
-@Mixin(value = {MinecraftClient.class})
+@Mixin(Minecraft.class)
 public abstract class PickBlockMixin {
-    @Shadow
-    public ClientPlayerEntity player;
 
-    @Shadow @Nullable public ClientWorld world;
+    @Shadow public LocalPlayer player;
+    @Shadow @Nullable public ClientLevel level;
 
-    //@Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerInventory;getSlotWithStack(Lnet/minecraft/item/ItemStack;)I"))
-    @Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/util/hit/BlockHitResult;getBlockPos()Lnet/minecraft/util/math/BlockPos;"))
+    @Redirect(
+            method = "pickBlock",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/phys/BlockHitResult;getBlockPos()Lnet/minecraft/core/BlockPos;"
+            )
+    )
+    private BlockPos pickFromShulker(BlockHitResult instance) {
 
-    //public int pickFromShulker(PlayerInventory playerInventory, ItemStack stack) {
-    public BlockPos pickFromShulker(BlockHitResult instance) {
+        if (level == null || player == null) {
+            return instance.getBlockPos();
+        }
 
-        ItemStack stack;
-
-        BlockState blockState =  this.world.getBlockState(instance.getBlockPos());
+        BlockState blockState = level.getBlockState(instance.getBlockPos());
         Block block = blockState.getBlock();
-        stack = block.asItem().getDefaultStack();
+        ItemStack stack = block.asItem().getDefaultInstance();
 
-        PlayerInventory playerInventory = this.player.getInventory();
-        int slot = playerInventory.getSlotWithStack(stack);
+        Inventory inventory = player.getInventory();
+        int slot = inventory.findSlotMatchingItem(stack);
 
-        if (this.player.getAbilities().creativeMode) {
+        // creative → не вмешиваемся
+        if (player.getAbilities().instabuild) {
             return instance.getBlockPos();
         }
 
         if (slot != -1) {
             return instance.getBlockPos();
         }
-        int shulker = Util.getShulkerWithStack(playerInventory, stack);
+
+        int shulker = Util.getShulkerWithStack(inventory, stack);
         if (shulker != -1) {
-            slot = Util.getSlotWithStack(ItemStackInventory.getInventoryFromShulker(this.player.getInventory().getStack(shulker)), stack);
-            if (slot != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
+
+            int inner = Util.getSlotWithStack(
+                    ItemStackInventory.getInventoryFromShulker(inventory.getItem(shulker)),
+                    stack
+            );
+
+            if (inner != -1) {
+                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker));
             }
         }
 
