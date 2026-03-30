@@ -1,12 +1,13 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
 
 public class Util {
 
@@ -16,17 +17,14 @@ public class Util {
         for (int i = 0; i < getSize(playerInventory); ++i) {
             ItemStack item = playerInventory.getItem(i);
 
-            // не шалкер — пропускаем
             if (!isShulkerItem(item)) {
                 continue;
             }
 
-            // стаканый шалкер
             if (item.getCount() != 1) {
-                player.displayClientMessage(
+                player.sendSystemMessage(
                         Component.translatable("takeitout.msg.stacked_shulker_skipped", i)
-                                .withStyle(ChatFormatting.YELLOW),
-                        true
+                                .withStyle(ChatFormatting.YELLOW)
                 );
                 continue;
             }
@@ -41,46 +39,64 @@ public class Util {
                     return i;
                 }
 
-            } catch (Throwable t) {
-                player.displayClientMessage(
+            } catch (Throwable ignored) {
+                player.sendSystemMessage(
                         Component.literal("takeitout.msg.shulker_read_fail")
-                                .withStyle(ChatFormatting.RED),
-                        true
+                                .withStyle(ChatFormatting.RED)
                 );
             }
         }
+
         return -1;
     }
 
     public static boolean isShulkerItem(ItemStack item) {
-        return item.getItem() instanceof BlockItem blockItem
+        return !item.isEmpty()
+                && item.getItem() instanceof BlockItem blockItem
                 && blockItem.getBlock() instanceof ShulkerBoxBlock;
     }
 
     public static int getSlotWithNoShulker(Inventory inventory) {
         for (int i = getSize(inventory) - 1; i >= 0; --i) {
-            if (isShulkerItem(inventory.getItem(i))) return i;
+            ItemStack item = inventory.getItem(i);
+            if (!item.isEmpty() && !isShulkerItem(item)) {
+                return i;
+            }
         }
         return -1;
     }
 
-    public static int getSlotWithStack(net.minecraft.world.Container inventory, ItemStack stack) {
+    public static int getSlotWithStack(Container inventory, ItemStack stack) {
         for (int i = 0; i < inventory.getContainerSize(); ++i) {
             ItemStack current = inventory.getItem(i);
 
-            if (current.isEmpty()) continue;
-            if (!areItemsEqual(stack, current)) continue;
+            if (current.isEmpty()) {
+                continue;
+            }
+
+            if (!areItemsEqual(stack, current)) {
+                continue;
+            }
 
             return i;
         }
+
         return -1;
     }
 
     public static boolean areItemsEqual(ItemStack stack1, ItemStack stack2) {
-        return stack1.is(stack2.getItem()) && ItemStack.isSameItem(stack1, stack2);
+        if (stack1 == null || stack2 == null) {
+            return false;
+        }
+
+        if (stack1.isEmpty() || stack2.isEmpty()) {
+            return false;
+        }
+
+        return ItemStack.isSameItem(stack1, stack2);
     }
 
-    public static int getSize(net.minecraft.world.Container inventory) {
+    public static int getSize(Container inventory) {
         if (inventory instanceof Inventory) {
             return Math.min(36, inventory.getContainerSize());
         }

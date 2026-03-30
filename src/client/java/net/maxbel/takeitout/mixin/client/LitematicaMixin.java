@@ -17,6 +17,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -31,6 +33,9 @@ import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
+
+    @Unique
+    private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
 
     @Unique private static int waitTicks = 0;
     @Unique private static boolean waitingForItem = false;
@@ -52,7 +57,9 @@ public class LitematicaMixin {
         } catch (Throwable ignored) {
         }
 
-        if (pingMs <= 0) pingMs = 180;
+        if (pingMs <= 0) {
+            pingMs = 180;
+        }
 
         int ms = (int) Math.round(pingMs * 2.5 + 200);
         int ticks = (ms + 49) / 50;
@@ -68,21 +75,30 @@ public class LitematicaMixin {
 
     @Inject(method = "doEasyPlaceAction", at = @At("HEAD"), cancellable = true, remap = false)
     private static void interceptMissingItem(Minecraft mc, CallbackInfoReturnable<InteractionResult> cir) {
-        if (mc == null || mc.player == null) return;
+        if (mc == null || mc.player == null) {
+            return;
+        }
 
         BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
-        if (result == null) return;
+        if (result == null) {
+            return;
+        }
 
         BlockPos pos = result.getBlockPos();
         WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
-        if (schematic == null) return;
+        if (schematic == null) {
+            return;
+        }
 
         BlockState state = schematic.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandItem();
 
         if (!InventoryUtils.areStacksEqual(inHand, required)) {
+            //LOGGER.info("[LITEMATICA] missing item detected, required={}, inHand={}", required, inHand);
+
             if (!waitingForItem) {
+                //LOGGER.info("[LITEMATICA] invoking doSchematicWorldPickBlock");
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
                 waitingForItem = true;
                 waitingState = state;
@@ -90,7 +106,9 @@ public class LitematicaMixin {
                 retryCount = 0;
                 expectedWaitTicks = computeExpectedWaitTicks(mc);
                 requestTsMs = System.currentTimeMillis();
+                //LOGGER.info("[LITEMATICA] waiting started, expectedWaitTicks={}", expectedWaitTicks);
             }
+
             cir.setReturnValue(InteractionResult.FAIL);
             cir.cancel();
         }
@@ -110,6 +128,7 @@ public class LitematicaMixin {
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
 
             if (InventoryUtils.areStacksEqual(inHand, required)) {
+                //LOGGER.info("[LITEMATICA] required item arrived in hand after {} ticks", waitTicks);
                 waitingForItem = false;
                 waitingState = null;
                 waitTicks = 0;
@@ -118,17 +137,18 @@ public class LitematicaMixin {
                 waitTicks++;
 
                 if (retryCount == 0 && waitTicks >= jitter(expectedWaitTicks / 2, 10)) {
+                    //LOGGER.info("[LITEMATICA] retry 1 at tick {}", waitTicks);
                     WorldUtils.doSchematicWorldPickBlock(true, client);
                     retryCount = 1;
                 } else if (retryCount == 1 && waitTicks >= jitter(expectedWaitTicks, 10)) {
+                    //LOGGER.info("[LITEMATICA] retry 2 at tick {}", waitTicks);
                     WorldUtils.doSchematicWorldPickBlock(true, client);
                     retryCount = 2;
                 }
 
                 int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
                 if (waitTicks >= hardTimeout) {
-                    System.out.println("[TakeItOut] Timeout while waiting item from shulker. ping-based " +
-                            expectedWaitTicks + "t, waited " + waitTicks + "t, retries " + retryCount);
+                    //LOGGER.info("[LITEMATICA] Timeout while waiting item from shulker. ping-based {}t, waited {}t, retries {}", expectedWaitTicks, waitTicks, retryCount);
                     waitingForItem = false;
                     waitingState = null;
                     waitTicks = 0;
@@ -136,49 +156,77 @@ public class LitematicaMixin {
                 }
             }
         }
+
         return client;
     }
 
     @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true, remap = false)
     private static void doSchematicWorldPickBlockHook(boolean closest, Minecraft mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
-        if (mc == null || mc.player == null) return;
+        //LOGGER.info("[LITEMATICA] doSchematicWorldPickBlockHook entered");
 
-        if (!isSelectedHotbarSlotAllowedByLitematica()) {
+        if (mc == null || mc.player == null) {
+            //LOGGER.info("[LITEMATICA] abort: mc/player null");
             return;
         }
+
+        //if (!isSelectedHotbarSlotAllowedByLitematica()) {
+        //    //LOGGER.info("[LITEMATICA] abort: selected hotbar slot not allowed");
+        //    return;
+        //}
 
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
+            //LOGGER.info("[LITEMATICA] abort: no valid block hit, hit={}", hit);
             return;
         }
 
         BlockPos pos = hit.getBlockPos();
         WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
-        if (world == null) return;
+        if (world == null) {
+            //LOGGER.info("[LITEMATICA] abort: schematic world null");
+            return;
+        }
 
         BlockState state = world.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
 
+        //LOGGER.info("[LITEMATICA] required={}, mainHand={}", required, mc.player.getMainHandItem());
+
         if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandItem(), required)) {
             int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
+            //LOGGER.info("[LITEMATICA] direct inventory slot={}", slot);
 
             if (slot != -1) {
+                //LOGGER.info("[LITEMATICA] swapping existing item to main hand");
                 InventoryUtils.swapItemToMainHand(required, mc);
             } else {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
+                //LOGGER.info("[LITEMATICA] shulker slot={}", shulkerSlot);
+
                 if (shulkerSlot != -1) {
                     Container shInv = getInventoryFromShulker(mc.player.getInventory().getItem(shulkerSlot));
                     int inner = getSlotWithStack(shInv, required);
+                    //LOGGER.info("[LITEMATICA] inner slot={}", inner);
+
                     if (inner != -1) {
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                        boolean canSend = ClientPlayNetworking.canSend(Takeitout.GetShulkerStackPayload.ID);
+                        //LOGGER.info("[LITEMATICA] canSend={}", canSend);
+
+                        if (canSend) {
+                            //LOGGER.info("[LITEMATICA] sending payload inner={}, shulker={}", inner, shulkerSlot);
+                            ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                        } else {
+                            //LOGGER.info("[LITEMATICA] payload cannot be sent");
+                        }
                     }
                 }
             }
         }
 
+        //LOGGER.info("[LITEMATICA] calling schematicWorldPickBlock");
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
 
         cir.setReturnValue(true);
@@ -194,18 +242,24 @@ public class LitematicaMixin {
             }
 
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.player == null) return true;
+            if (mc == null || mc.player == null) {
+                return true;
+            }
 
             int selected = mc.player.getInventory().getSelectedSlot();
 
             for (String part : raw.split(",")) {
                 part = part.trim();
-                if (part.isEmpty()) continue;
+                if (part.isEmpty()) {
+                    continue;
+                }
 
                 try {
                     int oneBased = Integer.parseInt(part);
                     int zeroBased = oneBased - 1;
-                    if (zeroBased == selected) return true;
+                    if (zeroBased == selected) {
+                        return true;
+                    }
                 } catch (NumberFormatException ignored) {
                 }
             }

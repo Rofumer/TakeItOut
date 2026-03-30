@@ -9,26 +9,29 @@ import net.minecraft.world.item.component.ItemContainerContents;
 
 public class ItemStackInventory extends SimpleContainer {
     protected final ItemStack itemStack;
-    protected final int SIZE;
+    protected final int size;
 
-    public ItemStackInventory(ItemStack stack, int SIZE) {
-        super(getStacks(stack, SIZE));
+    public ItemStackInventory(ItemStack stack, int size) {
+        super(getStacks(stack, size));
         this.itemStack = stack;
-        this.SIZE = SIZE;
+        this.size = size;
     }
 
     private static ItemStack[] getStacks(ItemStack usedStack, int size) {
         ItemStack[] stacks = new ItemStack[size];
         Arrays.fill(stacks, ItemStack.EMPTY);
 
+        if (usedStack == null || usedStack.isEmpty()) {
+            return stacks;
+        }
+
         ItemContainerContents contents = usedStack.get(DataComponents.CONTAINER);
         if (contents != null) {
-            int i = 0;
-            for (ItemStack stack : contents.stream().toList()) {
-                if (i >= size) {
-                    break;
-                }
-                stacks[i++] = stack;
+            NonNullList<ItemStack> temp = NonNullList.withSize(size, ItemStack.EMPTY);
+            contents.copyInto(temp);
+
+            for (int i = 0; i < temp.size() && i < size; i++) {
+                stacks[i] = temp.get(i);
             }
         }
 
@@ -36,11 +39,15 @@ public class ItemStackInventory extends SimpleContainer {
     }
 
     public static NonNullList<ItemStack> getStacks(ItemStack usedStack) {
-        NonNullList<ItemStack> itemStacks = NonNullList.create();
+        NonNullList<ItemStack> itemStacks = NonNullList.withSize(27, ItemStack.EMPTY);
+
+        if (usedStack == null || usedStack.isEmpty()) {
+            return itemStacks;
+        }
 
         ItemContainerContents contents = usedStack.get(DataComponents.CONTAINER);
         if (contents != null) {
-            itemStacks.addAll(contents.stream().toList());
+            contents.copyInto(itemStacks);
         }
 
         return itemStacks;

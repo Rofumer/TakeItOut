@@ -4,9 +4,9 @@
   "version": "${version}",
   "name": "TakeItOut",
   "description": "This utility picks a block from a shulker",
-  "authors": ["Max Bel"],
-  "website": "https://www.curseforge.com/minecraft/mc-mods/takeitout",
-  "discord": "https://discord.gg/TR8tUk4WNF",
+  "authors": [
+    "Max Bel"
+  ],
   "contact": {
     "homepage": "https://www.curseforge.com/minecraft/mc-mods/takeitout",
     "email": "rofumer@gmail.com",
@@ -20,12 +20,13 @@
       }
     }
   },
-
   "license": "All-Rights-Reserved",
   "icon": "assets/takeitout/icon.png",
   "environment": "*",
   "entrypoints": {
-    "modmenu": [ "net.maxbel.takeitout.client.ModMenuCompat" ],
+    "modmenu": [
+      "net.maxbel.takeitout.client.ModMenuCompat"
+    ],
     "client": [
       "net.maxbel.takeitout.client.TakeitoutClient"
     ],
@@ -42,9 +43,8 @@
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
-    "fabric": "*",
-    "minecraft": [
-      "1.21.11"
-    ]
+    "fabric-api": "*",
+    "minecraft": "26.1",
+    "java": ">=25"
   }
 }
