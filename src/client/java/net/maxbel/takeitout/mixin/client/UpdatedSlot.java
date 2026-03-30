@@ -3,7 +3,6 @@ package net.maxbel.takeitout.mixin.client;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
-import net.minecraft.world.inventory.InventoryMenu;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -26,12 +25,12 @@ public abstract class UpdatedSlot {
 
         ItemStack stack = packet.getItem();
 
-        // syncId == 0 → инвентарь игрока
-        if (packet.getContainerId() == 0 &&
-                InventoryMenu.isHotbarSlot(packet.getSlot()) &&
-                ItemStack.isSameItem(awaitingStack, stack) &&
-                ItemStack.matches(awaitingStack, stack)) {
-
+        // containerId == 0 -> player inventory menu updates.
+        // For printer flow we only need to know that the requested item arrived,
+        // it may not always be reflected as a hotbar slot update first.
+        if (packet.getContainerId() == 0
+                && !stack.isEmpty()
+                && ItemStack.isSameItem(awaitingStack, stack)) {
             awaitingStack = ItemStack.EMPTY;
         }
     }

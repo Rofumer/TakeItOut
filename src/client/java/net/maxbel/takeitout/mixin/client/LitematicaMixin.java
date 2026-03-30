@@ -170,10 +170,10 @@ public class LitematicaMixin {
             return;
         }
 
-        //if (!isSelectedHotbarSlotAllowedByLitematica()) {
-        //    //LOGGER.info("[LITEMATICA] abort: selected hotbar slot not allowed");
-        //    return;
-        //}
+        if (!isSelectedHotbarSlotAllowedByLitematica()) {
+            //LOGGER.info("[LITEMATICA] abort: selected hotbar slot not allowed");
+            return;
+        }
 
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);

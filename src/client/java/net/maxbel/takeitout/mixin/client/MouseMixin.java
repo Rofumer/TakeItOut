@@ -9,11 +9,7 @@ import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -72,37 +68,6 @@ public class MouseMixin {
         BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(this.minecraft.player, 5.0D, true, true);
         if (schematicHit == null || schematicHit.getBlockPos() == null) {
             return;
-        }
-
-        double reach = 5.0D;
-        float tickDelta = 1.0F;
-
-        Vec3 start = this.minecraft.player.getEyePosition(tickDelta);
-        Vec3 look = this.minecraft.player.getViewVector(tickDelta);
-        Vec3 end = start.add(look.x * reach, look.y * reach, look.z * reach);
-
-        HitResult worldHit = this.minecraft.level.clip(new ClipContext(
-                start,
-                end,
-                ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE,
-                this.minecraft.player
-        ));
-
-        if (worldHit != null && worldHit.getType() == HitResult.Type.BLOCK) {
-            BlockPos worldPos = ((BlockHitResult) worldHit).getBlockPos();
-            BlockPos schemPos = schematicHit.getBlockPos();
-
-            if (worldPos.equals(schemPos)) {
-                return;
-            }
-
-            double worldDist = start.distanceTo(worldHit.getLocation());
-            double schematicDist = start.distanceTo(schematicHit.getLocation());
-
-            if (worldDist + 1.0e-6D < schematicDist) {
-                return;
-            }
         }
 
         SchematicBlockState st = new SchematicBlockState(

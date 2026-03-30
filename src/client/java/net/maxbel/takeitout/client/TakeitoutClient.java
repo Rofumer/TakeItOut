@@ -3,6 +3,7 @@ package net.maxbel.takeitout.client;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.mojang.blaze3d.platform.InputConstants;
+import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
@@ -23,7 +24,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
 
 public class TakeitoutClient implements ClientModInitializer {
@@ -36,6 +36,7 @@ public class TakeitoutClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.INVENTORY;
 
     private static boolean pickWasDownLastTick = false;
+    private static boolean useWasDownLastTick = false;
 
     @Override
     public void onInitializeClient() {
@@ -48,6 +49,19 @@ public class TakeitoutClient implements ClientModInitializer {
                 GLFW.GLFW_KEY_R,
                 CATEGORY
         ));
+
+        ClientTickEvents.START_CLIENT_TICK.register(client -> {
+            if (client.player == null) {
+                useWasDownLastTick = false;
+                return;
+            }
+
+            boolean useDown = client.options.keyUse.isDown();
+            if (useDown && !useWasDownLastTick) {
+                tryPickFromSchematicOnUse(client);
+            }
+            useWasDownLastTick = useDown;
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (keyBinding.consumeClick()) {
@@ -172,6 +186,33 @@ public class TakeitoutClient implements ClientModInitializer {
 
         LOGGER.info("[CLIENT] sending packet: inner={}, shulker={}", inner, shulker);
         ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker));
+    }
+
+    private static void tryPickFromSchematicOnUse(Minecraft mc) {
+        if (!AUTOTAKEOUT || mc.player == null || mc.level == null || mc.screen != null) {
+            return;
+        }
+
+        if (Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
+            return;
+        }
+
+        WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
+        if (schematicWorld == null) {
+            return;
+        }
+
+        BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(mc.player, 5.0D, true, true);
+        if (schematicHit == null || schematicHit.getBlockPos() == null) {
+            return;
+        }
+
+        SchematicBlockState st = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
+        if (st.targetState == null || st.targetState.isAir()) {
+            return;
+        }
+
+        WorldUtils.doSchematicWorldPickBlock(true, mc);
     }
 
     public static boolean onGameTick() {
