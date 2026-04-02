@@ -1,7 +1,7 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,7 +18,7 @@ public class TakeItOutKeybindsScreen extends Screen {
     private List<KeyMapping> modKeyBindings;
 
     public TakeItOutKeybindsScreen(Screen parent, Options options) {
-        super(Component.literal("TakeItOut Keybindings"));
+        super(Component.translatable("key.category.takeitout.takeitout"));
         this.parent = parent;
         this.options = options;
     }
@@ -29,7 +29,7 @@ public class TakeItOutKeybindsScreen extends Screen {
         int spacing = 24;
 
         modKeyBindings = Arrays.stream(this.options.keyMappings)
-                .filter(kb -> kb.getCategory().equals("key.category.takeitout"))
+                .filter(kb -> kb.getName().startsWith("key.takeitout."))
                 .collect(Collectors.toList());
 
         for (int i = 0; i < modKeyBindings.size(); i++) {

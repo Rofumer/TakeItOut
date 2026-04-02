@@ -1,8 +1,8 @@
 package net.maxbel.takeitout.client;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import com.mojang.blaze3d.platform.InputConstants;
+import org.slf4j.LoggerFactory;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
@@ -17,6 +17,7 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
@@ -33,8 +34,6 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean AUTOTAKEOUT;
     public static ItemStack awaitingStack;
 
-    private static final KeyMapping.Category CATEGORY = KeyMapping.Category.INVENTORY;
-
     private static boolean pickWasDownLastTick = false;
     private static boolean useWasDownLastTick = false;
 
@@ -43,11 +42,15 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         awaitingStack = ItemStack.EMPTY;
 
+        KeyMapping.Category category = KeyMapping.Category.register(
+                Identifier.fromNamespaceAndPath("takeitout", "takeitout")
+        );
+
         keyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.takeitout.toggle",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_R,
-                CATEGORY
+                category
         ));
 
         ClientTickEvents.START_CLIENT_TICK.register(client -> {
