@@ -1,7 +1,10 @@
 {
   "key.takeitout.toggle": "Включить автовытаскивание",
+  "key.takeitout.extract_mode": "Переключить режим вытягивания",
   "message.takeitout.on": "Автовытаскивание Включено",
   "message.takeitout.off": "Автовытаскивание Выключено",
+  "message.takeitout.extract_mode.stack": "Режим вытягивания: ВЕСЬ СТАК",
+  "message.takeitout.extract_mode.single": "Режим вытягивания: ОДИН ПРЕДМЕТ",
   "key.category.takeitout.takeitout": "TakeItOut",
   "takeitout.msg.stacked_shulker_skipped":"Действие отменено (Take It Out Mod): найден стак шалкеров"
 }

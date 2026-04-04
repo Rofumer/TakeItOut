@@ -29,7 +29,7 @@ public class Takeitout implements ModInitializer {
 
     public static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
 
-    public record GetShulkerStackPayload(int slot, int shulker) implements CustomPacketPayload {
+    public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetShulkerStackPayload> ID =
                 new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "getstack"));
 
@@ -37,6 +37,7 @@ public class Takeitout implements ModInitializer {
                 StreamCodec.composite(
                         ByteBufCodecs.INT, GetShulkerStackPayload::slot,
                         ByteBufCodecs.INT, GetShulkerStackPayload::shulker,
+                        ByteBufCodecs.BOOL, GetShulkerStackPayload::singleItemMode,
                         GetShulkerStackPayload::new
                 );
 
@@ -58,6 +59,7 @@ public class Takeitout implements ModInitializer {
     private static void handleGetShulkerStackPayload(ServerPlayer player, GetShulkerStackPayload payload) {
         int slotInShulker = payload.slot();
         int shulkerSlot = payload.shulker();
+        boolean singleItemMode = payload.singleItemMode();
 
         if (!isValidInventorySlot(player, shulkerSlot)) {
             return;
@@ -81,18 +83,48 @@ public class Takeitout implements ModInitializer {
         }
 
         ItemStack extracted = stackInShulker.copy();
+        if (singleItemMode) {
+            extracted.setCount(1);
+        }
+
+        ItemStack remainingInShulker = stackInShulker.copy();
+        remainingInShulker.shrink(extracted.getCount());
         ItemStack currentMainHand = player.getItemInHand(InteractionHand.MAIN_HAND).copy();
+
+        if (currentMainHand.isEmpty()) {
+            itemStacks.set(slotInShulker, remainingInShulker.isEmpty() ? ItemStack.EMPTY : remainingInShulker);
+            shulker.set(DataComponents.CONTAINER, ItemContainerContents.fromItems(itemStacks));
+
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
+            player.getInventory().setChanged();
+            player.inventoryMenu.broadcastChanges();
+            return;
+        }
 
         int freeSlot = player.getInventory().getFreeSlot();
 
         if (freeSlot != -1) {
-            itemStacks.set(slotInShulker, ItemStack.EMPTY);
+            itemStacks.set(slotInShulker, remainingInShulker.isEmpty() ? ItemStack.EMPTY : remainingInShulker);
             shulker.set(DataComponents.CONTAINER, ItemContainerContents.fromItems(itemStacks));
 
             if (!currentMainHand.isEmpty()) {
                 player.getInventory().setItem(freeSlot, currentMainHand);
             }
 
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
+            player.getInventory().setChanged();
+            player.inventoryMenu.broadcastChanges();
+            return;
+        }
+
+        if (!remainingInShulker.isEmpty()) {
+            itemStacks.set(slotInShulker, remainingInShulker);
+            ItemStack leftover = insertIntoShulker(itemStacks, currentMainHand);
+            if (!leftover.isEmpty()) {
+                return;
+            }
+
+            shulker.set(DataComponents.CONTAINER, ItemContainerContents.fromItems(itemStacks));
             player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             player.getInventory().setChanged();
             player.inventoryMenu.broadcastChanges();
@@ -106,6 +138,10 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
+            if (!remainingInShulker.isEmpty()) {
+                continue;
+            }
+
             itemStacks.set(slotInShulker, item.copy());
             shulker.set(DataComponents.CONTAINER, ItemContainerContents.fromItems(itemStacks));
 
@@ -116,6 +152,44 @@ public class Takeitout implements ModInitializer {
             player.inventoryMenu.broadcastChanges();
             return;
         }
+    }
+
+    private static ItemStack insertIntoShulker(List<ItemStack> itemStacks, ItemStack toInsert) {
+        ItemStack remaining = toInsert.copy();
+
+        for (int i = 0; i < itemStacks.size() && !remaining.isEmpty(); i++) {
+            ItemStack existing = itemStacks.get(i);
+            if (existing.isEmpty()) {
+                continue;
+            }
+
+            if (!ItemStack.isSameItemSameComponents(existing, remaining)) {
+                continue;
+            }
+
+            int max = existing.getMaxStackSize();
+            int canMove = Math.min(max - existing.getCount(), remaining.getCount());
+            if (canMove <= 0) {
+                continue;
+            }
+
+            existing.grow(canMove);
+            remaining.shrink(canMove);
+        }
+
+        for (int i = 0; i < itemStacks.size() && !remaining.isEmpty(); i++) {
+            if (!itemStacks.get(i).isEmpty()) {
+                continue;
+            }
+
+            int move = Math.min(remaining.getCount(), remaining.getMaxStackSize());
+            ItemStack moved = remaining.copy();
+            moved.setCount(move);
+            itemStacks.set(i, moved);
+            remaining.shrink(move);
+        }
+
+        return remaining;
     }
 
     private static boolean isValidInventorySlot(ServerPlayer player, int slot) {

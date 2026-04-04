@@ -30,8 +30,11 @@ import org.lwjgl.glfw.GLFW;
 public class TakeitoutClient implements ClientModInitializer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
+    private static final boolean VERBOSE_LOG = false;
     private static KeyMapping keyBinding;
+    private static KeyMapping extractModeKeyBinding;
     public static boolean AUTOTAKEOUT;
+    public static boolean SHULKER_SINGLE_ITEM_MODE;
     public static ItemStack awaitingStack;
 
     private static boolean pickWasDownLastTick = false;
@@ -40,6 +43,7 @@ public class TakeitoutClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         AUTOTAKEOUT = false;
+        SHULKER_SINGLE_ITEM_MODE = false;
         awaitingStack = ItemStack.EMPTY;
 
         KeyMapping.Category category = KeyMapping.Category.register(
@@ -50,6 +54,13 @@ public class TakeitoutClient implements ClientModInitializer {
                 "key.takeitout.toggle",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_R,
+                category
+        ));
+
+        extractModeKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.takeitout.extract_mode",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_B,
                 category
         ));
 
@@ -83,6 +94,20 @@ public class TakeitoutClient implements ClientModInitializer {
                 }
             }
 
+            while (extractModeKeyBinding.consumeClick()) {
+                if (client.player == null) {
+                    continue;
+                }
+
+                SHULKER_SINGLE_ITEM_MODE = !SHULKER_SINGLE_ITEM_MODE;
+                client.player.sendSystemMessage(Component.translatable(
+                        SHULKER_SINGLE_ITEM_MODE
+                                ? "message.takeitout.extract_mode.single"
+                                : "message.takeitout.extract_mode.stack"
+                ));
+                LOGGER.info("[TakeItOut] shulker extract mode switched: singleItemMode={}", SHULKER_SINGLE_ITEM_MODE);
+            }
+
             if (client.player == null) {
                 pickWasDownLastTick = false;
                 return;
@@ -91,7 +116,6 @@ public class TakeitoutClient implements ClientModInitializer {
             boolean pickDown = client.options.keyPickItem.isDown();
 
             if (pickDown && !pickWasDownLastTick) {
-                System.out.println("[TakeItOut] PICK DETECTED");
                 tryPickFromShulker(client);
             }
 
@@ -118,25 +142,25 @@ public class TakeitoutClient implements ClientModInitializer {
     }
 
     private static void tryPickFromShulker(Minecraft mc) {
-        LOGGER.info("[CLIENT] tryPickFromShulker called");
+        logVerbose("[CLIENT] tryPickFromShulker called");
 
         if (!AUTOTAKEOUT || !awaitingStack.isEmpty()) {
-            LOGGER.info("[CLIENT] blocked: AUTOTAKEOUT={}, awaitingStackEmpty={}", AUTOTAKEOUT, awaitingStack.isEmpty());
+            logVerbose("[CLIENT] blocked: AUTOTAKEOUT={}, awaitingStackEmpty={}", AUTOTAKEOUT, awaitingStack.isEmpty());
             return;
         }
 
         if (mc.player == null || mc.level == null) {
-            LOGGER.info("[CLIENT] blocked: no player or level");
+            logVerbose("[CLIENT] blocked: no player or level");
             return;
         }
 
         if (mc.player.getAbilities().instabuild) {
-            LOGGER.info("[CLIENT] blocked: creative mode");
+            logVerbose("[CLIENT] blocked: creative mode");
             return;
         }
 
         if (!(mc.hitResult instanceof BlockHitResult blockHitResult)) {
-            LOGGER.info("[CLIENT] blocked: hitResult={}", mc.hitResult);
+            logVerbose("[CLIENT] blocked: hitResult={}", mc.hitResult);
             return;
         }
 
@@ -144,27 +168,27 @@ public class TakeitoutClient implements ClientModInitializer {
         Block block = blockState.getBlock();
         ItemStack stack = block.asItem().getDefaultInstance();
 
-        LOGGER.info("[CLIENT] target block={}, stack={}", block, stack);
+        logVerbose("[CLIENT] target block={}, stack={}", block, stack);
 
         if (stack.isEmpty()) {
-            LOGGER.info("[CLIENT] blocked: target stack is empty");
+            logVerbose("[CLIENT] blocked: target stack is empty");
             return;
         }
 
         Inventory inventory = mc.player.getInventory();
         int slot = inventory.findSlotMatchingItem(stack);
-        LOGGER.info("[CLIENT] direct inventory slot={}", slot);
+        logVerbose("[CLIENT] direct inventory slot={}", slot);
 
         if (slot != -1) {
-            LOGGER.info("[CLIENT] blocked: already in inventory");
+            logVerbose("[CLIENT] blocked: already in inventory");
             return;
         }
 
         int shulker = Util.getShulkerWithStack(inventory, stack);
-        LOGGER.info("[CLIENT] shulker slot={}", shulker);
+        logVerbose("[CLIENT] shulker slot={}", shulker);
 
         if (shulker == -1) {
-            LOGGER.info("[CLIENT] blocked: no shulker with stack found");
+            logVerbose("[CLIENT] blocked: no shulker with stack found");
             return;
         }
 
@@ -172,50 +196,71 @@ public class TakeitoutClient implements ClientModInitializer {
                 ItemStackInventory.getInventoryFromShulker(inventory.getItem(shulker)),
                 stack
         );
-        LOGGER.info("[CLIENT] inner slot={}", inner);
+        logVerbose("[CLIENT] inner slot={}", inner);
 
         if (inner == -1) {
-            LOGGER.info("[CLIENT] blocked: inner slot not found");
+            logVerbose("[CLIENT] blocked: inner slot not found");
             return;
         }
 
         boolean canSend = ClientPlayNetworking.canSend(Takeitout.GetShulkerStackPayload.ID);
-        LOGGER.info("[CLIENT] canSend={}", canSend);
+        logVerbose("[CLIENT] canSend={}", canSend);
 
         if (!canSend) {
-            LOGGER.info("[CLIENT] blocked: networking channel unavailable");
+            logVerbose("[CLIENT] blocked: networking channel unavailable");
             return;
         }
 
-        LOGGER.info("[CLIENT] sending packet: inner={}, shulker={}", inner, shulker);
-        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker));
+        logVerbose("[CLIENT] sending packet: inner={}, shulker={}", inner, shulker);
+        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, SHULKER_SINGLE_ITEM_MODE));
     }
 
     private static void tryPickFromSchematicOnUse(Minecraft mc) {
+        logVerbose("[RMB_FLOW] tryPickFromSchematicOnUse: autoTakeout={}, awaitingEmpty={}", AUTOTAKEOUT, awaitingStack.isEmpty());
+
         if (!AUTOTAKEOUT || mc.player == null || mc.level == null || mc.screen != null) {
+            logVerbose("[RMB_FLOW] blocked: invalid context. player={}, level={}, screen={}", mc.player != null, mc.level != null, mc.screen);
             return;
         }
 
         if (Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
+            logVerbose("[RMB_FLOW] blocked: easy place mode is enabled");
             return;
         }
 
         WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
         if (schematicWorld == null) {
+            logVerbose("[RMB_FLOW] blocked: schematic world is null");
             return;
         }
 
         BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(mc.player, 5.0D, true, true);
         if (schematicHit == null || schematicHit.getBlockPos() == null) {
+            logVerbose("[RMB_FLOW] blocked: no schematic hit");
             return;
         }
 
         SchematicBlockState st = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
         if (st.targetState == null || st.targetState.isAir()) {
+            logVerbose("[RMB_FLOW] blocked: target state is null/air at {}", schematicHit.getBlockPos());
             return;
         }
 
+        logVerbose(
+                "[RMB_FLOW] pick request: hologramPos={}, hologramState={}, currentWorldState={}, selectedHotbarSlot={}, mainHand={}",
+                schematicHit.getBlockPos(),
+                st.targetState,
+                st.currentState,
+                mc.player.getInventory().getSelectedSlot(),
+                mc.player.getMainHandItem()
+        );
         WorldUtils.doSchematicWorldPickBlock(true, mc);
+    }
+
+    private static void logVerbose(String message, Object... args) {
+        if (VERBOSE_LOG) {
+            LOGGER.info(message, args);
+        }
     }
 
     public static boolean onGameTick() {

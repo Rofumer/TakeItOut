@@ -9,6 +9,7 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
@@ -36,6 +37,8 @@ public class LitematicaMixin {
 
     @Unique
     private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
+    @Unique
+    private static final boolean VERBOSE_LOG = false;
 
     @Unique private static int waitTicks = 0;
     @Unique private static boolean waitingForItem = false;
@@ -43,6 +46,10 @@ public class LitematicaMixin {
     @Unique private static int retryCount = 0;
     @Unique private static int expectedWaitTicks = 40;
     @Unique private static long requestTsMs = 0L;
+    @Unique private static BlockPos lastEasyPlacePos = null;
+    @Unique private static BlockState lastEasyPlaceTargetState = null;
+    @Unique private static boolean autoPlaceRetryInProgress = false;
+    @Unique private static boolean autoPlaceRetriedForCurrentWait = false;
 
     @Unique
     private static int computeExpectedWaitTicks(Minecraft mc) {
@@ -73,6 +80,14 @@ public class LitematicaMixin {
         return baseTicks + (int) (System.nanoTime() % (2L * spread + 1)) - spread;
     }
 
+    @Unique
+    private static String slotToHotbarHuman(int slot) {
+        if (slot >= 0 && slot <= 8) {
+            return (slot + 1) + "/9";
+        }
+        return "non-hotbar(" + slot + ")";
+    }
+
     @Inject(method = "doEasyPlaceAction", at = @At("HEAD"), cancellable = true, remap = false)
     private static void interceptMissingItem(Minecraft mc, CallbackInfoReturnable<InteractionResult> cir) {
         if (mc == null || mc.player == null) {
@@ -91,14 +106,46 @@ public class LitematicaMixin {
         }
 
         BlockState state = schematic.getBlockState(pos);
+        BlockState worldState = mc.level.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandItem();
 
+        if (state.equals(worldState)) {
+            return;
+        }
+
+        if (waitingForItem && waitingState != null && !waitingState.equals(state)) {
+            logVerbose(
+                    "[RMB_FLOW] target changed while waiting: oldState={}, newState={}, oldPos={}, newPos={}. Resetting wait.",
+                    waitingState,
+                    state,
+                    lastEasyPlacePos,
+                    pos
+            );
+            waitingForItem = false;
+            waitingState = null;
+            waitTicks = 0;
+            retryCount = 0;
+            autoPlaceRetriedForCurrentWait = false;
+        }
+
+        // We verify success against the exact target selected at action start.
+        lastEasyPlacePos = pos.immutable();
+        lastEasyPlaceTargetState = state;
+
         if (!InventoryUtils.areStacksEqual(inHand, required)) {
-            //LOGGER.info("[LITEMATICA] missing item detected, required={}, inHand={}", required, inHand);
+            logVerbose(
+                    "[RMB_FLOW] missing required item: hologramPos={}, hologramState={}, worldState={}, required={}, inHand={}, selectedHotbarSlot={}",
+                    pos,
+                    state,
+                    worldState,
+                    required,
+                    inHand,
+                    slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+            );
 
             if (!waitingForItem) {
-                //LOGGER.info("[LITEMATICA] invoking doSchematicWorldPickBlock");
+                logVerbose("[RMB_FLOW] requesting pick block for missing item");
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
                 waitingForItem = true;
                 waitingState = state;
@@ -106,7 +153,8 @@ public class LitematicaMixin {
                 retryCount = 0;
                 expectedWaitTicks = computeExpectedWaitTicks(mc);
                 requestTsMs = System.currentTimeMillis();
-                //LOGGER.info("[LITEMATICA] waiting started, expectedWaitTicks={}", expectedWaitTicks);
+                autoPlaceRetriedForCurrentWait = false;
+                logVerbose("[RMB_FLOW] waiting started, expectedWaitTicks={}", expectedWaitTicks);
             }
 
             cir.setReturnValue(InteractionResult.FAIL);
@@ -128,31 +176,60 @@ public class LitematicaMixin {
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
 
             if (InventoryUtils.areStacksEqual(inHand, required)) {
-                //LOGGER.info("[LITEMATICA] required item arrived in hand after {} ticks", waitTicks);
+                if (!autoPlaceRetriedForCurrentWait
+                        && !autoPlaceRetryInProgress
+                        && lastEasyPlacePos != null
+                        && lastEasyPlaceTargetState != null
+                        && !client.level.getBlockState(lastEasyPlacePos).equals(lastEasyPlaceTargetState)) {
+                    autoPlaceRetriedForCurrentWait = true;
+                    autoPlaceRetryInProgress = true;
+                    try {
+                        InteractionResult retryResult = invokeDoEasyPlaceActionReflective(client);
+                        logVerbose("[RMB_FLOW] auto place retry on item arrival: result={}", retryResult);
+                    } finally {
+                        autoPlaceRetryInProgress = false;
+                    }
+                }
+
+                logVerbose(
+                        "[RMB_FLOW] required item arrived in hand: waitedTicks={}, retries={}, selectedHotbarSlot={}, mainHand={}",
+                        waitTicks,
+                        retryCount,
+                        slotToHotbarHuman(client.player.getInventory().getSelectedSlot()),
+                        inHand
+                );
                 waitingForItem = false;
                 waitingState = null;
                 waitTicks = 0;
                 retryCount = 0;
+                autoPlaceRetriedForCurrentWait = false;
             } else {
                 waitTicks++;
 
                 if (retryCount == 0 && waitTicks >= jitter(expectedWaitTicks / 2, 10)) {
-                    //LOGGER.info("[LITEMATICA] retry 1 at tick {}", waitTicks);
+                    logVerbose("[RMB_FLOW] retry pick block #1 at tick {}", waitTicks);
                     WorldUtils.doSchematicWorldPickBlock(true, client);
                     retryCount = 1;
                 } else if (retryCount == 1 && waitTicks >= jitter(expectedWaitTicks, 10)) {
-                    //LOGGER.info("[LITEMATICA] retry 2 at tick {}", waitTicks);
+                    logVerbose("[RMB_FLOW] retry pick block #2 at tick {}", waitTicks);
                     WorldUtils.doSchematicWorldPickBlock(true, client);
                     retryCount = 2;
                 }
 
                 int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
                 if (waitTicks >= hardTimeout) {
-                    //LOGGER.info("[LITEMATICA] Timeout while waiting item from shulker. ping-based {}t, waited {}t, retries {}", expectedWaitTicks, waitTicks, retryCount);
+                    LOGGER.warn(
+                            "[RMB_FLOW] timeout waiting item from shulker: expectedWaitTicks={}, waitedTicks={}, retries={}, elapsedMs={}",
+                            expectedWaitTicks,
+                            waitTicks,
+                            retryCount,
+                            (System.currentTimeMillis() - requestTsMs)
+                    );
                     waitingForItem = false;
                     waitingState = null;
                     waitTicks = 0;
                     retryCount = 0;
+                    autoPlaceRetriedForCurrentWait = false;
                 }
             }
         }
@@ -160,18 +237,31 @@ public class LitematicaMixin {
         return client;
     }
 
+    @Unique
+    private static InteractionResult invokeDoEasyPlaceActionReflective(Minecraft client) {
+        try {
+            var method = WorldUtils.class.getDeclaredMethod("doEasyPlaceAction", Minecraft.class);
+            method.setAccessible(true);
+            Object result = method.invoke(null, client);
+            if (result instanceof InteractionResult interactionResult) {
+                return interactionResult;
+            }
+        } catch (Throwable t) {
+            LOGGER.warn("[RMB_FLOW] auto place retry reflective call failed", t);
+        }
+
+        return InteractionResult.PASS;
+    }
+
     @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true, remap = false)
     private static void doSchematicWorldPickBlockHook(boolean closest, Minecraft mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
-        //LOGGER.info("[LITEMATICA] doSchematicWorldPickBlockHook entered");
-
         if (mc == null || mc.player == null) {
-            //LOGGER.info("[LITEMATICA] abort: mc/player null");
             return;
         }
 
         if (!isSelectedHotbarSlotAllowedByLitematica()) {
-            //LOGGER.info("[LITEMATICA] abort: selected hotbar slot not allowed");
+            logVerbose("[RMB_FLOW] pick blocked by PICK_BLOCKABLE_SLOTS, selected={}", slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
             return;
         }
 
@@ -179,58 +269,119 @@ public class LitematicaMixin {
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
-            //LOGGER.info("[LITEMATICA] abort: no valid block hit, hit={}", hit);
+            logVerbose("[RMB_FLOW] pick blocked: no valid schematic hit, hit={}", hit);
             return;
         }
 
         BlockPos pos = hit.getBlockPos();
         WorldSchematic world = SchematicWorldHandler.getSchematicWorld();
         if (world == null) {
-            //LOGGER.info("[LITEMATICA] abort: schematic world null");
+            logVerbose("[RMB_FLOW] pick blocked: schematic world null");
             return;
         }
 
         BlockState state = world.getBlockState(pos);
+        BlockState worldState = mc.level.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
 
-        //LOGGER.info("[LITEMATICA] required={}, mainHand={}", required, mc.player.getMainHandItem());
+        logVerbose(
+                "[RMB_FLOW] pick context: hologramPos={}, hologramState={}, worldState={}, requiredItem={}, mainHand={}, selectedHotbarSlot={}",
+                pos,
+                state,
+                worldState,
+                required,
+                mc.player.getMainHandItem(),
+                slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+        );
 
         if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandItem(), required)) {
             int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
-            //LOGGER.info("[LITEMATICA] direct inventory slot={}", slot);
+            logVerbose("[RMB_FLOW] required item not in hand. direct inventory slot={}", slot);
 
             if (slot != -1) {
-                //LOGGER.info("[LITEMATICA] swapping existing item to main hand");
+                logVerbose("[RMB_FLOW] swapping item from slot {} to selected hotbar {}", slot, slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
                 InventoryUtils.swapItemToMainHand(required, mc);
             } else {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
-                //LOGGER.info("[LITEMATICA] shulker slot={}", shulkerSlot);
+                logVerbose("[RMB_FLOW] searching shulker with required item. shulkerSlot={}", shulkerSlot);
 
                 if (shulkerSlot != -1) {
                     Container shInv = getInventoryFromShulker(mc.player.getInventory().getItem(shulkerSlot));
                     int inner = getSlotWithStack(shInv, required);
-                    //LOGGER.info("[LITEMATICA] inner slot={}", inner);
+                    logVerbose("[RMB_FLOW] shulker lookup result: shulkerSlot={}, innerSlot={}", shulkerSlot, inner);
 
                     if (inner != -1) {
                         boolean canSend = ClientPlayNetworking.canSend(Takeitout.GetShulkerStackPayload.ID);
-                        //LOGGER.info("[LITEMATICA] canSend={}", canSend);
+                        logVerbose("[RMB_FLOW] shulker extract network available={}", canSend);
 
                         if (canSend) {
-                            //LOGGER.info("[LITEMATICA] sending payload inner={}, shulker={}", inner, shulkerSlot);
-                            ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                            logVerbose(
+                                    "[RMB_FLOW] requesting shulker extract: fromShulkerSlot={}, fromShulkerInnerSlot={}, expectedTargetHotbarSlot={}",
+                                    shulkerSlot,
+                                    inner,
+                                    slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+                            );
+                            ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         } else {
-                            //LOGGER.info("[LITEMATICA] payload cannot be sent");
+                            LOGGER.warn("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
                         }
                     }
                 }
             }
         }
 
-        //LOGGER.info("[LITEMATICA] calling schematicWorldPickBlock");
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
+        logVerbose(
+            "[RMB_FLOW] schematicWorldPickBlock completed: selectedHotbarSlot={}, mainHandNow={}",
+            slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()),
+            mc.player.getMainHandItem()
+        );
 
         cir.setReturnValue(true);
         cir.cancel();
+    }
+
+    @Inject(method = "doEasyPlaceAction", at = @At("RETURN"), remap = false)
+    private static void logPlaceResult(Minecraft mc, CallbackInfoReturnable<InteractionResult> cir) {
+        if (mc == null || mc.player == null || mc.level == null) {
+            return;
+        }
+
+        if (lastEasyPlacePos == null || lastEasyPlaceTargetState == null) {
+            return;
+        }
+
+        BlockPos pos = lastEasyPlacePos;
+        BlockState hologramState = lastEasyPlaceTargetState;
+        BlockState worldState = mc.level.getBlockState(lastEasyPlacePos);
+        boolean placed = worldState.equals(hologramState);
+
+        if (!placed || cir.getReturnValue() == InteractionResult.FAIL) {
+            LOGGER.warn(
+                    "[RMB_FLOW] place result: result={}, hologramPos={}, hologramState={}, worldState={}, placedMatchesHologram={}, selectedHotbarSlot={}, mainHand={}",
+                    cir.getReturnValue(),
+                    pos,
+                    hologramState,
+                    worldState,
+                    placed,
+                    slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()),
+                    mc.player.getMainHandItem()
+            );
+        } else {
+            logVerbose(
+                    "[RMB_FLOW] place result: result={}, hologramPos={}, hologramState={}, worldState={}, placedMatchesHologram={}, selectedHotbarSlot={}, mainHand={}",
+                    cir.getReturnValue(),
+                    pos,
+                    hologramState,
+                    worldState,
+                    placed,
+                    slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()),
+                    mc.player.getMainHandItem()
+            );
+        }
+
+        lastEasyPlacePos = null;
+        lastEasyPlaceTargetState = null;
     }
 
     @Unique
@@ -267,6 +418,13 @@ public class LitematicaMixin {
             return false;
         } catch (Throwable ignored) {
             return true;
+        }
+    }
+
+    @Unique
+    private static void logVerbose(String message, Object... args) {
+        if (VERBOSE_LOG) {
+            LOGGER.info(message, args);
         }
     }
 }

@@ -69,7 +69,7 @@ public abstract class PrinterMixin {
                     slot = getSlotWithStack(shInv, itemStack);
                     if (slot != -1) {
                         awaitingStack = itemStack;
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
+                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         break;
                     }
                 }

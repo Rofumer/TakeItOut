@@ -12,7 +12,6 @@ import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 
 @Mixin(ClientPacketListener.class)
 public abstract class UpdatedSlot {
-
     @Inject(
             method = "handleContainerSetSlot",
             at = @At("TAIL")
