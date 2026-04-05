@@ -2,6 +2,9 @@ package net.maxbel.takeitout.client;
 
 import org.slf4j.Logger;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.slf4j.LoggerFactory;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.util.RayTraceUtils;
@@ -12,6 +15,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.loader.api.FabricLoader;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -27,10 +31,19 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+
 public class TakeitoutClient implements ClientModInitializer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
     private static final boolean VERBOSE_LOG = false;
+    private static final Gson GSON = new Gson();
+    private static final Path CLIENT_SETTINGS_PATH = FabricLoader.getInstance()
+            .getConfigDir()
+            .resolve("takeitout-client.json");
     private static KeyMapping keyBinding;
     private static KeyMapping extractModeKeyBinding;
     public static boolean AUTOTAKEOUT;
@@ -45,6 +58,7 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         SHULKER_SINGLE_ITEM_MODE = false;
         awaitingStack = ItemStack.EMPTY;
+        loadClientSettings();
 
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("takeitout", "takeitout")
@@ -92,6 +106,7 @@ public class TakeitoutClient implements ClientModInitializer {
                     AUTOTAKEOUT = true;
                     awaitingStack = ItemStack.EMPTY;
                 }
+                saveClientSettings();
             }
 
             while (extractModeKeyBinding.consumeClick()) {
@@ -106,6 +121,7 @@ public class TakeitoutClient implements ClientModInitializer {
                                 : "message.takeitout.extract_mode.stack"
                 ));
                 LOGGER.info("[TakeItOut] shulker extract mode switched: singleItemMode={}", SHULKER_SINGLE_ITEM_MODE);
+                saveClientSettings();
             }
 
             if (client.player == null) {
@@ -260,6 +276,56 @@ public class TakeitoutClient implements ClientModInitializer {
     private static void logVerbose(String message, Object... args) {
         if (VERBOSE_LOG) {
             LOGGER.info(message, args);
+        }
+    }
+
+    private static void loadClientSettings() {
+        if (!Files.exists(CLIENT_SETTINGS_PATH)) {
+            return;
+        }
+
+        try {
+            String raw = Files.readString(CLIENT_SETTINGS_PATH);
+            JsonObject settings = JsonParser.parseString(raw).getAsJsonObject();
+            AUTOTAKEOUT = getBoolean(settings, "autotakeout", false);
+            SHULKER_SINGLE_ITEM_MODE = getBoolean(settings, "single_item_mode", false);
+            LOGGER.info(
+                    "[TakeItOut] loaded settings: autotakeout={}, singleItemMode={}",
+                    AUTOTAKEOUT,
+                    SHULKER_SINGLE_ITEM_MODE
+            );
+        } catch (Exception e) {
+            LOGGER.warn("[TakeItOut] failed to load client settings from {}", CLIENT_SETTINGS_PATH, e);
+        }
+    }
+
+    private static void saveClientSettings() {
+        try {
+            Files.createDirectories(CLIENT_SETTINGS_PATH.getParent());
+            JsonObject settings = new JsonObject();
+            settings.addProperty("autotakeout", AUTOTAKEOUT);
+            settings.addProperty("single_item_mode", SHULKER_SINGLE_ITEM_MODE);
+            Files.writeString(
+                    CLIENT_SETTINGS_PATH,
+                    GSON.toJson(settings),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+            );
+        } catch (IOException e) {
+            LOGGER.warn("[TakeItOut] failed to save client settings to {}", CLIENT_SETTINGS_PATH, e);
+        }
+    }
+
+    private static boolean getBoolean(JsonObject settings, String key, boolean fallback) {
+        if (!settings.has(key) || settings.get(key).isJsonNull()) {
+            return fallback;
+        }
+
+        try {
+            return settings.get(key).getAsBoolean();
+        } catch (Exception e) {
+            return fallback;
         }
     }
 
