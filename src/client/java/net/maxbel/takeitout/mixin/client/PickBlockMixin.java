@@ -2,6 +2,7 @@ package net.maxbel.takeitout.mixin.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -51,7 +52,7 @@ public abstract class PickBlockMixin {
         if (shulker != -1) {
             slot = Util.getSlotWithStack(ItemStackInventory.getInventoryFromShulker(this.player.getInventory().getStack(shulker)), stack);
             if (slot != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
+                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
             }
         }
 

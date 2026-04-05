@@ -22,6 +22,7 @@ import java.util.List;
 
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.TakeitoutClient.AUTOTAKEOUT;
+import static net.maxbel.takeitout.client.TakeitoutClient.TAKE_SINGLE_ITEM_MODE;
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
@@ -38,8 +39,7 @@ public abstract class PrinterMixin {
 
     @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("TAIL"), remap = false)
     public void methodHookTail(CallbackInfoReturnable<Boolean> cir) {
-
-        if (TakeitoutClient.AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
+        if (TakeitoutClient.AUTOTAKEOUT && awaitingStack.isEmpty()) {
 
 
             //System.out.println("PrinterMixin");
@@ -66,7 +66,7 @@ public abstract class PrinterMixin {
                     slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) player.getInventory().getStack(shulker))), itemStack);
                     if (slot != -1) {
                         awaitingStack = itemStack;
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker));
+                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TAKE_SINGLE_ITEM_MODE));
                         break;
                     }
                 }
@@ -78,7 +78,7 @@ public abstract class PrinterMixin {
     @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
     public void methodHookHead(CallbackInfoReturnable<Boolean> cir) {
 
-        if (awaitingStack != ItemStack.EMPTY) {
+        if (!awaitingStack.isEmpty()) {
             cir.setReturnValue(false);
             cir.cancel();
         }

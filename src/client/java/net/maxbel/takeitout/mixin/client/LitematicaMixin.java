@@ -23,53 +23,25 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
+import static net.maxbel.takeitout.client.TakeitoutClient.TAKE_SINGLE_ITEM_MODE;
+import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
+    @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
 
-    @Unique private static int waitTicks = 0;
-    @Unique private static boolean waitingForItem = false;
-    @Unique private static BlockState waitingState = null;
-    @Unique private static int retryCount = 0;
-    @Unique private static int expectedWaitTicks = 40; // пересчитается динамически
-    @Unique private static long requestTsMs = 0L;
-
-    /** Оценка нужного ожидания с учётом пинга (в тиках). */
-    @Unique
-    private static int computeExpectedWaitTicks(MinecraftClient mc) {
-        int pingMs = 0;
-        try {
-            if (mc != null && mc.getNetworkHandler() != null && mc.player != null) {
-                var entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
-                if (entry != null) pingMs = entry.getLatency(); // ms
-            }
-        } catch (Throwable ignored) {}
-
-        // Если пинг неизвестен — примем 180 мс как «типичную Европу»
-        if (pingMs <= 0) pingMs = 180;
-
-        // Нужно 2–3 round-trip: возьмём 2.5 RTT + небольшой запас
-        int ms = (int) Math.round(pingMs * 2.5 + 200);
-
-        // Перевод в тики: 1 тик = 50 мс
-        int ticks = (ms + 49) / 50;
-
-        // Ограничим разумными пределами
-        ticks = Math.max(20, Math.min(ticks, 200)); // от 1 до 10 секунд
-        return ticks;
-    }
-
-    /** Небольшой джиттер, чтобы не «бить» ровно в границу тиков сервера. */
-    @Unique
-    private static int jitter(int baseTicks, int percent) {
-        int spread = Math.max(1, baseTicks * percent / 100);
-        return baseTicks + (int) (System.nanoTime() % (2L * spread + 1)) - spread;
-    }
+    @Unique private static boolean waitingForShulkerResponse = false;
+    @Unique private static ItemStack waitingShulkerStack = ItemStack.EMPTY;
+    @Unique private static long waitingShulkerRequestTsMs = 0L;
+    @Unique private static BlockPos lastEasyPlaceTargetPos = null;
+    @Unique private static BlockState lastEasyPlaceTargetState = null;
 
     /**
      * Перехват Easy Place: если в руке не тот предмет — инициируем pick block и ждём.
@@ -77,32 +49,128 @@ public class LitematicaMixin {
      */
     @Inject(method = "doEasyPlaceAction", at = @At("HEAD"), cancellable = true, remap = false)
     private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
-        if (mc == null || mc.player == null) return;
+        if (mc == null || mc.player == null) {
+            lastEasyPlaceTargetPos = null;
+            lastEasyPlaceTargetState = null;
+            return;
+        }
 
         BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 6, true, true);
-        if (result == null) return;
+        if (result == null || result.getType() != HitResult.Type.BLOCK) {
+            lastEasyPlaceTargetPos = null;
+            lastEasyPlaceTargetState = null;
+            return;
+        }
 
-        BlockPos pos = result.getBlockPos();
         WorldSchematic schematic = SchematicWorldHandler.getSchematicWorld();
-        if (schematic == null) return;
+        if (schematic == null) {
+            lastEasyPlaceTargetPos = null;
+            lastEasyPlaceTargetState = null;
+            return;
+        }
 
-        BlockState state = schematic.getBlockState(pos);
-        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
+        lastEasyPlaceTargetPos = result.getBlockPos().toImmutable();
+        lastEasyPlaceTargetState = schematic.getBlockState(lastEasyPlaceTargetPos);
+
+        ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(lastEasyPlaceTargetState);
         ItemStack inHand = mc.player.getMainHandStack();
 
-        if (!InventoryUtils.areStacksEqual(inHand, required)) {
-            if (!waitingForItem) {
-                WorldUtils.doSchematicWorldPickBlock(true, mc);
-                waitingForItem = true;
-                waitingState = state;
-                waitTicks = 0;
-                retryCount = 0;
-                expectedWaitTicks = computeExpectedWaitTicks(mc);
-                requestTsMs = System.currentTimeMillis();
+        if (waitingForShulkerResponse) {
+            if (!waitingShulkerStack.isEmpty() && InventoryUtils.areStacksAndNbtEqual(inHand, waitingShulkerStack)) {
+                LOGGER.debug(
+                        "EasyPlace shulker wait resolved: expected={}, inHand={}",
+                        waitingShulkerStack,
+                        inHand
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
+            } else {
+                long elapsedMs = System.currentTimeMillis() - waitingShulkerRequestTsMs;
+                if (elapsedMs < 3500L) {
+                    cir.setReturnValue(ActionResult.FAIL);
+                    cir.cancel();
+                    return;
+                }
+
+                LOGGER.warn(
+                        "EasyPlace shulker wait timeout in pre-check: expected={}, inHand={}, elapsedMs={}",
+                        waitingShulkerStack,
+                        inHand,
+                        elapsedMs
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
             }
+        }
+
+        if (InventoryUtils.areStacksAndNbtEqual(inHand, required)) {
+            return;
+        }
+
+        if (mc.world != null && mc.world.getBlockState(lastEasyPlaceTargetPos).equals(lastEasyPlaceTargetState)) {
+            return;
+        }
+
+        WorldUtils.doSchematicWorldPickBlock(true, mc);
+
+        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
             cir.setReturnValue(ActionResult.FAIL);
             cir.cancel();
         }
+    }
+
+    @Inject(method = "doEasyPlaceAction", at = @At("RETURN"), remap = false)
+    private static void logEasyPlaceResult(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
+        if (mc == null || mc.world == null || lastEasyPlaceTargetPos == null || lastEasyPlaceTargetState == null) {
+            return;
+        }
+
+        BlockState worldState = mc.world.getBlockState(lastEasyPlaceTargetPos);
+        boolean stateMatches = worldState.equals(lastEasyPlaceTargetState);
+        boolean actionSucceeded = cir.getReturnValue() != ActionResult.FAIL;
+
+        if (stateMatches) {
+            LOGGER.debug(
+                    "EasyPlace result: pos={}, actionResult={}, actionSucceeded={}, worldState={}, targetState={}, placedMatchesTarget={}",
+                    lastEasyPlaceTargetPos,
+                    cir.getReturnValue(),
+                    actionSucceeded,
+                    worldState,
+                    lastEasyPlaceTargetState,
+                    true
+            );
+        } else if (actionSucceeded) {
+            LOGGER.debug(
+                    "EasyPlace result: pos={}, actionResult={}, actionSucceeded={}, worldState={}, targetState={}, placedMatchesTarget={}",
+                    lastEasyPlaceTargetPos,
+                    cir.getReturnValue(),
+                    true,
+                    worldState,
+                    lastEasyPlaceTargetState,
+                    false
+            );
+        } else {
+            LOGGER.warn(
+                    "EasyPlace result: pos={}, actionResult={}, actionSucceeded={}, worldState={}, targetState={}, placedMatchesTarget={}",
+                    lastEasyPlaceTargetPos,
+                    cir.getReturnValue(),
+                    false,
+                    worldState,
+                    lastEasyPlaceTargetState,
+                    false
+            );
+        }
+
+        if (actionSucceeded && stateMatches) {
+            waitingForShulkerResponse = false;
+            waitingShulkerStack = ItemStack.EMPTY;
+            waitingShulkerRequestTsMs = 0L;
+        }
+
+        lastEasyPlaceTargetPos = null;
+        lastEasyPlaceTargetState = null;
     }
 
     @ModifyArg(
@@ -114,42 +182,6 @@ public class LitematicaMixin {
             remap = false
     )
     private static MinecraftClient checkItemAndTick(MinecraftClient client) {
-        if (waitingForItem && client != null && client.player != null && waitingState != null) {
-            ItemStack inHand = client.player.getMainHandStack();
-            ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
-
-            if (InventoryUtils.areStacksEqual(inHand, required)) {
-                // Успешно: сброс состояния
-                waitingForItem = false;
-                waitingState = null;
-                waitTicks = 0;
-                retryCount = 0;
-            } else {
-                waitTicks++;
-
-                // Первая повторная попытка примерно на половине ожидаемого времени
-                if (retryCount == 0 && waitTicks >= jitter(expectedWaitTicks / 2, 10)) {
-                    WorldUtils.doSchematicWorldPickBlock(true, client);
-                    retryCount = 1;
-                }
-                // Вторая повторная попытка ближе к ожидаемому времени
-                else if (retryCount == 1 && waitTicks >= jitter(expectedWaitTicks, 10)) {
-                    WorldUtils.doSchematicWorldPickBlock(true, client);
-                    retryCount = 2;
-                }
-
-                // Окончательный таймаут: ожидаемое время + половина
-                int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
-                if (waitTicks >= hardTimeout) {
-                    System.out.println("[TakeItOut] Timeout while waiting item from shulker. ping-based " +
-                            expectedWaitTicks + "t, waited " + waitTicks + "t, retries " + retryCount);
-                    waitingForItem = false;
-                    waitingState = null;
-                    waitTicks = 0;
-                    retryCount = 0;
-                }
-            }
-        }
         return client;
     }
 
@@ -177,12 +209,101 @@ public class LitematicaMixin {
 
         BlockState state = world.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
+        int selectedSlot = mc.player.getInventory().getSelectedSlot();
+        ItemStack handBefore = mc.player.getMainHandStack();
+        boolean easyPlaceMode = Configs.Generic.EASY_PLACE_MODE.getBooleanValue();
+
+        if (!easyPlaceMode && waitingForShulkerResponse) {
+            waitingForShulkerResponse = false;
+            waitingShulkerStack = ItemStack.EMPTY;
+            waitingShulkerRequestTsMs = 0L;
+        }
+
+        if (easyPlaceMode && waitingForShulkerResponse && !waitingShulkerStack.isEmpty()) {
+            if (!InventoryUtils.areStacksEqual(waitingShulkerStack, required)) {
+                LOGGER.debug(
+                        "PickBlock shulker response dropped (target changed): expected={}, newRequired={}, inHand={}",
+                        waitingShulkerStack,
+                        required,
+                        mc.player.getMainHandStack()
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
+            }
+        }
+
+        if (easyPlaceMode && waitingForShulkerResponse && !waitingShulkerStack.isEmpty()) {
+            if (InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), waitingShulkerStack)) {
+                LOGGER.debug(
+                        "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
+                        waitingShulkerStack,
+                        mc.player.getMainHandStack(),
+                        mc.player.getInventory().getSelectedSlot()
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
+            } else {
+                int inventorySlot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, waitingShulkerStack, true);
+                if (inventorySlot != -1) {
+                    LOGGER.debug(
+                            "PickBlock shulker response received in inventory: expected={}, sourceSlot={}, handBefore={}, handSlot={}",
+                            waitingShulkerStack,
+                            inventorySlot,
+                            mc.player.getMainHandStack(),
+                            mc.player.getInventory().getSelectedSlot()
+                    );
+                    InventoryUtils.swapItemToMainHand(waitingShulkerStack, mc);
+                    waitingForShulkerResponse = false;
+                    waitingShulkerStack = ItemStack.EMPTY;
+                    waitingShulkerRequestTsMs = 0L;
+                } else {
+                    long elapsedMs = System.currentTimeMillis() - waitingShulkerRequestTsMs;
+                    if (elapsedMs < 3500L) {
+                        LOGGER.debug(
+                                "PickBlock waiting shulker response: expected={}, inHand={}, elapsedMs={}",
+                                waitingShulkerStack,
+                                mc.player.getMainHandStack(),
+                                elapsedMs
+                        );
+                        cir.setReturnValue(true);
+                        cir.cancel();
+                        return;
+                    }
+
+                    LOGGER.warn(
+                            "PickBlock shulker response timeout: expected={}, inHand={}, elapsedMs={}, retrying",
+                            waitingShulkerStack,
+                            mc.player.getMainHandStack(),
+                            elapsedMs
+                    );
+                    waitingForShulkerResponse = false;
+                    waitingShulkerStack = ItemStack.EMPTY;
+                    waitingShulkerRequestTsMs = 0L;
+                }
+            }
+        }
+
+        LOGGER.debug(
+                "PickBlock request: pos={}, required={}, inHand={}, handSlot={}",
+                pos,
+                required,
+                handBefore,
+                selectedSlot
+        );
 
         // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
         if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
             int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
 
             if (slot != -1) {
+                LOGGER.debug(
+                        "PickBlock source=inventory: required={}, sourceSlot={}, handSlot={}",
+                        required,
+                        slot,
+                        selectedSlot
+                );
                 InventoryUtils.swapItemToMainHand(required, mc);
             } else {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
@@ -190,14 +311,51 @@ public class LitematicaMixin {
                     Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
                     int inner = getSlotWithStack(shInv, required);
                     if (inner != -1) {
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot));
+                        LOGGER.debug(
+                                "PickBlock source=shulker: required={}, shulkerSlot={}, shulkerInnerSlot={}, handSlot={}",
+                                required,
+                                shulkerSlot,
+                                inner,
+                                selectedSlot
+                        );
+                        awaitingStack = required.copyWithCount(1);
+                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
+                        if (easyPlaceMode) {
+                            waitingForShulkerResponse = true;
+                            waitingShulkerStack = required.copy();
+                            waitingShulkerRequestTsMs = System.currentTimeMillis();
+                        }
+                        cir.setReturnValue(true);
+                        cir.cancel();
+                        return;
+                    } else {
+                        LOGGER.warn(
+                                "PickBlock shulker-miss: required={}, shulkerSlot={}, handSlot={}",
+                                required,
+                                shulkerSlot,
+                                selectedSlot
+                        );
                     }
+                } else {
+                    LOGGER.warn(
+                            "PickBlock miss: required={} not found in inventory or shulkers, handSlot={}",
+                            required,
+                            selectedSlot
+                    );
                 }
             }
         }
 
         // 3) дальше выполняем pickblock лайтематики как и раньше
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
+
+        LOGGER.debug(
+                "PickBlock done: pos={}, required={}, handAfter={}, handSlot={}",
+                pos,
+                required,
+                mc.player.getMainHandStack(),
+                mc.player.getInventory().getSelectedSlot()
+        );
 
         cir.setReturnValue(true);
         cir.cancel();

@@ -8,6 +8,7 @@
   "client": [
     "LitematicaMixin",
     "TweakerooMixin",
+    "MinecraftClientAccessor",
     "MixinClientPlayerEntity",
     "MouseMixin",
     "PickBlockMixin",

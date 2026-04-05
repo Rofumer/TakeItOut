@@ -19,7 +19,7 @@ public abstract class UpdatedSlot {
     @Inject(method = "onScreenHandlerSlotUpdate(Lnet/minecraft/network/packet/s2c/play/ScreenHandlerSlotUpdateS2CPacket;)V", at = @At("TAIL"), remap = true)
     public void methodHook(ScreenHandlerSlotUpdateS2CPacket packet, CallbackInfo ci) {
 
-        if(awaitingStack.getItem() == packet.getStack().copyWithCount(1).getItem() && packet.getSyncId() == 0 && PlayerScreenHandler.isInHotbar(packet.getSlot())) {
+        if(!awaitingStack.isEmpty() && awaitingStack.getItem() == packet.getStack().copyWithCount(1).getItem() && packet.getSyncId() == 0 && PlayerScreenHandler.isInHotbar(packet.getSlot())) {
             awaitingStack = ItemStack.EMPTY;
             //System.out.println("---"+packet.getStack()+"---"+packet.getSlot()+"---"+packet.getSyncId());
         }

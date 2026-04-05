@@ -1,5 +1,8 @@
 package net.maxbel.takeitout.client;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 //import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
@@ -8,6 +11,7 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
@@ -20,15 +24,22 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.Identifier;
-import net.minecraft.client.option.KeyBinding;
 //import fi.dy.masa.litematica.world.SchematicWorldHandler;
 //import fi.dy.masa.litematica.world.WorldSchematic;
 import org.lwjgl.glfw.GLFW;
 
-public class TakeitoutClient implements ClientModInitializer {
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
-    private static KeyBinding keyBinding;
+public class TakeitoutClient implements ClientModInitializer {
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Path SETTINGS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-client.json");
+
+    private static KeyBinding autoTakeoutKeyBinding;
+    private static KeyBinding singleItemModeKeyBinding;
     public static boolean AUTOTAKEOUT;
+    public static boolean TAKE_SINGLE_ITEM_MODE;
     public static ItemStack awaitingStack;
 
     // id категории
@@ -42,25 +53,56 @@ public class TakeitoutClient implements ClientModInitializer {
     public void onInitializeClient() {
 
         AUTOTAKEOUT = false;
+        TAKE_SINGLE_ITEM_MODE = false;
         awaitingStack = ItemStack.EMPTY;
-        keyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        loadSettings();
+        autoTakeoutKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.takeitout.toggle", // The translation key of the keybinding's name
                 InputUtil.Type.KEYSYM, // The type of the keybinding, KEYSYM for keyboard, MOUSE for mouse.
                 GLFW.GLFW_KEY_R, // The keycode of the key
                 CATEGORY // The translation key of the keybinding's category.
         ));
+        singleItemModeKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+                "key.takeitout.single_item_toggle",
+                InputUtil.Type.KEYSYM,
+                GLFW.GLFW_KEY_B,
+                CATEGORY
+        ));
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (keyBinding.wasPressed()) {
+            if (client.player != null && !awaitingStack.isEmpty()) {
+                if (getSlotWithItem(client.player, awaitingStack.getItem()) != -1) {
+                    awaitingStack = ItemStack.EMPTY;
+                }
+            }
+
+            while (autoTakeoutKeyBinding.wasPressed()) {
                 if (AUTOTAKEOUT) {
                     //client.player.sendMessage(Text.literal("Auto Take Out is OFF"), false);
                     client.player.sendMessage(Text.translatable("message.takeitout.off"), false);
                     AUTOTAKEOUT = false;
                     awaitingStack = ItemStack.EMPTY;
+                    saveSettings();
                 } else {
                     //client.player.sendMessage(Text.literal("Auto Take Out is ON"), false);
                     client.player.sendMessage(Text.translatable("message.takeitout.on"), false);
                     AUTOTAKEOUT = true;
                     awaitingStack = ItemStack.EMPTY;
+                    saveSettings();
+                }
+            }
+
+            while (singleItemModeKeyBinding.wasPressed()) {
+                TAKE_SINGLE_ITEM_MODE = !TAKE_SINGLE_ITEM_MODE;
+                saveSettings();
+                if (client.player != null) {
+                    client.player.sendMessage(
+                            Text.translatable(
+                                    TAKE_SINGLE_ITEM_MODE
+                                            ? "message.takeitout.single_item_mode.on"
+                                            : "message.takeitout.single_item_mode.off"
+                            ),
+                            false
+                    );
                 }
             }
         });
@@ -81,7 +123,7 @@ public class TakeitoutClient implements ClientModInitializer {
 
     public static boolean onGameTick() {
 
-        if (AUTOTAKEOUT && awaitingStack == ItemStack.EMPTY) {
+        if (AUTOTAKEOUT && awaitingStack.isEmpty()) {
 
             try {
                 Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
@@ -119,5 +161,37 @@ public class TakeitoutClient implements ClientModInitializer {
             return false;
         }
         return false;
+    }
+
+    private static void loadSettings() {
+        if (!Files.exists(SETTINGS_PATH)) {
+            return;
+        }
+
+        try {
+            JsonObject obj = GSON.fromJson(Files.readString(SETTINGS_PATH), JsonObject.class);
+            if (obj == null) {
+                return;
+            }
+
+            if (obj.has("autotakeout")) {
+                AUTOTAKEOUT = obj.get("autotakeout").getAsBoolean();
+            }
+            if (obj.has("single_item_mode")) {
+                TAKE_SINGLE_ITEM_MODE = obj.get("single_item_mode").getAsBoolean();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void saveSettings() {
+        try {
+            Files.createDirectories(SETTINGS_PATH.getParent());
+            JsonObject obj = new JsonObject();
+            obj.addProperty("autotakeout", AUTOTAKEOUT);
+            obj.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
+            Files.writeString(SETTINGS_PATH, GSON.toJson(obj));
+        } catch (IOException ignored) {
+        }
     }
 }

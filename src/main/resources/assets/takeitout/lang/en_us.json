@@ -1,7 +1,10 @@
 {
   "key.takeitout.toggle": "Toggle auto take out",
+  "key.takeitout.single_item_toggle": "Toggle single-item mode",
   "message.takeitout.on": "Auto Take Out is ON",
   "message.takeitout.off": "Auto Take Out is OFF",
+  "message.takeitout.single_item_mode.on": "Single-item mode: ON",
+  "message.takeitout.single_item_mode.off": "Single-item mode: OFF",
   "key.category.takeitout.key_category": "TakeItOut",
   "takeitout.msg.stacked_shulker_skipped":"Action prevented (Take It Out Mod): Stacked shulkers"
 }
