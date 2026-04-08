@@ -1,5 +1,7 @@
 package net.maxbel.takeitout.client;
 
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
@@ -19,8 +21,13 @@ public class Util {
                 continue;
             }
 
-            // стаканый шалкер (Carpet/Carpet Extra) — пропускаем и сообщаем в action bar
+            // стаканый шалкер (Carpet/Carpet Extra)
+            // если такой шалкер пустой — не блокируем основной pipeline,
+            // иначе пропускаем и сообщаем в action bar
             if (item.getCount() != 1) {
+                if (isShulkerEmpty(item)) {
+                    continue;
+                }
                 playerInventory.player.sendMessage(
                         //Text.literal("Action prevented (Take It Out Mod): Stacked shulkers").formatted(Formatting.YELLOW),
                         Text.translatable("takeitout.msg.stacked_shulker_skipped", i).formatted(Formatting.YELLOW),
@@ -55,6 +62,19 @@ public class Util {
         return item.getItem() instanceof BlockItem && ((BlockItem)item.getItem()).getBlock() instanceof ShulkerBoxBlock;
     }
 
+    public static boolean isShulkerEmpty(ItemStack shulkerStack) {
+        ContainerComponent container = shulkerStack.get(DataComponentTypes.CONTAINER);
+        if (container == null) {
+            return true;
+        }
+        for (ItemStack innerStack : container.stream().toList()) {
+            if (!innerStack.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static int getSlotWithNoShulker(Inventory inventory) {
         for (int i = getSize(inventory)-1; i >= 0; --i) {
             if(isShulkerItem(inventory.getStack(i))) return i;
@@ -82,4 +102,3 @@ public class Util {
         return inventory.size();
     }
 }
-
