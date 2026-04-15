@@ -136,6 +136,12 @@ public class MouseMixin {
             return;
         }
 
+        // Срабатываем только на несовпадение со схемой (голограммный "миссматч")
+        // Если реальный блок уже совпадает с целевым блоком схемы — не подбираем.
+        if (st.currentState != null && st.targetState.equals(st.currentState)) {
+            return;
+        }
+
         int selectedSlot = client.player.getInventory().getSelectedSlot();
         ItemStack inHand = client.player.getStackInHand(Hand.MAIN_HAND);
         ItemStack wanted = new ItemStack(st.targetState.getBlock().asItem());
