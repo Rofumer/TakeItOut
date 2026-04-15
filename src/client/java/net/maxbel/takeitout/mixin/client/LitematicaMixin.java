@@ -15,7 +15,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.slf4j.Logger;
@@ -26,6 +29,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.Set;
 
 import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
@@ -39,6 +44,10 @@ public class LitematicaMixin {
     private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
     @Unique
     private static final boolean VERBOSE_LOG = false;
+    @Unique
+    private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
+    @Unique
+    private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
 
     @Unique private static int waitTicks = 0;
     @Unique private static boolean waitingForItem = false;
@@ -110,7 +119,7 @@ public class LitematicaMixin {
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandItem();
 
-        if (state.equals(worldState)) {
+        if (arePlacementEquivalent(worldState, state)) {
             return;
         }
 
@@ -133,7 +142,7 @@ public class LitematicaMixin {
         lastEasyPlacePos = pos.immutable();
         lastEasyPlaceTargetState = state;
 
-        if (!InventoryUtils.areStacksEqual(inHand, required)) {
+        if (!ItemStack.isSameItemSameComponents(inHand, required)) {
             logVerbose(
                     "[RMB_FLOW] missing required item: hologramPos={}, hologramState={}, worldState={}, required={}, inHand={}, selectedHotbarSlot={}",
                     pos,
@@ -175,12 +184,12 @@ public class LitematicaMixin {
             ItemStack inHand = client.player.getMainHandItem();
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
 
-            if (InventoryUtils.areStacksEqual(inHand, required)) {
+            if (ItemStack.isSameItemSameComponents(inHand, required)) {
                 if (!autoPlaceRetriedForCurrentWait
                         && !autoPlaceRetryInProgress
                         && lastEasyPlacePos != null
                         && lastEasyPlaceTargetState != null
-                        && !client.level.getBlockState(lastEasyPlacePos).equals(lastEasyPlaceTargetState)) {
+                        && !arePlacementEquivalent(client.level.getBlockState(lastEasyPlacePos), lastEasyPlaceTargetState)) {
                     autoPlaceRetriedForCurrentWait = true;
                     autoPlaceRetryInProgress = true;
                     try {
@@ -294,7 +303,7 @@ public class LitematicaMixin {
                 slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
         );
 
-        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandItem(), required)) {
+        if (!ItemStack.isSameItemSameComponents(mc.player.getMainHandItem(), required)) {
             int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
             logVerbose("[RMB_FLOW] required item not in hand. direct inventory slot={}", slot);
 
@@ -321,6 +330,7 @@ public class LitematicaMixin {
                                     inner,
                                     slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
                             );
+                            TakeitoutClient.awaitingStack = required.copyWithCount(1);
                             ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         } else {
                             LOGGER.warn("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
@@ -354,7 +364,7 @@ public class LitematicaMixin {
         BlockPos pos = lastEasyPlacePos;
         BlockState hologramState = lastEasyPlaceTargetState;
         BlockState worldState = mc.level.getBlockState(lastEasyPlacePos);
-        boolean placed = worldState.equals(hologramState);
+        boolean placed = arePlacementEquivalent(worldState, hologramState);
 
         if (!placed || cir.getReturnValue() == InteractionResult.FAIL) {
             LOGGER.warn(
@@ -382,6 +392,45 @@ public class LitematicaMixin {
 
         lastEasyPlacePos = null;
         lastEasyPlaceTargetState = null;
+    }
+
+    @Unique
+    private static boolean shouldIgnorePlacementProperty(BlockState targetState, Property<?> property) {
+        String name = property.getName();
+
+        if (PLACE_STATE_IGNORED_PROPERTIES.contains(name)) {
+            return true;
+        }
+
+        return (targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
+                && FENCE_WALL_IGNORED_PROPERTIES.contains(name);
+    }
+
+    @Unique
+    private static boolean arePlacementEquivalent(BlockState worldState, BlockState targetState) {
+        if (worldState.equals(targetState)) {
+            return true;
+        }
+
+        if (!worldState.is(targetState.getBlock())) {
+            return false;
+        }
+
+        for (Property<?> property : targetState.getProperties()) {
+            if (shouldIgnorePlacementProperty(targetState, property)) {
+                continue;
+            }
+
+            if (!worldState.hasProperty(property)) {
+                return false;
+            }
+
+            if (!worldState.getValue(property).equals(targetState.getValue(property))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Unique
