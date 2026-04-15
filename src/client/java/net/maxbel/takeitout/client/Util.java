@@ -22,11 +22,21 @@ public class Util {
             }
 
             if (item.getCount() != 1) {
-                player.sendSystemMessage(
-                        Component.translatable("takeitout.msg.stacked_shulker_skipped", i)
-                                .withStyle(ChatFormatting.YELLOW)
-                );
-                continue;
+                try {
+                    if (!isShulkerEmpty(item)) {
+                        player.sendSystemMessage(
+                                Component.translatable("takeitout.msg.stacked_shulker_skipped", i)
+                                        .withStyle(ChatFormatting.YELLOW)
+                        );
+                        continue;
+                    }
+                } catch (Throwable ignored) {
+                    player.sendSystemMessage(
+                            Component.literal("takeitout.msg.shulker_read_fail")
+                                    .withStyle(ChatFormatting.RED)
+                    );
+                    continue;
+                }
             }
 
             try {
@@ -48,6 +58,17 @@ public class Util {
         }
 
         return -1;
+    }
+
+    private static boolean isShulkerEmpty(ItemStack shulker) {
+        Container shulkerInventory = ItemStackInventory.getInventoryFromShulker(shulker);
+        for (int i = 0; i < shulkerInventory.getContainerSize(); i++) {
+            if (!shulkerInventory.getItem(i).isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static boolean isShulkerItem(ItemStack item) {
