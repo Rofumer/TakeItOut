@@ -10,6 +10,8 @@ import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.FenceBlock;
+import net.minecraft.block.WallBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
@@ -17,6 +19,7 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.state.property.Property;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,6 +28,8 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Set;
 
 import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
@@ -36,6 +41,8 @@ import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
+    @Unique private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
+    @Unique private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
 
     @Unique private static boolean waitingForShulkerResponse = false;
     @Unique private static ItemStack waitingShulkerStack = ItemStack.EMPTY;
@@ -76,7 +83,7 @@ public class LitematicaMixin {
         ItemStack inHand = mc.player.getMainHandStack();
 
         if (waitingForShulkerResponse) {
-            if (!waitingShulkerStack.isEmpty() && InventoryUtils.areStacksAndNbtEqual(inHand, waitingShulkerStack)) {
+            if (!waitingShulkerStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(inHand, waitingShulkerStack)) {
                 LOGGER.debug(
                         "EasyPlace shulker wait resolved: expected={}, inHand={}",
                         waitingShulkerStack,
@@ -105,17 +112,17 @@ public class LitematicaMixin {
             }
         }
 
-        if (InventoryUtils.areStacksAndNbtEqual(inHand, required)) {
+        if (ItemStack.areItemsAndComponentsEqual(inHand, required)) {
             return;
         }
 
-        if (mc.world != null && mc.world.getBlockState(lastEasyPlaceTargetPos).equals(lastEasyPlaceTargetState)) {
+        if (mc.world != null && arePlacementEquivalent(mc.world.getBlockState(lastEasyPlaceTargetPos), lastEasyPlaceTargetState)) {
             return;
         }
 
         WorldUtils.doSchematicWorldPickBlock(true, mc);
 
-        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
+        if (!ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), required)) {
             cir.setReturnValue(ActionResult.FAIL);
             cir.cancel();
         }
@@ -128,7 +135,7 @@ public class LitematicaMixin {
         }
 
         BlockState worldState = mc.world.getBlockState(lastEasyPlaceTargetPos);
-        boolean stateMatches = worldState.equals(lastEasyPlaceTargetState);
+        boolean stateMatches = arePlacementEquivalent(worldState, lastEasyPlaceTargetState);
         boolean actionSucceeded = cir.getReturnValue() != ActionResult.FAIL;
 
         if (stateMatches) {
@@ -234,7 +241,7 @@ public class LitematicaMixin {
         }
 
         if (easyPlaceMode && waitingForShulkerResponse && !waitingShulkerStack.isEmpty()) {
-            if (InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), waitingShulkerStack)) {
+            if (ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), waitingShulkerStack)) {
                 LOGGER.debug(
                         "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
                         waitingShulkerStack,
@@ -294,7 +301,7 @@ public class LitematicaMixin {
         );
 
         // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
-        if (!InventoryUtils.areStacksAndNbtEqual(mc.player.getMainHandStack(), required)) {
+        if (!ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), required)) {
             int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
 
             if (slot != -1) {
@@ -322,7 +329,7 @@ public class LitematicaMixin {
                         ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
                         if (easyPlaceMode) {
                             waitingForShulkerResponse = true;
-                            waitingShulkerStack = required.copy();
+                            waitingShulkerStack = required.copyWithCount(1);
                             waitingShulkerRequestTsMs = System.currentTimeMillis();
                         }
                         cir.setReturnValue(true);
@@ -359,6 +366,45 @@ public class LitematicaMixin {
 
         cir.setReturnValue(true);
         cir.cancel();
+    }
+
+    @Unique
+    private static boolean shouldIgnorePlacementProperty(BlockState targetState, Property<?> property) {
+        String name = property.getName();
+
+        if (PLACE_STATE_IGNORED_PROPERTIES.contains(name)) {
+            return true;
+        }
+
+        return (targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
+                && FENCE_WALL_IGNORED_PROPERTIES.contains(name);
+    }
+
+    @Unique
+    private static boolean arePlacementEquivalent(BlockState worldState, BlockState targetState) {
+        if (worldState.equals(targetState)) {
+            return true;
+        }
+
+        if (!worldState.isOf(targetState.getBlock())) {
+            return false;
+        }
+
+        for (Property<?> property : targetState.getProperties()) {
+            if (shouldIgnorePlacementProperty(targetState, property)) {
+                continue;
+            }
+
+            if (!worldState.contains(property)) {
+                return false;
+            }
+
+            if (!worldState.get(property).equals(targetState.get(property))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Unique
