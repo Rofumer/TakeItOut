@@ -80,6 +80,10 @@ public class MouseMixin {
             return;
         }
 
+        if (st.currentState != null && st.targetState.equals(st.currentState)) {
+            return;
+        }
+
         WorldUtils.doSchematicWorldPickBlock(true, this.minecraft);
     }
 }

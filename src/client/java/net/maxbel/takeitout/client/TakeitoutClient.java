@@ -26,8 +26,6 @@ import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.lwjgl.glfw.GLFW;
 
@@ -175,16 +173,31 @@ public class TakeitoutClient implements ClientModInitializer {
             return;
         }
 
-        if (!(mc.hitResult instanceof BlockHitResult blockHitResult)) {
-            logVerbose("[CLIENT] blocked: hitResult={}", mc.hitResult);
+        WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
+        if (schematicWorld == null) {
+            logVerbose("[CLIENT] blocked: schematic world is null");
             return;
         }
 
-        BlockState blockState = mc.level.getBlockState(blockHitResult.getBlockPos());
-        Block block = blockState.getBlock();
-        ItemStack stack = block.asItem().getDefaultInstance();
+        BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(mc.player, 5.0D, true, true);
+        if (schematicHit == null || schematicHit.getBlockPos() == null) {
+            logVerbose("[CLIENT] blocked: no schematic hit");
+            return;
+        }
 
-        logVerbose("[CLIENT] target block={}, stack={}", block, stack);
+        SchematicBlockState state = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
+        if (state.targetState == null || state.targetState.isAir()) {
+            logVerbose("[CLIENT] blocked: target state is null/air at {}", schematicHit.getBlockPos());
+            return;
+        }
+        if (state.currentState != null && state.targetState.equals(state.currentState)) {
+            logVerbose("[CLIENT] blocked: no mismatch at {}", schematicHit.getBlockPos());
+            return;
+        }
+
+        ItemStack stack = state.targetState.getBlock().asItem().getDefaultInstance();
+
+        logVerbose("[CLIENT] target schematic state={}, current state={}, stack={}", state.targetState, state.currentState, stack);
 
         if (stack.isEmpty()) {
             logVerbose("[CLIENT] blocked: target stack is empty");
@@ -259,6 +272,10 @@ public class TakeitoutClient implements ClientModInitializer {
         SchematicBlockState st = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
         if (st.targetState == null || st.targetState.isAir()) {
             logVerbose("[RMB_FLOW] blocked: target state is null/air at {}", schematicHit.getBlockPos());
+            return;
+        }
+        if (st.currentState != null && st.targetState.equals(st.currentState)) {
+            logVerbose("[RMB_FLOW] blocked: no mismatch at {}", schematicHit.getBlockPos());
             return;
         }
 
@@ -373,7 +390,9 @@ public class TakeitoutClient implements ClientModInitializer {
                 result.getBlockPos()
         );
 
-        if (state.targetState != null && !state.targetState.isAir()) {
+        if (state.targetState != null
+                && !state.targetState.isAir()
+                && (state.currentState == null || !state.targetState.equals(state.currentState))) {
             if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
                 return true;
