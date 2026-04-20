@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FenceBlock;
+import net.minecraft.block.MushroomBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.inventory.Inventory;
@@ -43,6 +44,7 @@ public class LitematicaMixin {
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
     @Unique private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
     @Unique private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
+    @Unique private static final Set<String> MUSHROOM_BLOCK_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up", "down");
 
     @Unique private static boolean waitingForShulkerResponse = false;
     @Unique private static ItemStack waitingShulkerStack = ItemStack.EMPTY;
@@ -376,8 +378,10 @@ public class LitematicaMixin {
             return true;
         }
 
-        return (targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
-                && FENCE_WALL_IGNORED_PROPERTIES.contains(name);
+        return ((targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
+                && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
+                || (targetState.getBlock() instanceof MushroomBlock
+                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name));
     }
 
     @Unique
