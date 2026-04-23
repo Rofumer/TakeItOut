@@ -1,10 +1,15 @@
 {
   "key.takeitout.toggle": "Toggle auto take out",
   "key.takeitout.extract_mode": "Toggle shulker extract mode",
+  "key.takeitout.open_settings": "Open TakeItOut settings",
   "message.takeitout.on": "Auto Take Out is ON",
   "message.takeitout.off": "Auto Take Out is OFF",
+  "message.takeitout.single_item_mode.on": "Single-item mode: ON",
+  "message.takeitout.single_item_mode.off": "Single-item mode: OFF",
   "message.takeitout.extract_mode.stack": "Shulker extract mode: FULL STACK",
   "message.takeitout.extract_mode.single": "Shulker extract mode: SINGLE ITEM",
+  "message.takeitout.container_source_render.on": "Container source render: ON",
+  "message.takeitout.container_source_render.off": "Container source render: OFF",
   "key.category.takeitout.takeitout": "TakeItOut",
   "takeitout.msg.stacked_shulker_skipped":"Action prevented (Take It Out Mod): Stacked shulkers"
 }

@@ -10,12 +10,14 @@ import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
+import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.MushroomBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -48,6 +50,8 @@ public class LitematicaMixin {
     private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
     @Unique
     private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
+    @Unique
+    private static final Set<String> MUSHROOM_BLOCK_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up", "down");
 
     @Unique private static int waitTicks = 0;
     @Unique private static boolean waitingForItem = false;
@@ -183,6 +187,33 @@ public class LitematicaMixin {
         if (waitingForItem && client != null && client.player != null && waitingState != null) {
             ItemStack inHand = client.player.getMainHandItem();
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
+            int inventorySlot = InventoryUtils.findSlotWithItem(client.player.containerMenu, required, true);
+
+            if (!ItemStack.isSameItemSameComponents(inHand, required) && inventorySlot != -1) {
+                logVerbose(
+                        "[RMB_FLOW] required item arrived in inventory: slot={}, selectedHotbarSlot={}, stack={}",
+                        inventorySlot,
+                        slotToHotbarHuman(client.player.getInventory().getSelectedSlot()),
+                        required
+                );
+                InventoryUtils.swapItemToMainHand(required, client);
+                inHand = client.player.getMainHandItem();
+            }
+
+            if (WorldContainerSources.consumeFailedResponse(required.copyWithCount(1))) {
+                LOGGER.warn(
+                        "[RMB_FLOW] item request failed: required={}, selectedHotbarSlot={}, mainHand={}",
+                        required,
+                        slotToHotbarHuman(client.player.getInventory().getSelectedSlot()),
+                        inHand
+                );
+                waitingForItem = false;
+                waitingState = null;
+                waitTicks = 0;
+                retryCount = 0;
+                autoPlaceRetriedForCurrentWait = false;
+                return client;
+            }
 
             if (ItemStack.isSameItemSameComponents(inHand, required)) {
                 if (!autoPlaceRetriedForCurrentWait
@@ -228,7 +259,7 @@ public class LitematicaMixin {
                 int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
                 if (waitTicks >= hardTimeout) {
                     LOGGER.warn(
-                            "[RMB_FLOW] timeout waiting item from shulker: expectedWaitTicks={}, waitedTicks={}, retries={}, elapsedMs={}",
+                            "[RMB_FLOW] timeout waiting item from shulker/world container: expectedWaitTicks={}, waitedTicks={}, retries={}, elapsedMs={}",
                             expectedWaitTicks,
                             waitTicks,
                             retryCount,
@@ -336,6 +367,14 @@ public class LitematicaMixin {
                             LOGGER.warn("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
                         }
                     }
+                } else {
+                    logVerbose(
+                            "[RMB_FLOW] required item not found in inventory/shulkers, trying world containers: required={}, sources={}, selectedHotbarSlot={}",
+                            required,
+                            WorldContainerSources.size(),
+                            slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+                    );
+                    WorldContainerSources.requestStack(mc, required, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);
                 }
             }
         }
@@ -402,8 +441,10 @@ public class LitematicaMixin {
             return true;
         }
 
-        return (targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
-                && FENCE_WALL_IGNORED_PROPERTIES.contains(name);
+        return ((targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
+                && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
+                || (targetState.getBlock() instanceof MushroomBlock
+                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name));
     }
 
     @Unique

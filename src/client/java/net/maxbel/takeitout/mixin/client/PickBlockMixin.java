@@ -5,6 +5,7 @@ import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.ItemStackInventory;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.client.Util;
+import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -27,7 +28,7 @@ public abstract class PickBlockMixin {
     @Shadow @Nullable public ClientLevel level;
 
     @Redirect(
-            method = "pickBlock",
+            method = "pickBlockOrEntity",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/phys/BlockHitResult;getBlockPos()Lnet/minecraft/core/BlockPos;"
@@ -64,8 +65,10 @@ public abstract class PickBlockMixin {
             );
 
             if (inner != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
+                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
             }
+        } else {
+            WorldContainerSources.requestStack(Minecraft.getInstance(), stack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);
         }
 
         return instance.getBlockPos();

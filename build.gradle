@@ -40,10 +40,10 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    implementation files('libs/litematica-fabric-26.1-0.27.0.jar')
-    implementation files('libs/malilib-fabric-26.1-0.28.1.jar')
-    implementation files('libs/tweakeroo-fabric-26.1-0.28.0.jar')
-    implementation files('libs/litematica-printer-26.1-3.2.2.jar')
+    implementation files('libs/litematica-fabric-26.1.1-0.27.1.jar')
+    implementation files('libs/malilib-fabric-26.1.1-0.28.2.jar')
+    implementation files('libs/tweakeroo-fabric-26.1.1-0.28.1.jar')
+    implementation files('libs/litematica-printer-26.1.1-3.2.2.jar')
 
     implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
 }

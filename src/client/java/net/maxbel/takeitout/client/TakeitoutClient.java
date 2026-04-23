@@ -1,16 +1,14 @@
 package net.maxbel.takeitout.client;
 
-import org.slf4j.Logger;
-import com.mojang.blaze3d.platform.InputConstants;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import org.slf4j.LoggerFactory;
-import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
+import fi.dy.masa.malilib.config.ConfigManager;
+import fi.dy.masa.malilib.event.InputEventHandler;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -19,6 +17,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -32,109 +31,164 @@ import org.lwjgl.glfw.GLFW;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class TakeitoutClient implements ClientModInitializer {
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Path SETTINGS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-client.json");
+    public static final int DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF22C55E;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
-    private static final boolean VERBOSE_LOG = false;
-    private static final Gson GSON = new Gson();
-    private static final Path CLIENT_SETTINGS_PATH = FabricLoader.getInstance()
-            .getConfigDir()
-            .resolve("takeitout-client.json");
-    private static KeyMapping keyBinding;
-    private static KeyMapping extractModeKeyBinding;
+    private static KeyMapping openSettingsKeyBinding;
     public static boolean AUTOTAKEOUT;
+    public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean SHULKER_SINGLE_ITEM_MODE;
+    public static boolean RENDER_CONTAINER_SOURCES;
+    public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
+    public static final List<Takeitout.WorldContainerItemCount> WORLD_CONTAINER_ITEMS = new ArrayList<>();
+    public static final Map<Long, List<Takeitout.WorldContainerItemCount>> WORLD_CONTAINER_ITEMS_BY_SOURCE = new LinkedHashMap<>();
 
-    private static boolean pickWasDownLastTick = false;
-    private static boolean useWasDownLastTick = false;
+    private static int awaitingStackTicks;
+    private static ClientLevel lastSourceWorld;
 
     @Override
     public void onInitializeClient() {
         AUTOTAKEOUT = false;
+        TAKE_SINGLE_ITEM_MODE = false;
         SHULKER_SINGLE_ITEM_MODE = false;
+        RENDER_CONTAINER_SOURCES = true;
+        CONTAINER_SOURCE_OUTLINE_COLOR = DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
         awaitingStack = ItemStack.EMPTY;
-        loadClientSettings();
+        awaitingStackTicks = 0;
+
+        loadSettings();
+
+        TakeItOutConfigs.CONTAINER_SOURCE_OUTLINE_COLOR.setIntegerValue(CONTAINER_SOURCE_OUTLINE_COLOR);
+        TakeItOutConfigs.initCallbacks();
+        TakeItOutConfigHandler.INSTANCE.load();
+        TakeItOutHotkeys.initCallbacks();
+
+        ConfigManager.getInstance().registerConfigHandler("takeitout", TakeItOutConfigHandler.INSTANCE);
+        InputEventHandler.getKeybindManager().registerKeybindProvider(TakeItOutInputHandler.getInstance());
 
         KeyMapping.Category category = KeyMapping.Category.register(
-                Identifier.fromNamespaceAndPath("takeitout", "takeitout")
+                Identifier.fromNamespaceAndPath("takeitout", "key_category")
         );
 
-        keyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.takeitout.toggle",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_R,
+        openSettingsKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.takeitout.open_settings",
+                com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_UNKNOWN,
                 category
         ));
 
-        extractModeKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.takeitout.extract_mode",
-                InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_B,
-                category
-        ));
+        WorldContainerSourceRenderer.register();
 
-        ClientTickEvents.START_CLIENT_TICK.register(client -> {
-            if (client.player == null) {
-                useWasDownLastTick = false;
-                return;
-            }
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerStackResponsePayload.ID, (payload, context) ->
+                context.client().execute(() -> {
+                    WorldContainerSources.recordResponse(payload.stack(), payload.success());
+                    if (!payload.success()
+                            && !awaitingStack.isEmpty()
+                            && ItemStack.isSameItemSameComponents(awaitingStack, payload.stack())) {
+                        awaitingStack = ItemStack.EMPTY;
+                        awaitingStackTicks = 0;
+                    }
+                })
+        );
 
-            boolean useDown = client.options.keyUse.isDown();
-            if (useDown && !useWasDownLastTick) {
-                tryPickFromSchematicOnUse(client);
-            }
-            useWasDownLastTick = useDown;
-        });
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerItemsPayload.ID, (payload, context) ->
+                context.client().execute(() -> {
+                    WORLD_CONTAINER_ITEMS.clear();
+                    WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
+                    WORLD_CONTAINER_ITEMS.addAll(payload.items());
+                    for (Takeitout.WorldContainerContents container : payload.containers()) {
+                        WORLD_CONTAINER_ITEMS_BY_SOURCE.put(
+                                container.sourcePosition(),
+                                new ArrayList<>(container.items())
+                        );
+                    }
+                })
+        );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (keyBinding.consumeClick()) {
-                if (client.player == null) {
-                    continue;
-                }
+            if (client.level != lastSourceWorld) {
+                WorldContainerSources.updateContext(client);
+                lastSourceWorld = client.level;
+            }
 
-                if (AUTOTAKEOUT) {
-                    client.player.sendSystemMessage(Component.translatable("message.takeitout.off"));
-                    AUTOTAKEOUT = false;
+            if (client.player != null && !awaitingStack.isEmpty()) {
+                if (getSlotWithItem(client.player, awaitingStack.getItem()) != -1) {
                     awaitingStack = ItemStack.EMPTY;
-                } else {
-                    client.player.sendSystemMessage(Component.translatable("message.takeitout.on"));
-                    AUTOTAKEOUT = true;
+                    awaitingStackTicks = 0;
+                } else if (++awaitingStackTicks > 70) {
                     awaitingStack = ItemStack.EMPTY;
+                    awaitingStackTicks = 0;
                 }
-                saveClientSettings();
+            } else {
+                awaitingStackTicks = 0;
             }
 
-            while (extractModeKeyBinding.consumeClick()) {
-                if (client.player == null) {
-                    continue;
+            while (openSettingsKeyBinding.consumeClick()) {
+                if (client.screen == null) {
+                    client.setScreen(new TakeItOutSettingsScreen(null));
                 }
-
-                SHULKER_SINGLE_ITEM_MODE = !SHULKER_SINGLE_ITEM_MODE;
-                client.player.sendSystemMessage(Component.translatable(
-                        SHULKER_SINGLE_ITEM_MODE
-                                ? "message.takeitout.extract_mode.single"
-                                : "message.takeitout.extract_mode.stack"
-                ));
-                LOGGER.info("[TakeItOut] shulker extract mode switched: singleItemMode={}", SHULKER_SINGLE_ITEM_MODE);
-                saveClientSettings();
             }
-
-            if (client.player == null) {
-                pickWasDownLastTick = false;
-                return;
-            }
-
-            boolean pickDown = client.options.keyPickItem.isDown();
-
-            if (pickDown && !pickWasDownLastTick) {
-                tryPickFromShulker(client);
-            }
-
-            pickWasDownLastTick = pickDown;
         });
+    }
+
+    public static void toggleAutoTakeout(Minecraft client) {
+        AUTOTAKEOUT = !AUTOTAKEOUT;
+        awaitingStack = ItemStack.EMPTY;
+        saveSettings();
+
+        if (client.player != null) {
+            client.player.sendSystemMessage(
+                    Component.translatable(AUTOTAKEOUT ? "message.takeitout.on" : "message.takeitout.off")
+            );
+        }
+    }
+
+    public static void toggleSingleItemMode(Minecraft client) {
+        TAKE_SINGLE_ITEM_MODE = !TAKE_SINGLE_ITEM_MODE;
+        SHULKER_SINGLE_ITEM_MODE = TAKE_SINGLE_ITEM_MODE;
+        saveSettings();
+
+        if (client.player != null) {
+            client.player.sendSystemMessage(
+                    Component.translatable(
+                            TAKE_SINGLE_ITEM_MODE
+                                    ? "message.takeitout.single_item_mode.on"
+                                    : "message.takeitout.single_item_mode.off"
+                    )
+            );
+        }
+    }
+
+    public static void toggleContainerSourceRender(Minecraft client) {
+        RENDER_CONTAINER_SOURCES = !RENDER_CONTAINER_SOURCES;
+        saveSettings();
+
+        if (client.player != null) {
+            client.player.sendSystemMessage(
+                    Component.translatable(
+                            RENDER_CONTAINER_SOURCES
+                                    ? "message.takeitout.container_source_render.on"
+                                    : "message.takeitout.container_source_render.off"
+                    )
+            );
+        }
+    }
+
+    public static void setContainerSourceOutlineColor(int color) {
+        applyContainerSourceOutlineColor(color);
+        saveSettings();
+    }
+
+    static void applyContainerSourceOutlineColor(int color) {
+        CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF000000 | (color & 0x00FFFFFF);
     }
 
     public static int getSlotWithItem(LocalPlayer player, Item item) {
@@ -142,7 +196,6 @@ public class TakeitoutClient implements ClientModInitializer {
 
         for (int i = 0; i < inventory.getContainerSize(); ++i) {
             ItemStack stack = inventory.getItem(i);
-
             if (stack.is(item)) {
                 return i;
             }
@@ -153,197 +206,6 @@ public class TakeitoutClient implements ClientModInitializer {
         }
 
         return -1;
-    }
-
-    private static void tryPickFromShulker(Minecraft mc) {
-        logVerbose("[CLIENT] tryPickFromShulker called");
-
-        if (!AUTOTAKEOUT || !awaitingStack.isEmpty()) {
-            logVerbose("[CLIENT] blocked: AUTOTAKEOUT={}, awaitingStackEmpty={}", AUTOTAKEOUT, awaitingStack.isEmpty());
-            return;
-        }
-
-        if (mc.player == null || mc.level == null) {
-            logVerbose("[CLIENT] blocked: no player or level");
-            return;
-        }
-
-        if (mc.player.getAbilities().instabuild) {
-            logVerbose("[CLIENT] blocked: creative mode");
-            return;
-        }
-
-        WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
-        if (schematicWorld == null) {
-            logVerbose("[CLIENT] blocked: schematic world is null");
-            return;
-        }
-
-        BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(mc.player, 5.0D, true, true);
-        if (schematicHit == null || schematicHit.getBlockPos() == null) {
-            logVerbose("[CLIENT] blocked: no schematic hit");
-            return;
-        }
-
-        SchematicBlockState state = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
-        if (state.targetState == null || state.targetState.isAir()) {
-            logVerbose("[CLIENT] blocked: target state is null/air at {}", schematicHit.getBlockPos());
-            return;
-        }
-        if (state.currentState != null && state.targetState.equals(state.currentState)) {
-            logVerbose("[CLIENT] blocked: no mismatch at {}", schematicHit.getBlockPos());
-            return;
-        }
-
-        ItemStack stack = state.targetState.getBlock().asItem().getDefaultInstance();
-
-        logVerbose("[CLIENT] target schematic state={}, current state={}, stack={}", state.targetState, state.currentState, stack);
-
-        if (stack.isEmpty()) {
-            logVerbose("[CLIENT] blocked: target stack is empty");
-            return;
-        }
-
-        Inventory inventory = mc.player.getInventory();
-        int slot = inventory.findSlotMatchingItem(stack);
-        logVerbose("[CLIENT] direct inventory slot={}", slot);
-
-        if (slot != -1) {
-            logVerbose("[CLIENT] blocked: already in inventory");
-            return;
-        }
-
-        int shulker = Util.getShulkerWithStack(inventory, stack);
-        logVerbose("[CLIENT] shulker slot={}", shulker);
-
-        if (shulker == -1) {
-            logVerbose("[CLIENT] blocked: no shulker with stack found");
-            return;
-        }
-
-        int inner = Util.getSlotWithStack(
-                ItemStackInventory.getInventoryFromShulker(inventory.getItem(shulker)),
-                stack
-        );
-        logVerbose("[CLIENT] inner slot={}", inner);
-
-        if (inner == -1) {
-            logVerbose("[CLIENT] blocked: inner slot not found");
-            return;
-        }
-
-        boolean canSend = ClientPlayNetworking.canSend(Takeitout.GetShulkerStackPayload.ID);
-        logVerbose("[CLIENT] canSend={}", canSend);
-
-        if (!canSend) {
-            logVerbose("[CLIENT] blocked: networking channel unavailable");
-            return;
-        }
-
-        logVerbose("[CLIENT] sending packet: inner={}, shulker={}", inner, shulker);
-        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, SHULKER_SINGLE_ITEM_MODE));
-    }
-
-    private static void tryPickFromSchematicOnUse(Minecraft mc) {
-        logVerbose("[RMB_FLOW] tryPickFromSchematicOnUse: autoTakeout={}, awaitingEmpty={}", AUTOTAKEOUT, awaitingStack.isEmpty());
-
-        if (!AUTOTAKEOUT || mc.player == null || mc.level == null || mc.screen != null) {
-            logVerbose("[RMB_FLOW] blocked: invalid context. player={}, level={}, screen={}", mc.player != null, mc.level != null, mc.screen);
-            return;
-        }
-
-        if (Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
-            logVerbose("[RMB_FLOW] blocked: easy place mode is enabled");
-            return;
-        }
-
-        WorldSchematic schematicWorld = SchematicWorldHandler.getSchematicWorld();
-        if (schematicWorld == null) {
-            logVerbose("[RMB_FLOW] blocked: schematic world is null");
-            return;
-        }
-
-        BlockHitResult schematicHit = RayTraceUtils.traceToSchematicWorld(mc.player, 5.0D, true, true);
-        if (schematicHit == null || schematicHit.getBlockPos() == null) {
-            logVerbose("[RMB_FLOW] blocked: no schematic hit");
-            return;
-        }
-
-        SchematicBlockState st = new SchematicBlockState(mc.level, schematicWorld, schematicHit.getBlockPos());
-        if (st.targetState == null || st.targetState.isAir()) {
-            logVerbose("[RMB_FLOW] blocked: target state is null/air at {}", schematicHit.getBlockPos());
-            return;
-        }
-        if (st.currentState != null && st.targetState.equals(st.currentState)) {
-            logVerbose("[RMB_FLOW] blocked: no mismatch at {}", schematicHit.getBlockPos());
-            return;
-        }
-
-        logVerbose(
-                "[RMB_FLOW] pick request: hologramPos={}, hologramState={}, currentWorldState={}, selectedHotbarSlot={}, mainHand={}",
-                schematicHit.getBlockPos(),
-                st.targetState,
-                st.currentState,
-                mc.player.getInventory().getSelectedSlot(),
-                mc.player.getMainHandItem()
-        );
-        WorldUtils.doSchematicWorldPickBlock(true, mc);
-    }
-
-    private static void logVerbose(String message, Object... args) {
-        if (VERBOSE_LOG) {
-            LOGGER.info(message, args);
-        }
-    }
-
-    private static void loadClientSettings() {
-        if (!Files.exists(CLIENT_SETTINGS_PATH)) {
-            return;
-        }
-
-        try {
-            String raw = Files.readString(CLIENT_SETTINGS_PATH);
-            JsonObject settings = JsonParser.parseString(raw).getAsJsonObject();
-            AUTOTAKEOUT = getBoolean(settings, "autotakeout", false);
-            SHULKER_SINGLE_ITEM_MODE = getBoolean(settings, "single_item_mode", false);
-            LOGGER.info(
-                    "[TakeItOut] loaded settings: autotakeout={}, singleItemMode={}",
-                    AUTOTAKEOUT,
-                    SHULKER_SINGLE_ITEM_MODE
-            );
-        } catch (Exception e) {
-            LOGGER.warn("[TakeItOut] failed to load client settings from {}", CLIENT_SETTINGS_PATH, e);
-        }
-    }
-
-    private static void saveClientSettings() {
-        try {
-            Files.createDirectories(CLIENT_SETTINGS_PATH.getParent());
-            JsonObject settings = new JsonObject();
-            settings.addProperty("autotakeout", AUTOTAKEOUT);
-            settings.addProperty("single_item_mode", SHULKER_SINGLE_ITEM_MODE);
-            Files.writeString(
-                    CLIENT_SETTINGS_PATH,
-                    GSON.toJson(settings),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.WRITE
-            );
-        } catch (IOException e) {
-            LOGGER.warn("[TakeItOut] failed to save client settings to {}", CLIENT_SETTINGS_PATH, e);
-        }
-    }
-
-    private static boolean getBoolean(JsonObject settings, String key, boolean fallback) {
-        if (!settings.has(key) || settings.get(key).isJsonNull()) {
-            return fallback;
-        }
-
-        try {
-            return settings.get(key).getAsBoolean();
-        } catch (Exception e) {
-            return fallback;
-        }
     }
 
     public static boolean onGameTick() {
@@ -400,5 +262,73 @@ public class TakeitoutClient implements ClientModInitializer {
         }
 
         return false;
+    }
+
+    private static void loadSettings() {
+        if (!Files.exists(SETTINGS_PATH)) {
+            return;
+        }
+
+        try {
+            JsonObject object = GSON.fromJson(Files.readString(SETTINGS_PATH), JsonObject.class);
+            if (object == null) {
+                return;
+            }
+
+            if (object.has("autotakeout")) {
+                AUTOTAKEOUT = object.get("autotakeout").getAsBoolean();
+            }
+            if (object.has("single_item_mode")) {
+                TAKE_SINGLE_ITEM_MODE = object.get("single_item_mode").getAsBoolean();
+                SHULKER_SINGLE_ITEM_MODE = TAKE_SINGLE_ITEM_MODE;
+            }
+            if (object.has("render_container_sources")) {
+                RENDER_CONTAINER_SOURCES = object.get("render_container_sources").getAsBoolean();
+            }
+            if (object.has("container_source_outline_color")) {
+                CONTAINER_SOURCE_OUTLINE_COLOR = parseColor(object.get("container_source_outline_color").getAsString());
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void saveSettings() {
+        try {
+            Files.createDirectories(SETTINGS_PATH.getParent());
+            JsonObject object = new JsonObject();
+            object.addProperty("autotakeout", AUTOTAKEOUT);
+            object.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
+            object.addProperty("render_container_sources", RENDER_CONTAINER_SOURCES);
+            object.addProperty("container_source_outline_color", formatColor(CONTAINER_SOURCE_OUTLINE_COLOR));
+            Files.writeString(SETTINGS_PATH, GSON.toJson(object));
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static int parseColor(String raw) {
+        if (raw == null) {
+            return DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
+        }
+
+        String value = raw.trim();
+        if (value.startsWith("#")) {
+            value = value.substring(1);
+        }
+        if (value.startsWith("0x") || value.startsWith("0X")) {
+            value = value.substring(2);
+        }
+        if (value.length() == 6) {
+            value = "FF" + value;
+        }
+
+        try {
+            return (int) Long.parseLong(value, 16);
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
+        }
+    }
+
+    private static String formatColor(int color) {
+        return String.format("#%06X", color & 0x00FFFFFF);
     }
 }

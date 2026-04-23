@@ -1,51 +1,19 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.Options;
-import net.minecraft.client.gui.components.Button;
+import fi.dy.masa.malilib.config.gui.GuiModConfigs;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.options.OptionsScreen;
-import net.minecraft.network.chat.Component;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
-public class TakeItOutKeybindsScreen extends Screen {
-    private final Screen parent;
-    private final Options options;
-    private List<KeyMapping> modKeyBindings;
-
-    public TakeItOutKeybindsScreen(Screen parent, Options options) {
-        super(Component.translatable("key.category.takeitout.takeitout"));
-        this.parent = parent;
-        this.options = options;
+public final class TakeItOutKeybindsScreen {
+    private TakeItOutKeybindsScreen() {
     }
 
-    @Override
-    protected void init() {
-        int y = 40;
-        int spacing = 24;
-
-        modKeyBindings = Arrays.stream(this.options.keyMappings)
-                .filter(kb -> kb.getName().startsWith("key.takeitout."))
-                .collect(Collectors.toList());
-
-        for (int i = 0; i < modKeyBindings.size(); i++) {
-            KeyMapping key = modKeyBindings.get(i);
-
-            addRenderableWidget(Button.builder(
-                    Component.literal("Change keybind: " + key.getTranslatedKeyMessage().getString()),
-                    b -> Minecraft.getInstance().setScreen(
-                            new OptionsScreen(this, this.options, Minecraft.getInstance().level != null)
-                    )
-            ).bounds(this.width / 2 - 100, y + i * spacing, 200, 20).build());
-        }
-
-        addRenderableWidget(Button.builder(
-                Component.literal("Done"),
-                b -> Minecraft.getInstance().setScreen(this.parent)
-        ).bounds(this.width / 2 - 100, this.height - 30, 200, 20).build());
+    public static Screen create(Screen parent) {
+        GuiModConfigs screen = new GuiModConfigs(
+                "takeitout",
+                TakeItOutConfigs.SETTINGS_LIST,
+                "TakeItOut Settings"
+        );
+        screen.setParent(parent);
+        return screen;
     }
 }

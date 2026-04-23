@@ -7,6 +7,8 @@ import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
+import net.maxbel.takeitout.client.WorldContainerSources;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.Container;
@@ -68,10 +70,14 @@ public abstract class PrinterMixin {
                     Container shInv = getInventoryFromShulker(player.getInventory().getItem(shulker));
                     slot = getSlotWithStack(shInv, itemStack);
                     if (slot != -1) {
-                        awaitingStack = itemStack;
+                        awaitingStack = itemStack.copyWithCount(1);
                         ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         break;
                     }
+                }
+
+                if (WorldContainerSources.requestStack(Minecraft.getInstance(), itemStack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE)) {
+                    break;
                 }
             }
         }

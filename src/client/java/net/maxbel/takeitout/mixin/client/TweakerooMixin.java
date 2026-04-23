@@ -6,6 +6,8 @@ import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.ItemStackInventory;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.client.Util;
+import net.maxbel.takeitout.client.WorldContainerSources;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -39,9 +41,12 @@ public class TweakerooMixin {
                         stackReference
                 );
                 if (slot != -1) {
-                    ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
+                    ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
+                    return;
                 }
             }
+
+            WorldContainerSources.requestStack(Minecraft.getInstance(), stackReference, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);
         }
     }
 }
