@@ -9,6 +9,7 @@ import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.malilib.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.MushroomBlock;
@@ -85,6 +86,16 @@ public class LitematicaMixin {
         ItemStack inHand = mc.player.getMainHandStack();
 
         if (waitingForShulkerResponse) {
+            if (WorldContainerSources.consumeFailedResponse(waitingShulkerStack)) {
+                LOGGER.warn(
+                        "EasyPlace world-container wait failed: expected={}, inHand={}",
+                        waitingShulkerStack,
+                        inHand
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
+            } else
             if (!waitingShulkerStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(inHand, waitingShulkerStack)) {
                 LOGGER.debug(
                         "EasyPlace shulker wait resolved: expected={}, inHand={}",
@@ -243,6 +254,16 @@ public class LitematicaMixin {
         }
 
         if (easyPlaceMode && waitingForShulkerResponse && !waitingShulkerStack.isEmpty()) {
+            if (WorldContainerSources.consumeFailedResponse(waitingShulkerStack)) {
+                LOGGER.warn(
+                        "PickBlock world-container response failed: expected={}, inHand={}",
+                        waitingShulkerStack,
+                        mc.player.getMainHandStack()
+                );
+                waitingForShulkerResponse = false;
+                waitingShulkerStack = ItemStack.EMPTY;
+                waitingShulkerRequestTsMs = 0L;
+            } else
             if (ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), waitingShulkerStack)) {
                 LOGGER.debug(
                         "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
@@ -347,10 +368,21 @@ public class LitematicaMixin {
                     }
                 } else {
                     LOGGER.warn(
-                            "PickBlock miss: required={} not found in inventory or shulkers, handSlot={}",
+                            "PickBlock miss: required={} not found in inventory or shulkers, trying world containers, sources={}, handSlot={}",
                             required,
+                            WorldContainerSources.size(),
                             selectedSlot
-                    );
+                        );
+                    if (WorldContainerSources.requestStack(mc, required, TAKE_SINGLE_ITEM_MODE)) {
+                        if (easyPlaceMode) {
+                            waitingForShulkerResponse = true;
+                            waitingShulkerStack = required.copyWithCount(1);
+                            waitingShulkerRequestTsMs = System.currentTimeMillis();
+                        }
+                        cir.setReturnValue(true);
+                        cir.cancel();
+                        return;
+                    }
                 }
             }
         }

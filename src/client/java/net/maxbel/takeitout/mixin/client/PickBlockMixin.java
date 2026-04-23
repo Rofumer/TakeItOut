@@ -54,6 +54,8 @@ public abstract class PickBlockMixin {
             if (slot != -1) {
                 ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
             }
+        } else {
+            WorldContainerSources.requestStack(MinecraftClient.getInstance(), stack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);
         }
 
         return instance.getBlockPos();

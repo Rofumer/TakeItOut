@@ -13,6 +13,7 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 //import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
+import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.input.MouseInput;
@@ -55,6 +56,15 @@ public class MouseMixin {
     private void onMouseButton(long window, MouseInput input, int action, CallbackInfo ci) {
         // Интересует только нажатие правой кнопки (GLFW_PRESS = 1)
         if (input.button() != 1 || action != 1) {
+            return;
+        }
+
+        if ((input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0) {
+            if (client != null && client.player != null && client.world != null && client.currentScreen == null
+                    && client.crosshairTarget instanceof BlockHitResult blockHit
+                    && WorldContainerSources.toggle(client, blockHit.getBlockPos())) {
+                ci.cancel();
+            }
             return;
         }
 
