@@ -1,6 +1,5 @@
 package net.maxbel.takeitout.mixin.client;
 
-import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.tweakeroo.util.InventoryUtils;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
@@ -26,7 +25,7 @@ public class TweakerooMixin {
 
     /**
      * restockNewStackToHand(PlayerEntity player, Hand hand, ItemStack stackReference, boolean allowHotbar) : void
-     * Локалка slotWithItem есть внутри метода — захватываем её.
+     * Capture the local slotWithItem from Tweakeroo's restock flow.
      */
     @Inject(
             method = "restockNewStackToHand",
@@ -44,23 +43,17 @@ public class TweakerooMixin {
             return;
         }
 
-        // В обычном PKM-режиме (без Easy Place) шэдулинг шолкер-доставки уже делает Mouse/Litematica flow.
-        // Ресток Tweakeroo здесь даёт дублирующие запросы и "лишние" выдачи.
-        if (!Configs.Generic.EASY_PLACE_MODE.getBooleanValue()) {
-            return;
-        }
-
+        // Do not send a second request while the previous delivery is still pending.
         if (!awaitingStack.isEmpty()) {
             return;
         }
 
-        // если Tweakeroo не нашёл замену в инвентаре
+        // If Tweakeroo didn't find a replacement in inventory, try shulkers/world containers.
         if (slotWithItem == -1) {
             if (player.getStackInHand(hand).isOf(stackReference.getItem())) {
                 return;
             }
 
-            // ищем шалкер с нужным предметом
             int shulker = Util.getShulkerWithStack(player.getInventory(), stackReference);
             if (shulker != -1) {
                 int slot = Util.getSlotWithStack(

@@ -325,6 +325,18 @@ public class LitematicaMixin {
 
         // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
         if (!ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), required)) {
+            if (!awaitingStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(awaitingStack, required.copyWithCount(1))) {
+                LOGGER.debug(
+                        "PickBlock duplicate request skipped: required={}, awaiting={}, handSlot={}",
+                        required,
+                        awaitingStack,
+                        selectedSlot
+                );
+                cir.setReturnValue(true);
+                cir.cancel();
+                return;
+            }
+
             int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
 
             if (slot != -1) {

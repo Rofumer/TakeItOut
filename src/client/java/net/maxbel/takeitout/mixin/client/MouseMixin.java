@@ -4,8 +4,6 @@ package net.maxbel.takeitout.mixin.client;
 //import fi.dy.masa.litematica.world.SchematicWorldHandler;
 //import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.litematica.config.Configs;
-import fi.dy.masa.litematica.config.Hotkeys;
-import fi.dy.masa.malilib.config.options.ConfigBoolean;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
@@ -13,20 +11,17 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 //import me.aleksilassila.litematica.printer.SchematicBlockState;
 import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
-import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
 import net.minecraft.client.input.MouseInput;
-import net.minecraft.item.Item;
-import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Item;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Final;
@@ -36,8 +31,6 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import static net.maxbel.takeitout.client.TakeitoutClient.getSlotWithItem;
 
 @Mixin(Mouse.class)
 public class MouseMixin {
@@ -56,15 +49,6 @@ public class MouseMixin {
     private void onMouseButton(long window, MouseInput input, int action, CallbackInfo ci) {
         // Интересует только нажатие правой кнопки (GLFW_PRESS = 1)
         if (input.button() != 1 || action != 1) {
-            return;
-        }
-
-        if ((input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0) {
-            if (client != null && client.player != null && client.world != null && client.currentScreen == null
-                    && client.crosshairTarget instanceof BlockHitResult blockHit
-                    && WorldContainerSources.toggle(client, blockHit.getBlockPos())) {
-                ci.cancel();
-            }
             return;
         }
 
