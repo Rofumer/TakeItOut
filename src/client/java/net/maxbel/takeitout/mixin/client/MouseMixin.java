@@ -7,12 +7,10 @@ import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
-import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -35,7 +33,6 @@ public class MouseMixin {
             require = 0
     )
     private void takeitout$onButton(long window, MouseButtonInfo input, int action, CallbackInfo ci) {
-
         if (input.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
             return;
         }
@@ -45,17 +42,6 @@ public class MouseMixin {
         }
 
         if (this.minecraft == null) {
-            return;
-        }
-
-        if (this.minecraft.player != null
-                && this.minecraft.level != null
-                && this.minecraft.screen == null
-                && this.minecraft.player.isShiftKeyDown()
-                && this.minecraft.hitResult instanceof BlockHitResult blockHit
-                && blockHit.getType() == HitResult.Type.BLOCK
-                && WorldContainerSources.toggle(this.minecraft, blockHit.getBlockPos())) {
-            ci.cancel();
             return;
         }
 

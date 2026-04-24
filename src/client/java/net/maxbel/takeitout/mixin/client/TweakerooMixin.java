@@ -33,7 +33,19 @@ public class TweakerooMixin {
                                                    boolean allowHotbar,
                                                    CallbackInfo ci,
                                                    int slotWithItem) {
+        if (!TakeitoutClient.AUTOTAKEOUT || player == null || stackReference == null || stackReference.isEmpty()) {
+            return;
+        }
+
+        if (!TakeitoutClient.awaitingStack.isEmpty()) {
+            return;
+        }
+
         if (slotWithItem == -1) {
+            if (player.getItemInHand(hand).is(stackReference.getItem())) {
+                return;
+            }
+
             int shulker = Util.getShulkerWithStack(player.getInventory(), stackReference);
             if (shulker != -1) {
                 int slot = Util.getSlotWithStack(
@@ -41,7 +53,8 @@ public class TweakerooMixin {
                         stackReference
                 );
                 if (slot != -1) {
-                    ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
+                    TakeitoutClient.awaitingStack = stackReference.copyWithCount(1);
+                    ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                     return;
                 }
             }

@@ -335,6 +335,19 @@ public class LitematicaMixin {
         );
 
         if (!ItemStack.isSameItemSameComponents(mc.player.getMainHandItem(), required)) {
+            if (!TakeitoutClient.awaitingStack.isEmpty()
+                    && ItemStack.isSameItemSameComponents(TakeitoutClient.awaitingStack, required.copyWithCount(1))) {
+                logVerbose(
+                        "[RMB_FLOW] duplicate request skipped: required={}, awaiting={}, selectedHotbarSlot={}",
+                        required,
+                        TakeitoutClient.awaitingStack,
+                        slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+                );
+                cir.setReturnValue(true);
+                cir.cancel();
+                return;
+            }
+
             int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
             logVerbose("[RMB_FLOW] required item not in hand. direct inventory slot={}", slot);
 
