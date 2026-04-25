@@ -1,6 +1,12 @@
 package net.maxbel.takeitout;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.BarrelBlock;
@@ -18,6 +24,8 @@ import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Hand;
@@ -27,11 +35,22 @@ import net.minecraft.util.math.BlockPos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class Takeitout implements ModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/server");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
+    private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
+    private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
+    private static final Set<String> ALLOWED_EXCHANGE_DIMENSIONS = new HashSet<>();
+    private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPayload {
         public static final CustomPayload.Id<GetShulkerStackPayload> ID =
@@ -54,14 +73,50 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    public record GetWorldContainerStackPayload(long[] sourcePositions, ItemStack stack, boolean singleItemMode) implements CustomPayload {
+    public record WorldContainerSource(String dimension, long position) {
+        public static final PacketCodec<RegistryByteBuf, WorldContainerSource> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.STRING,
+                        WorldContainerSource::dimension,
+                        PacketCodecs.LONG,
+                        WorldContainerSource::position,
+                        WorldContainerSource::new
+                );
+    }
+
+    private enum LinkedContainerExchangeMode {
+        DISABLED("disabled"),
+        SAME_DIMENSION("same_dimension"),
+        CROSS_DIMENSION("cross_dimension");
+
+        private final String id;
+
+        LinkedContainerExchangeMode(String id) {
+            this.id = id;
+        }
+
+        private static LinkedContainerExchangeMode fromString(String value) {
+            if (value != null) {
+                for (LinkedContainerExchangeMode mode : values()) {
+                    if (mode.id.equalsIgnoreCase(value) || mode.name().equalsIgnoreCase(value)) {
+                        return mode;
+                    }
+                }
+            }
+
+            LOGGER.warn("Invalid linked container exchange mode '{}', using {}", value, CROSS_DIMENSION.id);
+            return CROSS_DIMENSION;
+        }
+    }
+
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode) implements CustomPayload {
         public static final CustomPayload.Id<GetWorldContainerStackPayload> ID =
                 new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_stack"));
 
         public static final PacketCodec<RegistryByteBuf, GetWorldContainerStackPayload> CODEC =
                 PacketCodec.tuple(
-                        PacketCodecs.LONG_ARRAY,
-                        GetWorldContainerStackPayload::sourcePositions,
+                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackPayload::sources,
                         ItemStack.PACKET_CODEC,
                         GetWorldContainerStackPayload::stack,
                         PacketCodecs.BOOLEAN,
@@ -105,25 +160,25 @@ public class Takeitout implements ModInitializer {
                 );
     }
 
-    public record WorldContainerContents(long sourcePosition, List<WorldContainerItemCount> items) {
+    public record WorldContainerContents(WorldContainerSource source, List<WorldContainerItemCount> items) {
         public static final PacketCodec<RegistryByteBuf, WorldContainerContents> CODEC =
                 PacketCodec.tuple(
-                        PacketCodecs.LONG,
-                        WorldContainerContents::sourcePosition,
+                        WorldContainerSource.CODEC,
+                        WorldContainerContents::source,
                         PacketCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
                         WorldContainerContents::items,
                         WorldContainerContents::new
                 );
     }
 
-    public record GetWorldContainerItemsPayload(long[] sourcePositions) implements CustomPayload {
+    public record GetWorldContainerItemsPayload(List<WorldContainerSource> sources) implements CustomPayload {
         public static final CustomPayload.Id<GetWorldContainerItemsPayload> ID =
                 new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_items"));
 
         public static final PacketCodec<RegistryByteBuf, GetWorldContainerItemsPayload> CODEC =
                 PacketCodec.tuple(
-                        PacketCodecs.LONG_ARRAY,
-                        GetWorldContainerItemsPayload::sourcePositions,
+                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerItemsPayload::sources,
                         GetWorldContainerItemsPayload::new
                 );
 
@@ -157,6 +212,8 @@ public class Takeitout implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        loadServerConfig();
+
         PayloadTypeRegistry.playC2S().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
@@ -349,7 +406,7 @@ public class Takeitout implements ModInitializer {
 
     private static void handleGetWorldContainerStack(ServerPlayerEntity player, GetWorldContainerStackPayload payload) {
         ItemStack requested = payload.stack();
-        if (requested == null || requested.isEmpty() || payload.sourcePositions() == null) {
+        if (requested == null || requested.isEmpty() || payload.sources() == null) {
             return;
         }
 
@@ -357,14 +414,14 @@ public class Takeitout implements ModInitializer {
         int invalidSourceCount = 0;
         int emptySourceCount = 0;
         int failedExtractCount = 0;
-        for (long packedPos : payload.sourcePositions()) {
+        for (WorldContainerSource source : payload.sources()) {
             if (checked >= 64) {
                 break;
             }
             checked++;
 
-            BlockPos pos = BlockPos.fromLong(packedPos);
-            Inventory inventory = getWorldContainerInventory(player, pos);
+            BlockPos pos = BlockPos.fromLong(source.position());
+            Inventory inventory = getWorldContainerInventory(player, source);
             if (inventory == null) {
                 invalidSourceCount++;
                 continue;
@@ -395,7 +452,7 @@ public class Takeitout implements ModInitializer {
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
                 requested,
-                Math.min(payload.sourcePositions().length, 64),
+                Math.min(payload.sources().size(), 64),
                 invalidSourceCount,
                 emptySourceCount,
                 failedExtractCount
@@ -405,22 +462,22 @@ public class Takeitout implements ModInitializer {
     private static void handleGetWorldContainerItems(ServerPlayerEntity player, GetWorldContainerItemsPayload payload) {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
-        if (payload.sourcePositions() == null) {
+        if (payload.sources() == null) {
             ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
             return;
         }
 
         int checked = 0;
-        for (long packedPos : payload.sourcePositions()) {
+        for (WorldContainerSource source : payload.sources()) {
             if (checked >= 64) {
                 break;
             }
             checked++;
 
-            Inventory inventory = getWorldContainerInventory(player, BlockPos.fromLong(packedPos));
+            Inventory inventory = getWorldContainerInventory(player, source);
             List<WorldContainerItemCount> containerItems = new ArrayList<>();
             if (inventory == null) {
-                containers.add(new WorldContainerContents(packedPos, containerItems));
+                containers.add(new WorldContainerContents(source, containerItems));
                 continue;
             }
 
@@ -434,7 +491,7 @@ public class Takeitout implements ModInitializer {
                 addItemCount(containerItems, stack);
             }
 
-            containers.add(new WorldContainerContents(packedPos, containerItems));
+            containers.add(new WorldContainerContents(source, containerItems));
         }
 
         ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
@@ -665,11 +722,13 @@ public class Takeitout implements ModInitializer {
         return -1;
     }
 
-    private static Inventory getWorldContainerInventory(ServerPlayerEntity player, BlockPos pos) {
-        if (!(player.getEntityWorld() instanceof ServerWorld world)) {
+    private static Inventory getWorldContainerInventory(ServerPlayerEntity player, WorldContainerSource source) {
+        ServerWorld world = getSourceWorld(player, source);
+        if (world == null) {
             return null;
         }
 
+        BlockPos pos = BlockPos.fromLong(source.position());
         BlockState state = world.getBlockState(pos);
         Block block = state.getBlock();
         Inventory inventory = null;
@@ -688,6 +747,127 @@ public class Takeitout implements ModInitializer {
         }
 
         return inventory;
+    }
+
+    private static ServerWorld getSourceWorld(ServerPlayerEntity player, WorldContainerSource source) {
+        if (source == null || source.dimension() == null || source.dimension().isBlank()) {
+            return null;
+        }
+
+        String playerDimension = player.getEntityWorld().getRegistryKey().getValue().toString();
+        if (linkedContainerExchangeMode == LinkedContainerExchangeMode.DISABLED) {
+            LOGGER.warn(
+                    "World container source blocked by server config: player={}, reason=disabled, playerDimension={}, sourceDimension={}, pos={}",
+                    player.getName().getString(),
+                    playerDimension,
+                    source.dimension(),
+                    BlockPos.fromLong(source.position())
+            );
+            return null;
+        }
+
+        if (linkedContainerExchangeMode == LinkedContainerExchangeMode.SAME_DIMENSION && !playerDimension.equals(source.dimension())) {
+            LOGGER.warn(
+                    "World container source blocked by server config: player={}, reason=same_dimension_only, playerDimension={}, sourceDimension={}, pos={}",
+                    player.getName().getString(),
+                    playerDimension,
+                    source.dimension(),
+                    BlockPos.fromLong(source.position())
+            );
+            return null;
+        }
+
+        if (!isDimensionAllowedForExchange(playerDimension) || !isDimensionAllowedForExchange(source.dimension())) {
+            LOGGER.warn(
+                    "World container source blocked by server config: player={}, playerDimension={}, sourceDimension={}, pos={}",
+                    player.getName().getString(),
+                    playerDimension,
+                    source.dimension(),
+                    BlockPos.fromLong(source.position())
+            );
+            return null;
+        }
+
+        Identifier dimensionId;
+        try {
+            dimensionId = Identifier.of(source.dimension());
+        } catch (Exception ignored) {
+            return null;
+        }
+
+        RegistryKey<net.minecraft.world.World> worldKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
+        if (!(player.getEntityWorld() instanceof ServerWorld playerWorld)) {
+            return null;
+        }
+
+        return playerWorld.getServer().getWorld(worldKey);
+    }
+
+    private static boolean isDimensionAllowedForExchange(String dimension) {
+        return ALLOWED_EXCHANGE_DIMENSIONS.isEmpty() || ALLOWED_EXCHANGE_DIMENSIONS.contains(dimension);
+    }
+
+    private static void loadServerConfig() {
+        ALLOWED_EXCHANGE_DIMENSIONS.clear();
+        linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
+
+        if (!Files.exists(SERVER_CONFIG_PATH)) {
+            saveDefaultServerConfig();
+            LOGGER.info("Server config created: {}", SERVER_CONFIG_PATH);
+            return;
+        }
+
+        try {
+            JsonObject root = GSON.fromJson(Files.readString(SERVER_CONFIG_PATH), JsonObject.class);
+            if (root == null || !root.has(ALLOWED_EXCHANGE_DIMENSIONS_KEY) || !root.get(ALLOWED_EXCHANGE_DIMENSIONS_KEY).isJsonArray()) {
+                saveDefaultServerConfig();
+                return;
+            }
+
+            if (root.has(LINKED_CONTAINER_EXCHANGE_MODE_KEY)) {
+                linkedContainerExchangeMode = LinkedContainerExchangeMode.fromString(root.get(LINKED_CONTAINER_EXCHANGE_MODE_KEY).getAsString());
+            }
+
+            JsonArray allowedDimensions = root.getAsJsonArray(ALLOWED_EXCHANGE_DIMENSIONS_KEY);
+            for (JsonElement element : allowedDimensions) {
+                if (!element.isJsonPrimitive()) {
+                    continue;
+                }
+
+                String dimension = element.getAsString();
+                if (dimension == null || dimension.isBlank()) {
+                    continue;
+                }
+
+                try {
+                    Identifier.of(dimension);
+                    ALLOWED_EXCHANGE_DIMENSIONS.add(dimension);
+                } catch (Exception e) {
+                    LOGGER.warn("Ignoring invalid TakeItOut exchange dimension in server config: {}", dimension);
+                }
+            }
+
+            LOGGER.info(
+                    "Server config loaded: linkedContainerExchangeMode={}, allowedExchangeDimensions={}",
+                    linkedContainerExchangeMode.id,
+                    ALLOWED_EXCHANGE_DIMENSIONS.isEmpty() ? "all" : ALLOWED_EXCHANGE_DIMENSIONS
+            );
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load TakeItOut server config, using defaults", e);
+        }
+    }
+
+    private static void saveDefaultServerConfig() {
+        JsonObject root = new JsonObject();
+        root.addProperty(LINKED_CONTAINER_EXCHANGE_MODE_KEY, linkedContainerExchangeMode.id);
+        root.add(ALLOWED_EXCHANGE_DIMENSIONS_KEY, new JsonArray());
+
+        try {
+            Files.createDirectories(SERVER_CONFIG_PATH.getParent());
+            Files.writeString(SERVER_CONFIG_PATH, GSON.toJson(root));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to write TakeItOut server config", e);
+        }
     }
 
     private static boolean isValidInventorySlot(ServerPlayerEntity player, int slot) {

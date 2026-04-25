@@ -52,10 +52,11 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean AUTOTAKEOUT;
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
+    public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
     public static final List<Takeitout.WorldContainerItemCount> WORLD_CONTAINER_ITEMS = new ArrayList<>();
-    public static final Map<Long, List<Takeitout.WorldContainerItemCount>> WORLD_CONTAINER_ITEMS_BY_SOURCE = new LinkedHashMap<>();
+    public static final Map<String, List<Takeitout.WorldContainerItemCount>> WORLD_CONTAINER_ITEMS_BY_SOURCE = new LinkedHashMap<>();
     private static int awaitingStackTicks;
     private static ClientWorld lastSourceWorld;
 
@@ -69,6 +70,7 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         TAKE_SINGLE_ITEM_MODE = false;
         RENDER_CONTAINER_SOURCES = true;
+        ITEM_SORT_MODE = ItemSortMode.NAME;
         CONTAINER_SOURCE_OUTLINE_COLOR = DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
         awaitingStack = ItemStack.EMPTY;
         awaitingStackTicks = 0;
@@ -103,7 +105,10 @@ public class TakeitoutClient implements ClientModInitializer {
                 WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
                 WORLD_CONTAINER_ITEMS.addAll(payload.items());
                 for (Takeitout.WorldContainerContents container : payload.containers()) {
-                    WORLD_CONTAINER_ITEMS_BY_SOURCE.put(container.sourcePosition(), new ArrayList<>(container.items()));
+                    WORLD_CONTAINER_ITEMS_BY_SOURCE.put(WorldContainerSources.sourceKey(container.source()), new ArrayList<>(container.items()));
+                }
+                if (FabricLoader.getInstance().isModLoaded("litematica")) {
+                    WorldContainerMaterialListCache.handleItemsPayload(payload);
                 }
             });
         });
@@ -180,6 +185,11 @@ public class TakeitoutClient implements ClientModInitializer {
 
     public static void setContainerSourceOutlineColor(int color) {
         applyContainerSourceOutlineColor(color);
+        saveSettings();
+    }
+
+    public static void cycleItemSortMode() {
+        ITEM_SORT_MODE = ITEM_SORT_MODE == ItemSortMode.NAME ? ItemSortMode.COUNT : ItemSortMode.NAME;
         saveSettings();
     }
 
@@ -265,6 +275,9 @@ public class TakeitoutClient implements ClientModInitializer {
             if (obj.has("render_container_sources")) {
                 RENDER_CONTAINER_SOURCES = obj.get("render_container_sources").getAsBoolean();
             }
+            if (obj.has("item_sort_mode")) {
+                ITEM_SORT_MODE = ItemSortMode.fromString(obj.get("item_sort_mode").getAsString());
+            }
             if (obj.has("container_source_outline_color")) {
                 CONTAINER_SOURCE_OUTLINE_COLOR = parseColor(obj.get("container_source_outline_color").getAsString());
             }
@@ -279,6 +292,7 @@ public class TakeitoutClient implements ClientModInitializer {
             obj.addProperty("autotakeout", AUTOTAKEOUT);
             obj.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
             obj.addProperty("render_container_sources", RENDER_CONTAINER_SOURCES);
+            obj.addProperty("item_sort_mode", ITEM_SORT_MODE.id);
             obj.addProperty("container_source_outline_color", formatColor(CONTAINER_SOURCE_OUTLINE_COLOR));
             Files.writeString(SETTINGS_PATH, GSON.toJson(obj));
         } catch (IOException ignored) {
@@ -310,5 +324,34 @@ public class TakeitoutClient implements ClientModInitializer {
 
     private static String formatColor(int color) {
         return String.format("#%06X", color & 0x00FFFFFF);
+    }
+
+    public enum ItemSortMode {
+        NAME("name", "Name"),
+        COUNT("count", "Count");
+
+        private final String id;
+        private final String label;
+
+        ItemSortMode(String id, String label) {
+            this.id = id;
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public static ItemSortMode fromString(String value) {
+            if (value != null) {
+                for (ItemSortMode mode : values()) {
+                    if (mode.id.equalsIgnoreCase(value) || mode.name().equalsIgnoreCase(value)) {
+                        return mode;
+                    }
+                }
+            }
+
+            return NAME;
+        }
     }
 }

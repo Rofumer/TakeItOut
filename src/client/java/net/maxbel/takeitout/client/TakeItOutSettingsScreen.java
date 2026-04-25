@@ -25,6 +25,9 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private static final int CONTAINER_ROW_HEIGHT = 28;
+    private static final int LIST_TOP = 66;
+    private static final int LIST_BOTTOM_MARGIN = 36;
+    private static final int HEADER_OFFSET = 12;
 
     private final Screen parent;
     private Tab activeTab = Tab.ALL_ITEMS;
@@ -40,7 +43,7 @@ public class TakeItOutSettingsScreen extends Screen {
     protected void init() {
         int tabY = 28;
         int tabWidth = 88;
-        int left = this.width / 2 - 226;
+        int left = this.width / 2 - 270;
 
         addDrawableChild(ButtonWidget.builder(Text.literal("All Items"), button -> {
             activeTab = Tab.ALL_ITEMS;
@@ -68,6 +71,15 @@ public class TakeItOutSettingsScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.literal("Look At"), button -> focusTargetedContainer())
                 .position(left + (tabWidth + 4) * 3 + 84, tabY)
                 .size(80, 20)
+                .build());
+
+        addDrawableChild(ButtonWidget.builder(getSortButtonText(), button -> {
+                    TakeitoutClient.cycleItemSortMode();
+                    button.setMessage(getSortButtonText());
+                    scrollOffset = 0;
+                })
+                .position(left + (tabWidth + 4) * 3 + 168, tabY)
+                .size(96, 20)
                 .build());
 
         addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> this.client.setScreen(parent))
@@ -115,17 +127,17 @@ public class TakeItOutSettingsScreen extends Screen {
     private void renderAllItems(DrawContext context, int mouseX, int mouseY) {
         List<Takeitout.WorldContainerItemCount> items = getSortedItems();
         int listLeft = this.width / 2 - 155;
-        int listTop = 58;
+        int listTop = LIST_TOP;
         int listWidth = 310;
-        int listBottom = this.height - 36;
+        int listBottom = this.height - LIST_BOTTOM_MARGIN;
 
         context.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
-        context.drawTextWithShadow(this.textRenderer, "Sources: " + WorldContainerSources.size(), listLeft + 6, listTop - 12, 0xFFA7F3D0);
+        context.drawTextWithShadow(this.textRenderer, "Sources: " + WorldContainerSources.linkedSourceCountSnapshot(), listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
 
         if (items.isEmpty()) {
             context.drawCenteredTextWithShadow(
                     this.textRenderer,
-                    Text.literal(WorldContainerSources.size() == 0 ? "No linked containers" : "No items found"),
+                    Text.literal(WorldContainerSources.linkedSourceCountSnapshot() == 0 ? "No linked containers" : "No items found"),
                     this.width / 2,
                     listTop + 36,
                     0xFFAAAAAA
@@ -161,16 +173,16 @@ public class TakeItOutSettingsScreen extends Screen {
     private void renderContainers(DrawContext context, int mouseX, int mouseY) {
         List<WorldContainerSources.SourceEntry> sources = getVisibleContainerSources();
         int listLeft = this.width / 2 - 215;
-        int listTop = 58;
+        int listTop = LIST_TOP;
         int listWidth = 430;
-        int listBottom = this.height - 36;
+        int listBottom = this.height - LIST_BOTTOM_MARGIN;
 
         context.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
         context.drawTextWithShadow(
                 this.textRenderer,
                 trim(getContainersHeader(), listWidth - 12),
                 listLeft + 6,
-                listTop - 12,
+                listTop - HEADER_OFFSET,
                 0xFFA7F3D0
         );
 
@@ -194,7 +206,7 @@ public class TakeItOutSettingsScreen extends Screen {
         context.disableScissor();
 
         if (hoveredSource != null) {
-            renderContainerContentsTooltip(context, hoveredSource.pos(), mouseX, mouseY);
+            renderContainerContentsTooltip(context, hoveredSource, mouseX, mouseY);
         }
     }
 
@@ -202,17 +214,14 @@ public class TakeItOutSettingsScreen extends Screen {
         boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
         context.fill(x, y, x + width, y + 22, hovered ? 0x8822D3EE : 0x44000000);
 
-        ItemStack icon = getContainerIcon(source.pos());
+        ItemStack icon = getContainerIcon(source);
         if (!icon.isEmpty()) {
             context.drawItem(icon, x + 3, y + 3);
         }
 
-        String dimension = this.client != null && this.client.world != null
-                ? this.client.world.getRegistryKey().getValue().toString()
-                : "unknown";
         BlockPos pos = source.pos();
         String status = source.linked() ? "Linked" : "Unlinked";
-        String label = status + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " | " + dimension;
+        String label = status + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " | " + source.dimension();
         context.drawTextWithShadow(this.textRenderer, trim(label, width - 160), x + 24, y + 7, source.linked() ? 0xFFFFFFFF : 0xFFAAAAAA);
 
         int linkButtonX = x + width - 122;
@@ -221,8 +230,8 @@ public class TakeItOutSettingsScreen extends Screen {
         drawSmallButton(context, deleteButtonX, y + 2, 54, 18, "Delete", hovered && mouseX >= deleteButtonX && mouseX < deleteButtonX + 54);
     }
 
-    private void renderContainerContentsTooltip(DrawContext context, BlockPos source, int mouseX, int mouseY) {
-        List<Takeitout.WorldContainerItemCount> items = getSortedItemsForSource(source.asLong());
+    private void renderContainerContentsTooltip(DrawContext context, WorldContainerSources.SourceEntry source, int mouseX, int mouseY) {
+        List<Takeitout.WorldContainerItemCount> items = getSortedItemsForSource(WorldContainerSources.sourceKey(source));
         int rows = Math.min(items.size(), 10);
         int width = 180;
         for (int i = 0; i < rows; i++) {
@@ -262,9 +271,9 @@ public class TakeItOutSettingsScreen extends Screen {
     private boolean handleContainerClick(int mouseX, int mouseY) {
         List<WorldContainerSources.SourceEntry> sources = getVisibleContainerSources();
         int listLeft = this.width / 2 - 215;
-        int listTop = 58;
+        int listTop = LIST_TOP;
         int listWidth = 430;
-        int listBottom = this.height - 36;
+        int listBottom = this.height - LIST_BOTTOM_MARGIN;
         int y = listTop + 6 - scrollOffset;
 
         for (WorldContainerSources.SourceEntry source : sources) {
@@ -275,14 +284,14 @@ public class TakeItOutSettingsScreen extends Screen {
                     && mouseY >= y + 2
                     && mouseY < y + 20) {
                 if (mouseX >= linkButtonX && mouseX < linkButtonX + 58) {
-                    if (WorldContainerSources.setLinked(this.client, source.pos(), !source.linked())) {
+                    if (WorldContainerSources.setLinked(this.client, source, !source.linked())) {
                         requestItems();
                     }
                     return true;
                 }
 
                 if (mouseX >= deleteButtonX && mouseX < deleteButtonX + 54) {
-                    if (WorldContainerSources.delete(this.client, source.pos())) {
+                    if (WorldContainerSources.delete(this.client, source)) {
                         requestItems();
                     }
                     return true;
@@ -327,20 +336,21 @@ public class TakeItOutSettingsScreen extends Screen {
         WorldContainerSources.updateContext(client);
         TakeitoutClient.WORLD_CONTAINER_ITEMS.clear();
         TakeitoutClient.WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
-        long[] sourcePositions;
+        List<Takeitout.WorldContainerSource> sources;
         if (focusedContainer != null) {
-            sourcePositions = new long[]{focusedContainer.asLong()};
+            sources = List.of(WorldContainerSources.currentDimensionSource(focusedContainer));
         } else if (activeTab == Tab.CONTAINERS) {
-            sourcePositions = WorldContainerSources.getAllPackedSourcesSnapshot();
+            sources = WorldContainerSources.getAllSourceReferencesSnapshot();
         } else {
-            sourcePositions = WorldContainerSources.getPackedSourcesSnapshot();
+            sources = WorldContainerSources.getLinkedSourceReferencesSnapshot();
         }
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerItemsPayload(sourcePositions));
+        ClientPlayNetworking.send(new Takeitout.GetWorldContainerItemsPayload(sources));
     }
 
     private List<WorldContainerSources.SourceEntry> getVisibleContainerSources() {
         if (focusedContainer != null) {
             return List.of(new WorldContainerSources.SourceEntry(
+                    WorldContainerSources.currentDimensionSource(focusedContainer).dimension(),
                     focusedContainer,
                     WorldContainerSources.isLinked(focusedContainer)
             ));
@@ -361,29 +371,59 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private int getListHeight() {
-        return Math.max(0, this.height - 94);
+        return Math.max(0, this.height - LIST_TOP - LIST_BOTTOM_MARGIN);
     }
 
     private List<Takeitout.WorldContainerItemCount> getSortedItems() {
         List<Takeitout.WorldContainerItemCount> items = new ArrayList<>(TakeitoutClient.WORLD_CONTAINER_ITEMS);
-        items.sort(Comparator.comparing(item -> item.stack().getName().getString()));
+        sortItems(items);
         return items;
     }
 
-    private List<Takeitout.WorldContainerItemCount> getSortedItemsForSource(long source) {
+    private List<Takeitout.WorldContainerItemCount> getSortedItemsForSource(String source) {
         List<Takeitout.WorldContainerItemCount> items = new ArrayList<>(
                 TakeitoutClient.WORLD_CONTAINER_ITEMS_BY_SOURCE.getOrDefault(source, List.of())
         );
-        items.sort(Comparator.comparing(item -> item.stack().getName().getString()));
+        sortItems(items);
         return items;
     }
 
-    private ItemStack getContainerIcon(BlockPos source) {
+    private void sortItems(List<Takeitout.WorldContainerItemCount> items) {
+        items.sort(getItemComparator());
+    }
+
+    private Comparator<Takeitout.WorldContainerItemCount> getItemComparator() {
+        Comparator<Takeitout.WorldContainerItemCount> byName = Comparator.comparing(
+                item -> item.stack().getName().getString(),
+                String.CASE_INSENSITIVE_ORDER
+        );
+
+        if (TakeitoutClient.ITEM_SORT_MODE == TakeitoutClient.ItemSortMode.COUNT) {
+            return Comparator.comparingInt(Takeitout.WorldContainerItemCount::count)
+                    .reversed()
+                    .thenComparing(byName);
+        }
+
+        return byName.thenComparing(
+                Comparator.comparingInt(Takeitout.WorldContainerItemCount::count).reversed()
+        );
+    }
+
+    private Text getSortButtonText() {
+        return Text.literal("Sort: " + TakeitoutClient.ITEM_SORT_MODE.label());
+    }
+
+    private ItemStack getContainerIcon(WorldContainerSources.SourceEntry source) {
         if (this.client == null || this.client.world == null) {
             return ItemStack.EMPTY;
         }
 
-        Block block = this.client.world.getBlockState(source).getBlock();
+        String currentDimension = this.client.world.getRegistryKey().getValue().toString();
+        if (!source.dimension().equals(currentDimension)) {
+            return ItemStack.EMPTY;
+        }
+
+        Block block = this.client.world.getBlockState(source.pos()).getBlock();
         return block.asItem().getDefaultStack();
     }
 
