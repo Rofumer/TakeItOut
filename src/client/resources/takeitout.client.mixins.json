@@ -7,6 +7,8 @@
   "refmap": "takeitout.refmap.json",
   "client": [
     "LitematicaMixin",
+    "MaterialListUtilsMixin",
+    "GuiMaterialListMixin",
     "PickBlockMixin",
     "TweakerooMixin",
     "MixinClientPlayerEntity",

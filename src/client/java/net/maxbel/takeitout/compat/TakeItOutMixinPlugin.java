@@ -7,14 +7,15 @@ import java.util.function.Supplier;
 import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
-import com.google.common.collect.ImmutableMap;
 import net.fabricmc.loader.api.FabricLoader;
 
 public class TakeItOutMixinPlugin implements IMixinConfigPlugin {
     private static final Supplier<Boolean> TRUE = () -> true;
 
-    private static final Map<String, Supplier<Boolean>> CONDITIONS = ImmutableMap.of(
+    private static final Map<String, Supplier<Boolean>> CONDITIONS = Map.of(
             "net.maxbel.takeitout.mixin.client.LitematicaMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
+            "net.maxbel.takeitout.mixin.client.MaterialListUtilsMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
+            "net.maxbel.takeitout.mixin.client.GuiMaterialListMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.MouseMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.TweakerooMixin", () -> FabricLoader.getInstance().isModLoaded("tweakeroo"),
             "net.maxbel.takeitout.mixin.client.PrinterMixin", () -> FabricLoader.getInstance().isModLoaded("litematica_printer"));

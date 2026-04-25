@@ -13,6 +13,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
+import java.util.List;
+
 public final class WorldContainerSourceRenderer {
     private static final float OUTLINE_ALPHA = 1.0F;
     private static final double OUTLINE_PADDING = 0.002D;
@@ -32,7 +34,7 @@ public final class WorldContainerSourceRenderer {
     public static void register() {
         LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
             Minecraft client = Minecraft.getInstance();
-            if (!TakeitoutClient.RENDER_CONTAINER_SOURCES || client.level == null || WorldContainerSources.size() == 0) {
+            if (!TakeitoutClient.RENDER_CONTAINER_SOURCES || client.level == null) {
                 return;
             }
 
@@ -50,7 +52,12 @@ public final class WorldContainerSourceRenderer {
             VertexConsumer vertexConsumer = consumers.getBuffer(RenderTypes.lines());
             int color = TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR;
 
-            for (BlockPos source : WorldContainerSources.getSourcesSnapshot()) {
+            List<BlockPos> sources = WorldContainerSources.getSourcesSnapshot();
+            if (sources.isEmpty()) {
+                return;
+            }
+
+            for (BlockPos source : sources) {
                 if (Vec3.atCenterOf(source).distanceToSqr(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
                     continue;
                 }
