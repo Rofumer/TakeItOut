@@ -53,8 +53,11 @@ public class Takeitout implements ModInitializer {
     private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
+    private static final String LINKED_CONTAINER_SCAN_LIMIT_KEY = "linked_container_scan_limit";
+    private static final int DEFAULT_LINKED_CONTAINER_SCAN_LIMIT = 64;
     private static final Set<String> ALLOWED_EXCHANGE_DIMENSIONS = new HashSet<>();
     private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
+    private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetShulkerStackPayload> ID =
@@ -330,9 +333,9 @@ public class Takeitout implements ModInitializer {
         int invalidSourceCount = 0;
         int emptySourceCount = 0;
         int failedExtractCount = 0;
-
+        int scanLimit = linkedContainerScanLimit;
         for (WorldContainerSource source : payload.sources()) {
-            if (checked >= 64) {
+            if (checked >= scanLimit) {
                 break;
             }
             checked++;
@@ -370,7 +373,7 @@ public class Takeitout implements ModInitializer {
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
                 requested,
-                Math.min(payload.sources().size(), 64),
+                Math.min(payload.sources().size(), scanLimit),
                 invalidSourceCount,
                 emptySourceCount,
                 failedExtractCount
@@ -387,8 +390,9 @@ public class Takeitout implements ModInitializer {
         }
 
         int checked = 0;
+        int scanLimit = linkedContainerScanLimit;
         for (WorldContainerSource source : payload.sources()) {
-            if (checked >= 64) {
+            if (checked >= scanLimit) {
                 break;
             }
             checked++;
@@ -721,6 +725,7 @@ public class Takeitout implements ModInitializer {
     private static void loadServerConfig() {
         ALLOWED_EXCHANGE_DIMENSIONS.clear();
         linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
+        linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
 
         if (!Files.exists(SERVER_CONFIG_PATH)) {
             saveDefaultServerConfig();
@@ -737,6 +742,13 @@ public class Takeitout implements ModInitializer {
 
             if (root.has(LINKED_CONTAINER_EXCHANGE_MODE_KEY)) {
                 linkedContainerExchangeMode = LinkedContainerExchangeMode.fromString(root.get(LINKED_CONTAINER_EXCHANGE_MODE_KEY).getAsString());
+            }
+
+            if (root.has(LINKED_CONTAINER_SCAN_LIMIT_KEY)) {
+                linkedContainerScanLimit = parseLinkedContainerScanLimit(root.get(LINKED_CONTAINER_SCAN_LIMIT_KEY));
+            } else {
+                root.addProperty(LINKED_CONTAINER_SCAN_LIMIT_KEY, linkedContainerScanLimit);
+                saveServerConfig(root);
             }
 
             JsonArray allowedDimensions = root.getAsJsonArray(ALLOWED_EXCHANGE_DIMENSIONS_KEY);
@@ -759,8 +771,9 @@ public class Takeitout implements ModInitializer {
             }
 
             LOGGER.info(
-                    "Server config loaded: linkedContainerExchangeMode={}, allowedExchangeDimensions={}",
+                    "Server config loaded: linkedContainerExchangeMode={}, linkedContainerScanLimit={}, allowedExchangeDimensions={}",
                     linkedContainerExchangeMode.id,
+                    linkedContainerScanLimit,
                     ALLOWED_EXCHANGE_DIMENSIONS.isEmpty() ? "all" : ALLOWED_EXCHANGE_DIMENSIONS
             );
         } catch (Exception e) {
@@ -768,11 +781,50 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    private static int parseLinkedContainerScanLimit(JsonElement element) {
+        if (element == null || !element.isJsonPrimitive()) {
+            LOGGER.warn(
+                    "Invalid TakeItOut linked container scan limit '{}', using {}",
+                    element,
+                    DEFAULT_LINKED_CONTAINER_SCAN_LIMIT
+            );
+            return DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+        }
+
+        int limit;
+        try {
+            limit = element.getAsInt();
+        } catch (Exception e) {
+            LOGGER.warn(
+                    "Invalid TakeItOut linked container scan limit '{}', using {}",
+                    element,
+                    DEFAULT_LINKED_CONTAINER_SCAN_LIMIT
+            );
+            return DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+        }
+
+        if (limit < 1) {
+            LOGGER.warn(
+                    "Invalid TakeItOut linked container scan limit '{}', using {}",
+                    limit,
+                    DEFAULT_LINKED_CONTAINER_SCAN_LIMIT
+            );
+            return DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+        }
+
+        return limit;
+    }
+
     private static void saveDefaultServerConfig() {
         JsonObject root = new JsonObject();
         root.addProperty(LINKED_CONTAINER_EXCHANGE_MODE_KEY, linkedContainerExchangeMode.id);
+        root.addProperty(LINKED_CONTAINER_SCAN_LIMIT_KEY, linkedContainerScanLimit);
         root.add(ALLOWED_EXCHANGE_DIMENSIONS_KEY, new JsonArray());
 
+        saveServerConfig(root);
+    }
+
+    private static void saveServerConfig(JsonObject root) {
         try {
             Files.createDirectories(SERVER_CONFIG_PATH.getParent());
             Files.writeString(SERVER_CONFIG_PATH, GSON.toJson(root));
