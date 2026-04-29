@@ -14,11 +14,13 @@
 - Added cross-dimension linked container support within the same world/server.
 - Added a server config file, `takeitout-server.json`, for controlling linked-container exchange:
   - `linked_container_exchange_mode`: `disabled`, `same_dimension`, or `cross_dimension`;
+  - `linked_container_scan_limit`: maximum linked containers scanned per server request;
   - `allowed_exchange_dimensions`: optional dimension allowlist for linked-container exchange.
   - Example:
     ```json
     {
       "linked_container_exchange_mode": "cross_dimension",
+      "linked_container_scan_limit": 64,
       "allowed_exchange_dimensions": [
         "minecraft:overworld",
         "minecraft:the_nether"
@@ -41,5 +43,5 @@
 ### Notes
 
 - Litematica already counts items stored in shulker boxes in the player's inventory; TakeItOut only adds linked world-container counts on top.
-- Linked container material counts use the existing server-side scan limit of 64 containers per request.
+- Linked container material counts and extraction use the configured server-side scan limit per request.
 - Linked container outlines are still rendered only in the player's current dimension.
