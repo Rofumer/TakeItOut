@@ -14,6 +14,7 @@ public class TakeItOutMixinPlugin implements IMixinConfigPlugin {
 
     private static final Map<String, Supplier<Boolean>> CONDITIONS = Map.of(
             "net.maxbel.takeitout.mixin.client.LitematicaMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
+            "net.maxbel.takeitout.mixin.client.LitematicaContainerFillerMixin", () -> FabricLoader.getInstance().isModLoaded("litematica_container_filler"),
             "net.maxbel.takeitout.mixin.client.MaterialListUtilsMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.GuiMaterialListMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.MouseMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),

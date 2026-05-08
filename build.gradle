@@ -63,6 +63,7 @@ dependencies {
     //modImplementation files('libs/malilib-fabric-1.21.11-0.27.1.jar')
     modImplementation files('libs/malilib-fabric-1.21.11-0.27.6.jar')
     modImplementation files('libs/tweakeroo-fabric-1.21.11-0.27.0.jar')
+    modImplementation files('libs/litematica_container_filler-0.9.4-1.21.11.jar')
 
     ///modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')
     ///modImplementation files('libs/malilib-fabric-1.21.7-0.25.1.jar')
