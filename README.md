@@ -14,15 +14,7 @@ Works seamlessly with **Litematica schematics** and is especially useful with an
 
 ## 🎥 Video Guide
 
-<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px;">
-  <iframe 
-    src="https://www.youtube.com/embed/IKLPTC3caCk"
-    title="TakeItOut Showcase"
-    frameborder="0"
-    allowfullscreen
-    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-  </iframe>
-</div>
+[![Video Guide](https://img.youtube.com/vi/IKLPTC3caCk/0.jpg)](https://youtu.be/IKLPTC3caCk)
 
 ---
 
