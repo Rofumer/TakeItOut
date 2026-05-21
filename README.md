@@ -1,4 +1,4 @@
-## ⚡ TakeItOut Minecraft Mod — Fast Shulker Block Picking + Easy Place
+## ⚡ Take It Out Minecraft Mod — Fast Shulker Block Picking + Easy Place
 
 Pick blocks directly from **shulker boxes — whether they’re in your inventory or placed in the world** — using:
 
