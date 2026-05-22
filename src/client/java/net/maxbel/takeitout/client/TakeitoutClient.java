@@ -238,6 +238,10 @@ public class TakeitoutClient implements ClientModInitializer {
             // ignore
         }
 
+        if (FabricLoader.getInstance().isModLoaded("litematica-printer")) {
+            return false;
+        }
+
         WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
         if (worldSchematic == null) {
             return false;
