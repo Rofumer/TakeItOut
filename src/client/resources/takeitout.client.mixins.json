@@ -10,6 +10,7 @@
     "MaterialListUtilsMixin",
     "GuiMaterialListMixin",
     "PickBlockMixin",
+    "PlayerInventoryAccessor",
     "TweakerooMixin",
     "MixinClientPlayerEntity",
     "UpdatedSlot",

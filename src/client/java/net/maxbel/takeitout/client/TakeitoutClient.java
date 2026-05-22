@@ -46,6 +46,7 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean SHULKER_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
+    public static boolean AUTO_SELECT_HOTBAR_SLOT;
     public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
@@ -61,6 +62,7 @@ public class TakeitoutClient implements ClientModInitializer {
         TAKE_SINGLE_ITEM_MODE = false;
         SHULKER_SINGLE_ITEM_MODE = false;
         RENDER_CONTAINER_SOURCES = true;
+        AUTO_SELECT_HOTBAR_SLOT = false;
         ITEM_SORT_MODE = ItemSortMode.NAME;
         CONTAINER_SOURCE_OUTLINE_COLOR = DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
         awaitingStack = ItemStack.EMPTY;
@@ -295,6 +297,9 @@ public class TakeitoutClient implements ClientModInitializer {
             if (object.has("render_container_sources")) {
                 RENDER_CONTAINER_SOURCES = object.get("render_container_sources").getAsBoolean();
             }
+            if (object.has("auto_select_hotbar_slot")) {
+                AUTO_SELECT_HOTBAR_SLOT = object.get("auto_select_hotbar_slot").getAsBoolean();
+            }
             if (object.has("item_sort_mode")) {
                 ITEM_SORT_MODE = ItemSortMode.fromString(object.get("item_sort_mode").getAsString());
             }
@@ -312,6 +317,7 @@ public class TakeitoutClient implements ClientModInitializer {
             object.addProperty("autotakeout", AUTOTAKEOUT);
             object.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
             object.addProperty("render_container_sources", RENDER_CONTAINER_SOURCES);
+            object.addProperty("auto_select_hotbar_slot", AUTO_SELECT_HOTBAR_SLOT);
             object.addProperty("item_sort_mode", ITEM_SORT_MODE.id);
             object.addProperty("container_source_outline_color", formatColor(CONTAINER_SOURCE_OUTLINE_COLOR));
             Files.writeString(SETTINGS_PATH, GSON.toJson(object));

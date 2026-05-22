@@ -1,11 +1,14 @@
 package net.maxbel.takeitout.client;
 
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.mixin.client.PlayerInventoryAccessor;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -113,6 +116,11 @@ public class TakeItOutSettingsScreen extends Screen {
             return true;
         }
 
+        if (activeTab == Tab.ALL_ITEMS && (event.button() == 0 || event.button() == 1)
+                && handleAllItemsClick((int) event.x(), (int) event.y(), event.button())) {
+            return true;
+        }
+
         return super.mouseClicked(event, doubleClick);
     }
 
@@ -137,15 +145,33 @@ public class TakeItOutSettingsScreen extends Screen {
             return;
         }
 
+        Takeitout.WorldContainerItemCount hoveredItem = null;
         guiGraphics.enableScissor(listLeft, listTop, listLeft + listWidth, listBottom);
         int y = listTop + 6 - scrollOffset;
         for (Takeitout.WorldContainerItemCount item : items) {
             if (y > listTop - 22 && y < listBottom) {
                 renderItemRow(guiGraphics, item, listLeft + 8, y, mouseX, mouseY);
+                if (hoveredItem == null && mouseX >= listLeft && mouseX < listLeft + listWidth
+                        && mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
+                    hoveredItem = item;
+                }
             }
             y += 22;
         }
         guiGraphics.disableScissor();
+
+        if (hoveredItem != null) {
+            String line1 = "ЛКМ: взять стак";
+            String line2 = "ПКМ: взять 1 предмет";
+            int tw = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
+            int th = 32;
+            int tx = Math.min(mouseX + 12, this.width - tw - 4);
+            int ty = Math.min(mouseY + 12, this.height - th - 4);
+            guiGraphics.fill(tx, ty, tx + tw, ty + th, 0xEE101010);
+            drawBorder(guiGraphics, tx, ty, tw, th, 0xFF9CA3AF);
+            guiGraphics.text(this.font, line1, tx + 6, ty + 6, 0xFFFFFFFF);
+            guiGraphics.text(this.font, line2, tx + 6, ty + 18, 0xFFFFFFFF);
+        }
     }
 
     private void renderItemRow(GuiGraphicsExtractor guiGraphics, Takeitout.WorldContainerItemCount item, int x, int y, int mouseX, int mouseY) {
@@ -153,13 +179,14 @@ public class TakeItOutSettingsScreen extends Screen {
         String count = "x" + item.count();
         int countX = x + 294 - this.font.width(count);
 
-        guiGraphics.item(stack, x, y);
-        guiGraphics.text(this.font, stack.getHoverName(), x + 24, y + 5, 0xFFFFFFFF);
-        guiGraphics.text(this.font, count, countX, y + 5, 0xFFA7F3D0);
-
-        if (mouseX >= x && mouseX < x + 18 && mouseY >= y && mouseY < y + 18) {
-            guiGraphics.setTooltipForNextFrame(this.font, stack, mouseX, mouseY);
+        boolean hovered = mouseX >= x - 8 && mouseX < x + 302 && mouseY >= y && mouseY < y + 22;
+        if (hovered) {
+            guiGraphics.fill(x - 8, y, x + 302, y + 22, 0x33FFFFFF);
         }
+
+        guiGraphics.item(stack, x, y + 3);
+        guiGraphics.text(this.font, stack.getHoverName(), x + 24, y + 8, 0xFFFFFFFF);
+        guiGraphics.text(this.font, count, countX, y + 8, 0xFFA7F3D0);
     }
 
     private void renderContainers(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
@@ -295,6 +322,53 @@ public class TakeItOutSettingsScreen extends Screen {
 
         if (items.size() > rows) {
             guiGraphics.text(this.font, "+" + (items.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+        }
+    }
+
+    private boolean handleAllItemsClick(int mouseX, int mouseY, int button) {
+        List<Takeitout.WorldContainerItemCount> items = getSortedItems();
+        int listLeft = this.width / 2 - 155;
+        int listTop = LIST_TOP;
+        int listWidth = 310;
+        int listBottom = this.height - LIST_BOTTOM_MARGIN;
+
+        if (mouseX < listLeft || mouseX >= listLeft + listWidth) {
+            return false;
+        }
+
+        int y = listTop + 6 - scrollOffset;
+        for (Takeitout.WorldContainerItemCount item : items) {
+            if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
+                boolean singleItemMode = (button == 1);
+                if (TakeitoutClient.AUTO_SELECT_HOTBAR_SLOT) {
+                    selectTargetHotbarSlot(item.stack());
+                }
+                WorldContainerSources.requestStack(this.minecraft, item.stack(), singleItemMode);
+                requestItems();
+                return true;
+            }
+            y += 22;
+        }
+
+        return false;
+    }
+
+    private void selectTargetHotbarSlot(ItemStack requested) {
+        if (this.minecraft == null || this.minecraft.player == null || this.minecraft.getConnection() == null) return;
+        Inventory inv = this.minecraft.player.getInventory();
+
+        for (int i = 0; i < 9; i++) {
+            if (ItemStack.isSameItemSameComponents(inv.getItem(i), requested)) {
+                return;
+            }
+        }
+
+        for (int i = 0; i < 9; i++) {
+            if (inv.getItem(i).isEmpty()) {
+                ((PlayerInventoryAccessor) inv).setSelectedSlot(i);
+                this.minecraft.getConnection().send(new ServerboundSetCarriedItemPacket(i));
+                return;
+            }
         }
     }
 
