@@ -2,13 +2,16 @@ package net.maxbel.takeitout.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.mixin.client.PlayerInventoryAccessor;
 import net.minecraft.block.Block;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.c2s.play.UpdateSelectedSlotC2SPacket;
 import net.minecraft.text.Text;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
@@ -121,6 +124,11 @@ public class TakeItOutSettingsScreen extends Screen {
             return true;
         }
 
+        if (activeTab == Tab.ALL_ITEMS && (click.button() == 0 || click.button() == 1)
+                && handleAllItemsClick((int) click.x(), (int) click.y(), click.button())) {
+            return true;
+        }
+
         return super.mouseClicked(click, doubled);
     }
 
@@ -145,15 +153,27 @@ public class TakeItOutSettingsScreen extends Screen {
             return;
         }
 
+        Takeitout.WorldContainerItemCount hoveredItem = null;
         context.enableScissor(listLeft, listTop, listLeft + listWidth, listBottom);
         int y = listTop + 6 - scrollOffset;
         for (Takeitout.WorldContainerItemCount item : items) {
             if (y > listTop - 22 && y < listBottom) {
                 renderItemRow(context, item, listLeft + 8, y, mouseX, mouseY);
+                if (hoveredItem == null && mouseX >= listLeft && mouseX < listLeft + listWidth
+                        && mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
+                    hoveredItem = item;
+                }
             }
             y += 22;
         }
         context.disableScissor();
+
+        if (hoveredItem != null) {
+            context.drawTooltip(this.textRenderer, List.of(
+                    Text.literal("ЛКМ: взять стак"),
+                    Text.literal("ПКМ: взять 1 предмет")
+            ), mouseX, mouseY);
+        }
     }
 
     private void renderItemRow(DrawContext context, Takeitout.WorldContainerItemCount item, int x, int y, int mouseX, int mouseY) {
@@ -161,13 +181,14 @@ public class TakeItOutSettingsScreen extends Screen {
         String count = "x" + item.count();
         int countX = x + 294 - this.textRenderer.getWidth(count);
 
-        context.drawItem(stack, x, y);
-        context.drawTextWithShadow(this.textRenderer, stack.getName(), x + 24, y + 5, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, count, countX, y + 5, 0xFFA7F3D0);
-
-        if (mouseX >= x && mouseX < x + 18 && mouseY >= y && mouseY < y + 18) {
-            context.drawItemTooltip(this.textRenderer, stack, mouseX, mouseY);
+        boolean hovered = mouseX >= x - 8 && mouseX < x + 302 && mouseY >= y && mouseY < y + 22;
+        if (hovered) {
+            context.fill(x - 8, y, x + 302, y + 22, 0x33FFFFFF);
         }
+
+        context.drawItem(stack, x, y + 3);
+        context.drawTextWithShadow(this.textRenderer, stack.getName(), x + 24, y + 8, 0xFFFFFFFF);
+        context.drawTextWithShadow(this.textRenderer, count, countX, y + 8, 0xFFA7F3D0);
     }
 
     private void renderContainers(DrawContext context, int mouseX, int mouseY) {
@@ -265,6 +286,57 @@ public class TakeItOutSettingsScreen extends Screen {
 
         if (items.size() > rows) {
             context.drawTextWithShadow(this.textRenderer, "+" + (items.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+        }
+    }
+
+    private boolean handleAllItemsClick(int mouseX, int mouseY, int button) {
+        List<Takeitout.WorldContainerItemCount> items = getSortedItems();
+        int listLeft = this.width / 2 - 155;
+        int listTop = LIST_TOP;
+        int listWidth = 310;
+        int listBottom = this.height - LIST_BOTTOM_MARGIN;
+
+        if (mouseX < listLeft || mouseX >= listLeft + listWidth) {
+            return false;
+        }
+
+        int y = listTop + 6 - scrollOffset;
+        for (Takeitout.WorldContainerItemCount item : items) {
+            if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
+                MinecraftClient client = MinecraftClient.getInstance();
+                // LMB → full stack; RMB → single item
+                boolean singleItemMode = (button == 1);
+                if (TakeitoutClient.AUTO_SELECT_HOTBAR_SLOT) {
+                    selectTargetHotbarSlot(client, item.stack());
+                }
+                WorldContainerSources.requestStack(client, item.stack(), singleItemMode);
+                requestItems();
+                return true;
+            }
+            y += 22;
+        }
+
+        return false;
+    }
+
+    private void selectTargetHotbarSlot(MinecraftClient client, ItemStack requested) {
+        if (client.player == null || client.getNetworkHandler() == null) return;
+        PlayerInventory inv = client.player.getInventory();
+
+        // If item already in hotbar, keep current selection so server merges naturally
+        for (int i = 0; i < 9; i++) {
+            if (ItemStack.areItemsAndComponentsEqual(inv.getStack(i), requested)) {
+                return;
+            }
+        }
+
+        // Find first empty hotbar slot and switch to it
+        for (int i = 0; i < 9; i++) {
+            if (inv.getStack(i).isEmpty()) {
+                ((PlayerInventoryAccessor) inv).setSelectedSlot(i);
+                client.getNetworkHandler().sendPacket(new UpdateSelectedSlotC2SPacket(i));
+                return;
+            }
         }
     }
 

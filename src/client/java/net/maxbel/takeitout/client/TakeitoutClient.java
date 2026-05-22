@@ -52,6 +52,7 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean AUTOTAKEOUT;
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
+    public static boolean AUTO_SELECT_HOTBAR_SLOT;
     public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
@@ -70,6 +71,7 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         TAKE_SINGLE_ITEM_MODE = false;
         RENDER_CONTAINER_SOURCES = true;
+        AUTO_SELECT_HOTBAR_SLOT = false;
         ITEM_SORT_MODE = ItemSortMode.NAME;
         CONTAINER_SOURCE_OUTLINE_COLOR = DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
         awaitingStack = ItemStack.EMPTY;
@@ -275,6 +277,9 @@ public class TakeitoutClient implements ClientModInitializer {
             if (obj.has("render_container_sources")) {
                 RENDER_CONTAINER_SOURCES = obj.get("render_container_sources").getAsBoolean();
             }
+            if (obj.has("auto_select_hotbar_slot")) {
+                AUTO_SELECT_HOTBAR_SLOT = obj.get("auto_select_hotbar_slot").getAsBoolean();
+            }
             if (obj.has("item_sort_mode")) {
                 ITEM_SORT_MODE = ItemSortMode.fromString(obj.get("item_sort_mode").getAsString());
             }
@@ -292,6 +297,7 @@ public class TakeitoutClient implements ClientModInitializer {
             obj.addProperty("autotakeout", AUTOTAKEOUT);
             obj.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
             obj.addProperty("render_container_sources", RENDER_CONTAINER_SOURCES);
+            obj.addProperty("auto_select_hotbar_slot", AUTO_SELECT_HOTBAR_SLOT);
             obj.addProperty("item_sort_mode", ITEM_SORT_MODE.id);
             obj.addProperty("container_source_outline_color", formatColor(CONTAINER_SOURCE_OUTLINE_COLOR));
             Files.writeString(SETTINGS_PATH, GSON.toJson(obj));
