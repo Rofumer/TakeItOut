@@ -18,6 +18,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.MushroomBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -52,6 +53,8 @@ public class LitematicaMixin {
     private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
     @Unique
     private static final Set<String> MUSHROOM_BLOCK_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up", "down");
+    @Unique
+    private static final Set<String> REDSTONE_WIRE_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "power");
 
     @Unique private static int waitTicks = 0;
     @Unique private static boolean waitingForItem = false;
@@ -457,7 +460,9 @@ public class LitematicaMixin {
         return ((targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
                 && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
                 || (targetState.getBlock() instanceof MushroomBlock
-                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name));
+                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name))
+                || (targetState.getBlock() instanceof RedStoneWireBlock
+                && REDSTONE_WIRE_IGNORED_PROPERTIES.contains(name));
     }
 
     @Unique
