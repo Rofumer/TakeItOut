@@ -479,7 +479,7 @@ public class Takeitout implements ModInitializer {
         }
 
         inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
-        if (canInsertIntoContainer(inventory, currentMainHand)) {
+        if (canReplaceInventoryItem(currentMainHand) && canInsertIntoContainer(inventory, currentMainHand)) {
             ItemStack leftover = insertIntoContainer(inventory, currentMainHand);
             if (!leftover.isEmpty()) {
                 inventory.setItem(slot, stackInContainer);
