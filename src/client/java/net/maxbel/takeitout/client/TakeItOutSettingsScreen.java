@@ -3,6 +3,7 @@ package net.maxbel.takeitout.client;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -30,6 +31,8 @@ public class TakeItOutSettingsScreen extends Screen {
     private Tab activeTab = Tab.ALL_ITEMS;
     private int scrollOffset;
     private BlockPos focusedContainer;
+    private EditBox searchField;
+    private String searchQuery = "";
 
     public TakeItOutSettingsScreen(Screen parent) {
         super(Component.literal("TakeItOut"));
@@ -46,6 +49,7 @@ public class TakeItOutSettingsScreen extends Screen {
             activeTab = Tab.ALL_ITEMS;
             focusedContainer = null;
             scrollOffset = 0;
+            searchField.setVisible(true);
             requestItems();
         }).bounds(left, tabY, tabWidth, 20).build());
 
@@ -53,6 +57,7 @@ public class TakeItOutSettingsScreen extends Screen {
             activeTab = Tab.CONTAINERS;
             focusedContainer = null;
             scrollOffset = 0;
+            searchField.setVisible(false);
             requestItems();
         }).bounds(left + tabWidth + 4, tabY, tabWidth, 20).build());
 
@@ -79,6 +84,17 @@ public class TakeItOutSettingsScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.minecraft.setScreen(parent))
                 .bounds(this.width / 2 - 100, this.height - 28, 200, 20)
                 .build());
+
+        int listLeft = this.width / 2 - 155;
+        searchField = new EditBox(this.font, listLeft, 50, 310, 14, Component.literal("Search"));
+        searchField.setMaxLength(64);
+        searchField.setHint(Component.literal("Search..."));
+        searchField.setResponder(text -> {
+            searchQuery = text;
+            scrollOffset = 0;
+        });
+        searchField.setVisible(activeTab == Tab.ALL_ITEMS);
+        addRenderableWidget(searchField);
 
         requestItems();
     }
@@ -455,6 +471,10 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private List<Takeitout.WorldContainerItemCount> getSortedItems() {
         List<Takeitout.WorldContainerItemCount> items = new ArrayList<>(TakeitoutClient.WORLD_CONTAINER_ITEMS);
+        if (!searchQuery.isBlank()) {
+            String q = searchQuery.toLowerCase();
+            items.removeIf(item -> !item.stack().getHoverName().getString().toLowerCase().contains(q));
+        }
         sortItems(items);
         return items;
     }
