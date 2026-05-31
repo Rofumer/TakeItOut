@@ -18,6 +18,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -358,7 +359,7 @@ public class Takeitout implements ModInitializer {
         }
 
         if (payload.fromUi() && !allowAllItemsTake) {
-            player.displayClientMessage(Component.literal("TakeItOut: taking items via All Items tab is disabled on this server"), true);
+            player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal("TakeItOut: taking items via All Items tab is disabled on this server")));
             ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
             return;
         }
