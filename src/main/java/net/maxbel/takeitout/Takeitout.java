@@ -54,10 +54,12 @@ public class Takeitout implements ModInitializer {
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
     private static final String LINKED_CONTAINER_SCAN_LIMIT_KEY = "linked_container_scan_limit";
+    private static final String ALLOW_ALL_ITEMS_TAKE_KEY = "allow_all_items_take";
     private static final int DEFAULT_LINKED_CONTAINER_SCAN_LIMIT = 64;
     private static final Set<String> ALLOWED_EXCHANGE_DIMENSIONS = new HashSet<>();
     private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+    private static boolean allowAllItemsTake = true;
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetShulkerStackPayload> ID =
@@ -116,7 +118,7 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode)
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi)
             implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetWorldContainerStackPayload> ID =
                 new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "get_world_container_stack"));
@@ -129,6 +131,8 @@ public class Takeitout implements ModInitializer {
                         GetWorldContainerStackPayload::stack,
                         ByteBufCodecs.BOOL,
                         GetWorldContainerStackPayload::singleItemMode,
+                        ByteBufCodecs.BOOL,
+                        GetWorldContainerStackPayload::fromUi,
                         GetWorldContainerStackPayload::new
                 );
 
@@ -326,6 +330,11 @@ public class Takeitout implements ModInitializer {
     private static void handleGetWorldContainerStackPayload(ServerPlayer player, GetWorldContainerStackPayload payload) {
         ItemStack requested = payload.stack();
         if (requested == null || requested.isEmpty() || payload.sources() == null) {
+            return;
+        }
+
+        if (payload.fromUi() && !allowAllItemsTake) {
+            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
             return;
         }
 
@@ -726,6 +735,7 @@ public class Takeitout implements ModInitializer {
         ALLOWED_EXCHANGE_DIMENSIONS.clear();
         linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
         linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+        allowAllItemsTake = true;
 
         if (!Files.exists(SERVER_CONFIG_PATH)) {
             saveDefaultServerConfig();
@@ -751,6 +761,13 @@ public class Takeitout implements ModInitializer {
                 saveServerConfig(root);
             }
 
+            if (root.has(ALLOW_ALL_ITEMS_TAKE_KEY)) {
+                allowAllItemsTake = root.get(ALLOW_ALL_ITEMS_TAKE_KEY).getAsBoolean();
+            } else {
+                root.addProperty(ALLOW_ALL_ITEMS_TAKE_KEY, allowAllItemsTake);
+                saveServerConfig(root);
+            }
+
             JsonArray allowedDimensions = root.getAsJsonArray(ALLOWED_EXCHANGE_DIMENSIONS_KEY);
             for (JsonElement element : allowedDimensions) {
                 if (!element.isJsonPrimitive()) {
@@ -771,9 +788,10 @@ public class Takeitout implements ModInitializer {
             }
 
             LOGGER.info(
-                    "Server config loaded: linkedContainerExchangeMode={}, linkedContainerScanLimit={}, allowedExchangeDimensions={}",
+                    "Server config loaded: linkedContainerExchangeMode={}, linkedContainerScanLimit={}, allowAllItemsTake={}, allowedExchangeDimensions={}",
                     linkedContainerExchangeMode.id,
                     linkedContainerScanLimit,
+                    allowAllItemsTake,
                     ALLOWED_EXCHANGE_DIMENSIONS.isEmpty() ? "all" : ALLOWED_EXCHANGE_DIMENSIONS
             );
         } catch (Exception e) {
@@ -819,6 +837,7 @@ public class Takeitout implements ModInitializer {
         JsonObject root = new JsonObject();
         root.addProperty(LINKED_CONTAINER_EXCHANGE_MODE_KEY, linkedContainerExchangeMode.id);
         root.addProperty(LINKED_CONTAINER_SCAN_LIMIT_KEY, linkedContainerScanLimit);
+        root.addProperty(ALLOW_ALL_ITEMS_TAKE_KEY, allowAllItemsTake);
         root.add(ALLOWED_EXCHANGE_DIMENSIONS_KEY, new JsonArray());
 
         saveServerConfig(root);

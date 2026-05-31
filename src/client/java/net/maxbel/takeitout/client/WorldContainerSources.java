@@ -278,6 +278,10 @@ public final class WorldContainerSources {
     }
 
     public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode) {
+        return requestStack(client, required, singleItemMode, false);
+    }
+
+    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode, boolean fromUi) {
         if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) {
             return false;
         }
@@ -302,7 +306,8 @@ public final class WorldContainerSources {
         ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
                 sources,
                 required.copyWithCount(1),
-                singleItemMode
+                singleItemMode,
+                fromUi
         ));
         return true;
     }

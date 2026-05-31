@@ -353,7 +353,7 @@ public class TakeItOutSettingsScreen extends Screen {
         for (Takeitout.WorldContainerItemCount item : items) {
             if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
                 boolean singleItemMode = (button == 1);
-                WorldContainerSources.requestStack(this.minecraft, item.stack(), singleItemMode);
+                WorldContainerSources.requestStack(this.minecraft, item.stack(), singleItemMode, true);
                 requestItems();
                 return true;
             }
