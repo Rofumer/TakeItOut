@@ -8,7 +8,9 @@ import com.google.gson.JsonObject;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
@@ -220,6 +222,23 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ServerConfigSyncPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "server_config_sync"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, ServerConfigSyncPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT,
+                        ServerConfigSyncPayload::linkedContainerScanLimit,
+                        ServerConfigSyncPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
     @Override
     public void onInitialize() {
         loadServerConfig();
@@ -229,6 +248,7 @@ public class Takeitout implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(GetShulkerStackPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetShulkerStackPayload(context.player(), payload))
@@ -238,6 +258,10 @@ public class Takeitout implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetWorldContainerItemsPayload(context.player(), payload))
+        );
+
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+                sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit))
         );
     }
 
@@ -334,6 +358,7 @@ public class Takeitout implements ModInitializer {
         }
 
         if (payload.fromUi() && !allowAllItemsTake) {
+            player.displayClientMessage(Component.literal("TakeItOut: taking items via All Items tab is disabled on this server"), true);
             ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
             return;
         }

@@ -61,8 +61,13 @@ public final class WorldContainerSources {
         boolean linked = !SOURCES.getOrDefault(immutable, false);
         SOURCES.put(immutable, linked);
 
+        int linkedCount = linkedSourceCountSnapshot();
+        int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
+        String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
+                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
+                : "";
         client.player.sendOverlayMessage(
-                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedSourceCountSnapshot() + ")")
+                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
         );
         LOGGER.info(
                 "World container source {}: pos={}, linked={}, totalLinked={}",
@@ -88,14 +93,19 @@ public final class WorldContainerSources {
         }
 
         SOURCES.put(immutable, linked);
+        int linkedCount = linkedSourceCountSnapshot();
+        int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
+        String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
+                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
+                : "";
         client.player.sendOverlayMessage(
-                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedSourceCountSnapshot() + ")")
+                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
         );
         LOGGER.info(
                 "World container source {}: pos={}, totalLinked={}",
                 linked ? "linked" : "unlinked",
                 immutable,
-                linkedSourceCountSnapshot()
+                linkedCount
         );
         saveCurrentContext();
         return true;
@@ -117,15 +127,20 @@ public final class WorldContainerSources {
         updateContext(client);
         boolean changed = updateStoredSource(source, linked, false);
         if (changed) {
+            int linkedCount = linkedSourceCountSnapshot();
+            int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
+            String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
+                    ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
+                    : "";
             client.player.sendOverlayMessage(
-                    Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedSourceCountSnapshot() + ")")
+                    Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
             );
             LOGGER.info(
                     "World container source {}: dimension={}, pos={}, totalLinked={}",
                     linked ? "linked" : "unlinked",
                     source.dimension(),
                     source.pos(),
-                    linkedSourceCountSnapshot()
+                    linkedCount
             );
         }
 

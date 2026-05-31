@@ -46,6 +46,7 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean SHULKER_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
+    public static int SERVER_SCAN_LIMIT = -1;
     public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
@@ -116,6 +117,10 @@ public class TakeitoutClient implements ClientModInitializer {
                         WorldContainerMaterialListCache.handleItemsPayload(payload);
                     }
                 })
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.ServerConfigSyncPayload.ID, (payload, context) ->
+                context.client().execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit())
         );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
