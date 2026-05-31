@@ -1,14 +1,11 @@
 package net.maxbel.takeitout.client;
 
 import net.maxbel.takeitout.Takeitout;
-import net.maxbel.takeitout.mixin.client.PlayerInventoryAccessor;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -340,9 +337,6 @@ public class TakeItOutSettingsScreen extends Screen {
         for (Takeitout.WorldContainerItemCount item : items) {
             if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
                 boolean singleItemMode = (button == 1);
-                if (TakeitoutClient.AUTO_SELECT_HOTBAR_SLOT) {
-                    selectTargetHotbarSlot(item.stack());
-                }
                 WorldContainerSources.requestStack(this.minecraft, item.stack(), singleItemMode);
                 requestItems();
                 return true;
@@ -351,25 +345,6 @@ public class TakeItOutSettingsScreen extends Screen {
         }
 
         return false;
-    }
-
-    private void selectTargetHotbarSlot(ItemStack requested) {
-        if (this.minecraft == null || this.minecraft.player == null || this.minecraft.getConnection() == null) return;
-        Inventory inv = this.minecraft.player.getInventory();
-
-        for (int i = 0; i < 9; i++) {
-            if (ItemStack.isSameItemSameComponents(inv.getItem(i), requested)) {
-                return;
-            }
-        }
-
-        for (int i = 0; i < 9; i++) {
-            if (inv.getItem(i).isEmpty()) {
-                ((PlayerInventoryAccessor) inv).setSelectedSlot(i);
-                this.minecraft.getConnection().send(new ServerboundSetCarriedItemPacket(i));
-                return;
-            }
-        }
     }
 
     private boolean handleContainerClick(int mouseX, int mouseY) {
