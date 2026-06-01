@@ -503,6 +503,29 @@ public class Takeitout implements ModInitializer {
             return true;
         }
 
+        if (ItemStack.isSameItemSameComponents(currentMainHand, extracted)
+                && currentMainHand.getCount() < currentMainHand.getMaxStackSize()) {
+            inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+            syncWorldContainer(player, inventory);
+            currentMainHand.grow(extracted.getCount());
+            player.setItemInHand(InteractionHand.MAIN_HAND, currentMainHand);
+            syncPlayerInventory(player);
+            return true;
+        }
+
+        for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()); i++) {
+            ItemStack invStack = player.getInventory().getItem(i);
+            if (ItemStack.isSameItemSameComponents(invStack, extracted)
+                    && invStack.getCount() < invStack.getMaxStackSize()) {
+                inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+                syncWorldContainer(player, inventory);
+                invStack.grow(extracted.getCount());
+                player.getInventory().setItem(i, invStack);
+                syncPlayerInventory(player);
+                return true;
+            }
+        }
+
         int freeSlot = player.getInventory().getFreeSlot();
         if (freeSlot != -1) {
             inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);

@@ -126,7 +126,7 @@ public class LitematicaMixin {
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandItem();
 
-        if (arePlacementEquivalent(worldState, state)) {
+        if (!worldState.isAir()) {
             return;
         }
 

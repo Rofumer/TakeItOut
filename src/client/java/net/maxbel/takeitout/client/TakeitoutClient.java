@@ -78,7 +78,7 @@ public class TakeitoutClient implements ClientModInitializer {
         InputEventHandler.getKeybindManager().registerKeybindProvider(TakeItOutInputHandler.getInstance());
 
         KeyMapping.Category category = KeyMapping.Category.register(
-                Identifier.fromNamespaceAndPath("takeitout", "key_category")
+                Identifier.fromNamespaceAndPath("takeitout", "takeitout")
         );
 
         openSettingsKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -98,6 +98,11 @@ public class TakeitoutClient implements ClientModInitializer {
                             && ItemStack.isSameItemSameComponents(awaitingStack, payload.stack())) {
                         awaitingStack = ItemStack.EMPTY;
                         awaitingStackTicks = 0;
+                        if (context.client().player != null) {
+                            context.client().player.sendOverlayMessage(
+                                    Component.translatable("message.takeitout.item_not_found", payload.stack().getDisplayName())
+                            );
+                        }
                     }
                 })
         );

@@ -6,5 +6,6 @@
   "message.takeitout.extract_mode.stack": "Режим вытягивания: ВЕСЬ СТАК",
   "message.takeitout.extract_mode.single": "Режим вытягивания: ОДИН ПРЕДМЕТ",
   "key.category.takeitout.takeitout": "TakeItOut",
-  "takeitout.msg.stacked_shulker_skipped":"Действие отменено (Take It Out Mod): найден стак шалкеров"
+  "takeitout.msg.stacked_shulker_skipped":"Действие отменено (Take It Out Mod): найден стак шалкеров",
+  "message.takeitout.item_not_found": "Не найдено в контейнерах: %s"
 }
