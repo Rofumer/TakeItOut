@@ -222,6 +222,23 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<DumpInventoryPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "dump_inventory"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, DumpInventoryPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        DumpInventoryPayload::dumps,
+                        DumpInventoryPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
     public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<ServerConfigSyncPayload> ID =
                 new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "server_config_sync"));
@@ -246,6 +263,7 @@ public class Takeitout implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
@@ -258,6 +276,9 @@ public class Takeitout implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetWorldContainerItemsPayload(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(DumpInventoryPayload.ID, (payload, context) ->
+                context.server().execute(() -> handleDumpInventoryPayload(context.player(), payload))
         );
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
@@ -453,6 +474,39 @@ public class Takeitout implements ModInitializer {
         }
 
         ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
+    }
+
+    private static void handleDumpInventoryPayload(ServerPlayer player, DumpInventoryPayload payload) {
+        if (payload.dumps() == null || payload.dumps().isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!canReplaceInventoryItem(stack)) {
+                continue;
+            }
+
+            ItemStack remaining = stack.copy();
+            for (WorldContainerSource dump : payload.dumps()) {
+                if (remaining.isEmpty()) {
+                    break;
+                }
+                Container dumpInventory = getWorldContainerInventory(player, dump);
+                if (dumpInventory == null) {
+                    continue;
+                }
+                remaining = insertIntoContainer(dumpInventory, remaining);
+                syncWorldContainer(player, dumpInventory);
+            }
+
+            if (remaining.getCount() != stack.getCount()) {
+                player.getInventory().setItem(i, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
+            }
+        }
+
+        syncPlayerInventory(player);
+        LOGGER.debug("DumpInventory: player={}", player.getName().getString());
     }
 
     private static void addItemCount(List<WorldContainerItemCount> items, ItemStack stack) {

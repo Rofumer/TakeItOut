@@ -42,13 +42,27 @@ public final class TakeItOutHotkeys {
             "Container Source Render",
             "Toggle rendering outlines around linked world containers."
     );
+    public static final ConfigHotkey MARK_DUMP_CONTAINER = hotkey(
+            "markDumpContainer",
+            "G",
+            "Mark Dump Container",
+            "Mark or unmark the supported container you are looking at as a dump target."
+    );
+    public static final ConfigHotkey DUMP_NOW = hotkey(
+            "dumpNow",
+            "",
+            "Dump to Containers",
+            "Send replaceable blocks from your inventory to marked dump containers."
+    );
 
     public static final List<ConfigHotkey> HOTKEY_LIST = List.of(
             OPEN_CONFIG_GUI,
             AUTO_TAKE_OUT,
             SINGLE_ITEM_MODE,
             LINK_LOOKED_AT_CONTAINER,
-            TOGGLE_CONTAINER_SOURCE_RENDER
+            TOGGLE_CONTAINER_SOURCE_RENDER,
+            MARK_DUMP_CONTAINER,
+            DUMP_NOW
     );
 
     private TakeItOutHotkeys() {
@@ -95,6 +109,40 @@ public final class TakeItOutHotkeys {
 
         TOGGLE_CONTAINER_SOURCE_RENDER.getKeybind().setCallback((KeyAction action, IKeybind key) -> {
             TakeitoutClient.toggleContainerSourceRender(Minecraft.getInstance());
+            return true;
+        });
+
+        MARK_DUMP_CONTAINER.getKeybind().setCallback((KeyAction action, IKeybind key) -> {
+            if (action != KeyAction.PRESS) {
+                return false;
+            }
+
+            Minecraft client = Minecraft.getInstance();
+            if (client.screen != null || client.player == null || client.level == null) {
+                return false;
+            }
+
+            if (client.hitResult instanceof BlockHitResult hit
+                    && hit.getType() == HitResult.Type.BLOCK
+                    && WorldContainerSources.isSupportedContainer(client.level, hit.getBlockPos())) {
+                return WorldContainerDumps.toggle(client, hit.getBlockPos());
+            }
+
+            client.player.sendOverlayMessage(Component.literal("Look at a chest, barrel or shulker box"));
+            return false;
+        });
+
+        DUMP_NOW.getKeybind().setCallback((KeyAction action, IKeybind key) -> {
+            if (action != KeyAction.PRESS) {
+                return false;
+            }
+
+            Minecraft client = Minecraft.getInstance();
+            if (client.screen != null || client.player == null) {
+                return false;
+            }
+
+            TakeitoutClient.dumpNow(client);
             return true;
         });
     }

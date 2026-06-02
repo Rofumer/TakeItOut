@@ -52,12 +52,7 @@ public final class WorldContainerSourceRenderer {
             VertexConsumer vertexConsumer = consumers.getBuffer(RenderTypes.lines());
             int color = TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR;
 
-            List<BlockPos> sources = WorldContainerSources.getSourcesSnapshot();
-            if (sources.isEmpty()) {
-                return;
-            }
-
-            for (BlockPos source : sources) {
+            for (BlockPos source : WorldContainerSources.getSourcesSnapshot()) {
                 if (Vec3.atCenterOf(source).distanceToSqr(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
                     continue;
                 }
@@ -70,6 +65,24 @@ public final class WorldContainerSourceRenderer {
                         source.getY() - cameraPos.y,
                         source.getZ() - cameraPos.z,
                         color,
+                        OUTLINE_ALPHA
+                );
+            }
+
+            int dumpColor = 0xFFF97316;
+            for (BlockPos dump : WorldContainerDumps.getDumpSnapshot()) {
+                if (Vec3.atCenterOf(dump).distanceToSqr(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
+                    continue;
+                }
+
+                ShapeRenderer.renderShape(
+                        context.poseStack(),
+                        vertexConsumer,
+                        OUTLINE_SHAPE,
+                        dump.getX() - cameraPos.x,
+                        dump.getY() - cameraPos.y,
+                        dump.getZ() - cameraPos.z,
+                        dumpColor,
                         OUTLINE_ALPHA
                 );
             }

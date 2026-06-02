@@ -131,6 +131,7 @@ public class TakeitoutClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.level != lastSourceWorld) {
                 WorldContainerSources.updateContext(client);
+                WorldContainerDumps.updateContext(client);
                 lastSourceWorld = client.level;
             }
 
@@ -195,6 +196,20 @@ public class TakeitoutClient implements ClientModInitializer {
                     )
             );
         }
+    }
+
+    public static void dumpNow(Minecraft client) {
+        if (client.player == null) {
+            return;
+        }
+
+        List<Takeitout.WorldContainerSource> dumps = WorldContainerDumps.getDumpReferencesSnapshot();
+        if (dumps.isEmpty()) {
+            client.player.sendOverlayMessage(Component.literal("TakeItOut: no dump containers marked"));
+            return;
+        }
+
+        ClientPlayNetworking.send(new Takeitout.DumpInventoryPayload(dumps));
     }
 
     public static void setContainerSourceOutlineColor(int color) {

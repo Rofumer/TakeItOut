@@ -115,9 +115,17 @@ public class TakeItOutSettingsScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int contentHeight = activeTab == Tab.ALL_ITEMS
-                ? getSortedItems().size() * 22
-                : getVisibleContainerSources().size() * CONTAINER_ROW_HEIGHT;
+        int contentHeight;
+        if (activeTab == Tab.ALL_ITEMS) {
+            contentHeight = getSortedItems().size() * 22;
+        } else {
+            int sourceHeight = getVisibleContainerSources().size() * CONTAINER_ROW_HEIGHT;
+            List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
+                    ? WorldContainerDumps.getAllDumpsSnapshot()
+                    : List.of();
+            int dumpHeight = dumps.isEmpty() ? 0 : (CONTAINER_ROW_HEIGHT + dumps.size() * CONTAINER_ROW_HEIGHT);
+            contentHeight = sourceHeight + dumpHeight;
+        }
         int maxScroll = Math.max(0, contentHeight - getListHeight());
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (scrollY * 18)));
         return true;
@@ -204,6 +212,9 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private void renderContainers(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
         List<WorldContainerSources.SourceEntry> sources = getVisibleContainerSources();
+        List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
+                ? WorldContainerDumps.getAllDumpsSnapshot()
+                : List.of();
         int listLeft = this.width / 2 - 215;
         int listTop = LIST_TOP;
         int listWidth = 430;
@@ -218,7 +229,7 @@ public class TakeItOutSettingsScreen extends Screen {
                 0xFFA7F3D0
         );
 
-        if (sources.isEmpty()) {
+        if (sources.isEmpty() && dumps.isEmpty()) {
             guiGraphics.centeredText(this.font, "No containers", this.width / 2, listTop + 36, 0xFFAAAAAA);
             return;
         }
@@ -226,6 +237,7 @@ public class TakeItOutSettingsScreen extends Screen {
         WorldContainerSources.SourceEntry hoveredSource = null;
         guiGraphics.enableScissor(listLeft, listTop, listLeft + listWidth, listBottom);
         int y = listTop + 6 - scrollOffset;
+
         for (WorldContainerSources.SourceEntry source : sources) {
             if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
                 renderContainerRow(guiGraphics, source, listLeft + 8, y, listWidth - 16, mouseX, mouseY);
@@ -235,11 +247,48 @@ public class TakeItOutSettingsScreen extends Screen {
             }
             y += CONTAINER_ROW_HEIGHT;
         }
+
+        if (!dumps.isEmpty()) {
+            if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
+                guiGraphics.fill(listLeft + 8, y + 9, listLeft + listWidth - 8, y + 10, 0x44F97316);
+                guiGraphics.text(this.font, "Dump Containers (" + dumps.size() + ")", listLeft + 8, y + 2, 0xFFF97316);
+            }
+            y += CONTAINER_ROW_HEIGHT;
+
+            for (WorldContainerDumps.DumpEntry dump : dumps) {
+                if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
+                    renderDumpRow(guiGraphics, dump, listLeft + 8, y, listWidth - 16, mouseX, mouseY);
+                }
+                y += CONTAINER_ROW_HEIGHT;
+            }
+        }
+
         guiGraphics.disableScissor();
 
         if (hoveredSource != null) {
             renderContainerContentsTooltip(guiGraphics, hoveredSource, mouseX, mouseY);
         }
+    }
+
+    private void renderDumpRow(
+            GuiGraphicsExtractor guiGraphics,
+            WorldContainerDumps.DumpEntry dump,
+            int x,
+            int y,
+            int width,
+            int mouseX,
+            int mouseY
+    ) {
+        boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
+        guiGraphics.fill(x, y, x + width, y + 22, hovered ? 0x88F97316 : 0x33F97316);
+
+        BlockPos pos = dump.pos();
+        String label = (dump.enabled() ? "Dump" : "Disabled") + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ();
+        guiGraphics.text(this.font, trim(label, width - 72), x + 4, y + 7, dump.enabled() ? 0xFFFBBF24 : 0xFFAAAAAA);
+
+        int buttonX = x + width - 62;
+        drawSmallButton(guiGraphics, buttonX, y + 2, 58, 18, dump.enabled() ? "Unmark" : "Mark",
+                hovered && mouseX >= buttonX && mouseX < buttonX + 58);
     }
 
     private void renderContainerRow(
@@ -365,6 +414,9 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private boolean handleContainerClick(int mouseX, int mouseY) {
         List<WorldContainerSources.SourceEntry> sources = getVisibleContainerSources();
+        List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
+                ? WorldContainerDumps.getAllDumpsSnapshot()
+                : List.of();
         int listLeft = this.width / 2 - 215;
         int listTop = LIST_TOP;
         int listWidth = 430;
@@ -390,6 +442,20 @@ public class TakeItOutSettingsScreen extends Screen {
                 }
             }
             y += CONTAINER_ROW_HEIGHT;
+        }
+
+        if (!dumps.isEmpty()) {
+            y += CONTAINER_ROW_HEIGHT; // skip section header
+
+            for (WorldContainerDumps.DumpEntry dump : dumps) {
+                int buttonX = listLeft + 8 + listWidth - 16 - 62;
+                if (y >= listTop && y + 22 <= listBottom && mouseY >= y + 2 && mouseY < y + 20
+                        && mouseX >= buttonX && mouseX < buttonX + 58) {
+                    WorldContainerDumps.toggle(this.minecraft, dump.pos());
+                    return true;
+                }
+                y += CONTAINER_ROW_HEIGHT;
+            }
         }
 
         return false;
