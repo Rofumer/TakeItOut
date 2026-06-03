@@ -120,7 +120,7 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi)
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps)
             implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetWorldContainerStackPayload> ID =
                 new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "get_world_container_stack"));
@@ -135,6 +135,8 @@ public class Takeitout implements ModInitializer {
                         GetWorldContainerStackPayload::singleItemMode,
                         ByteBufCodecs.BOOL,
                         GetWorldContainerStackPayload::fromUi,
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackPayload::dumps,
                         GetWorldContainerStackPayload::new
                 );
 
@@ -403,7 +405,7 @@ public class Takeitout implements ModInitializer {
             }
 
             int slot = getSlotWithStack(inventory, requested);
-            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode())) {
+            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
                 ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
@@ -528,7 +530,8 @@ public class Takeitout implements ModInitializer {
             Container inventory,
             BlockPos pos,
             int slot,
-            boolean singleItemMode
+            boolean singleItemMode,
+            List<WorldContainerSource> dumps
     ) {
         if (slot < 0 || slot >= inventory.getContainerSize()) {
             return false;
@@ -590,17 +593,32 @@ public class Takeitout implements ModInitializer {
         }
 
         inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
-        if (canReplaceInventoryItem(currentMainHand) && canInsertIntoContainer(inventory, currentMainHand)) {
-            ItemStack leftover = insertIntoContainer(inventory, currentMainHand);
-            if (!leftover.isEmpty()) {
-                inventory.setItem(slot, stackInContainer);
-                return false;
+        if (canReplaceInventoryItem(currentMainHand)) {
+            Container insertTarget = null;
+            for (WorldContainerSource dumpSource : dumps) {
+                Container dumpInv = getWorldContainerInventory(player, dumpSource);
+                if (dumpInv != null && canInsertIntoContainer(dumpInv, currentMainHand)) {
+                    insertTarget = dumpInv;
+                    break;
+                }
             }
-
-            syncWorldContainer(player, inventory);
-            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
-            syncPlayerInventory(player);
-            return true;
+            if (insertTarget == null && canInsertIntoContainer(inventory, currentMainHand)) {
+                insertTarget = inventory;
+            }
+            if (insertTarget != null) {
+                ItemStack leftover = insertIntoContainer(insertTarget, currentMainHand);
+                if (!leftover.isEmpty()) {
+                    inventory.setItem(slot, stackInContainer);
+                    return false;
+                }
+                syncWorldContainer(player, inventory);
+                if (insertTarget != inventory) {
+                    syncWorldContainer(player, insertTarget);
+                }
+                player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
+                syncPlayerInventory(player);
+                return true;
+            }
         }
 
         inventory.setItem(slot, stackInContainer);
@@ -608,7 +626,25 @@ public class Takeitout implements ModInitializer {
         if (remainingInContainer.isEmpty()) {
             for (int i = Math.min(36, player.getInventory().getContainerSize()) - 1; i >= 0; --i) {
                 ItemStack item = player.getInventory().getItem(i);
-                if (!canReplaceInventoryItem(item) || !inventory.canPlaceItem(slot, item)) {
+                if (!canReplaceInventoryItem(item)) {
+                    continue;
+                }
+
+                for (WorldContainerSource dumpSource : dumps) {
+                    Container dumpInv = getWorldContainerInventory(player, dumpSource);
+                    if (dumpInv != null && canInsertIntoContainer(dumpInv, item)) {
+                        insertIntoContainer(dumpInv, item);
+                        syncWorldContainer(player, dumpInv);
+                        inventory.setItem(slot, ItemStack.EMPTY);
+                        syncWorldContainer(player, inventory);
+                        player.getInventory().setItem(i, currentMainHand);
+                        player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
+                        syncPlayerInventory(player);
+                        return true;
+                    }
+                }
+
+                if (!inventory.canPlaceItem(slot, item)) {
                     continue;
                 }
 

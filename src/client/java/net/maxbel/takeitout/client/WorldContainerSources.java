@@ -322,7 +322,8 @@ public final class WorldContainerSources {
                 sources,
                 required.copyWithCount(1),
                 singleItemMode,
-                fromUi
+                fromUi,
+                WorldContainerDumps.getDumpReferencesSnapshot()
         ));
         return true;
     }
