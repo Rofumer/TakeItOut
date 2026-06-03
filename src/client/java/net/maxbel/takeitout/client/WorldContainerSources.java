@@ -36,204 +36,216 @@ public final class WorldContainerSources {
     private static final Path SOURCES_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-world-sources.json");
     private static final long FAILURE_RETRY_DELAY_MS = 1500L;
     private static final String CONTEXTS_KEY = "contexts";
+    private static final String ACTIVE_GROUP_KEY = "activeGroup";
+    private static final String GROUPS_KEY = "groups";
+    public static final String DEFAULT_GROUP = "default";
 
     private static final Map<BlockPos, Boolean> SOURCES = new LinkedHashMap<>();
 
     private static ItemStack lastFailedStack = ItemStack.EMPTY;
     private static long lastFailureTsMs = 0L;
-    private static String currentContextKey;
+    private static String currentContextKey; // worldKey|dimension
+    private static String currentWorldKey;
+    private static String currentGroupName = DEFAULT_GROUP;
+    private static boolean isDirty = false;
 
     private WorldContainerSources() {
     }
 
     public static boolean toggle(Minecraft client, BlockPos pos) {
-        if (client == null || client.player == null || client.level == null || pos == null) {
-            return false;
-        }
-
+        if (client == null || client.player == null || client.level == null || pos == null) return false;
         updateContext(client);
-
         BlockPos immutable = pos.immutable();
-        if (!isSupportedContainer(client.level, immutable)) {
-            return false;
-        }
-
+        if (!isSupportedContainer(client.level, immutable)) return false;
         boolean linked = !SOURCES.getOrDefault(immutable, false);
         SOURCES.put(immutable, linked);
-
+        isDirty = true;
         int linkedCount = linkedSourceCountSnapshot();
         int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
         String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
-                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
-                : "";
-        client.player.sendOverlayMessage(
-                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
-        );
-        LOGGER.info(
-                "World container source {}: pos={}, linked={}, totalLinked={}",
-                linked ? "linked" : "unlinked",
-                immutable,
-                linked,
-                linkedSourceCountSnapshot()
-        );
+                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")" : "";
+        client.player.sendOverlayMessage(Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix));
+        LOGGER.info("World container source {}: pos={}, linked={}, totalLinked={}", linked ? "linked" : "unlinked", immutable, linked, linkedSourceCountSnapshot());
         saveCurrentContext();
         return true;
     }
 
     public static boolean setLinked(Minecraft client, BlockPos pos, boolean linked) {
-        if (client == null || client.player == null || pos == null) {
-            return false;
-        }
-
+        if (client == null || client.player == null || pos == null) return false;
         updateContext(client);
-
         BlockPos immutable = pos.immutable();
-        if (!SOURCES.containsKey(immutable) && !linked) {
-            return false;
-        }
-
+        if (!SOURCES.containsKey(immutable) && !linked) return false;
         SOURCES.put(immutable, linked);
+        isDirty = true;
         int linkedCount = linkedSourceCountSnapshot();
         int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
         String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
-                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
-                : "";
-        client.player.sendOverlayMessage(
-                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
-        );
-        LOGGER.info(
-                "World container source {}: pos={}, totalLinked={}",
-                linked ? "linked" : "unlinked",
-                immutable,
-                linkedCount
-        );
+                ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")" : "";
+        client.player.sendOverlayMessage(Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix));
+        LOGGER.info("World container source {}: pos={}, totalLinked={}", linked ? "linked" : "unlinked", immutable, linkedCount);
         saveCurrentContext();
         return true;
     }
 
     public static boolean setLinked(Minecraft client, SourceEntry source, boolean linked) {
-        if (source == null) {
-            return false;
-        }
-
-        if (Objects.equals(source.dimension(), getCurrentDimensionId())) {
-            return setLinked(client, source.pos(), linked);
-        }
-
-        if (client == null || client.player == null || source.pos() == null) {
-            return false;
-        }
-
+        if (source == null) return false;
+        if (Objects.equals(source.dimension(), getCurrentDimensionId())) return setLinked(client, source.pos(), linked);
+        if (client == null || client.player == null || source.pos() == null) return false;
         updateContext(client);
         boolean changed = updateStoredSource(source, linked, false);
         if (changed) {
+            isDirty = true;
             int linkedCount = linkedSourceCountSnapshot();
             int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
             String suffix = linked && scanLimit > 0 && linkedCount > scanLimit
-                    ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")"
-                    : "";
-            client.player.sendOverlayMessage(
-                    Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix)
-            );
-            LOGGER.info(
-                    "World container source {}: dimension={}, pos={}, totalLinked={}",
-                    linked ? "linked" : "unlinked",
-                    source.dimension(),
-                    source.pos(),
-                    linkedCount
-            );
+                    ? " §eWarning: linked containers (" + linkedCount + ") exceed server scan limit (" + scanLimit + ")" : "";
+            client.player.sendOverlayMessage(Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + suffix));
+            LOGGER.info("World container source {}: dimension={}, pos={}, totalLinked={}", linked ? "linked" : "unlinked", source.dimension(), source.pos(), linkedCount);
         }
-
         return changed;
     }
 
     public static boolean delete(Minecraft client, BlockPos pos) {
-        if (client == null || client.player == null || pos == null) {
-            return false;
-        }
-
+        if (client == null || client.player == null || pos == null) return false;
         updateContext(client);
-
         boolean deleted = SOURCES.remove(pos.immutable()) != null;
         if (deleted) {
+            isDirty = true;
             client.player.sendOverlayMessage(Component.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"));
             LOGGER.info("World container source deleted: pos={}, totalLinked={}", pos, linkedSourceCountSnapshot());
             saveCurrentContext();
         }
-
         return deleted;
     }
 
     public static boolean deleteAll(Minecraft client) {
-        if (client == null || client.player == null || currentContextKey == null) {
-            return false;
-        }
-
+        if (client == null || client.player == null || currentWorldKey == null) return false;
         updateContext(client);
-
-        if (getAllSourcesSnapshot().isEmpty()) {
-            return false;
-        }
-
+        if (getAllSourcesSnapshot().isEmpty()) return false;
         SOURCES.clear();
-
+        isDirty = true;
         try {
             Files.createDirectories(SOURCES_PATH.getParent());
             JsonObject root = readSourcesFile();
-            JsonObject contexts;
-            if (root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()) {
-                contexts = root.getAsJsonObject(CONTEXTS_KEY);
-            } else {
-                contexts = new JsonObject();
-                root.add(CONTEXTS_KEY, contexts);
-            }
-
-            String worldKey = getWorldKey(currentContextKey);
-            List<String> toRemove = new ArrayList<>();
-            for (String key : contexts.keySet()) {
-                if (key.startsWith(worldKey + "|")) {
-                    toRemove.add(key);
-                }
-            }
-            toRemove.forEach(contexts::remove);
-
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            groups.add(currentGroupName, new JsonObject());
             Files.writeString(SOURCES_PATH, GSON.toJson(root));
         } catch (IOException e) {
             LOGGER.warn("Failed to delete all world container sources", e);
         }
-
         client.player.sendOverlayMessage(Component.literal("TakeItOut: all sources deleted"));
-        LOGGER.info("All world container sources deleted for world: {}", getWorldKey(currentContextKey));
+        LOGGER.info("All world container sources deleted: world={}, group={}", currentWorldKey, currentGroupName);
         return true;
     }
 
     public static boolean delete(Minecraft client, SourceEntry source) {
-        if (source == null) {
-            return false;
-        }
-
-        if (Objects.equals(source.dimension(), getCurrentDimensionId())) {
-            return delete(client, source.pos());
-        }
-
-        if (client == null || client.player == null || source.pos() == null) {
-            return false;
-        }
-
+        if (source == null) return false;
+        if (Objects.equals(source.dimension(), getCurrentDimensionId())) return delete(client, source.pos());
+        if (client == null || client.player == null || source.pos() == null) return false;
         updateContext(client);
         boolean deleted = updateStoredSource(source, false, true);
         if (deleted) {
+            isDirty = true;
             client.player.sendOverlayMessage(Component.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"));
-            LOGGER.info(
-                    "World container source deleted: dimension={}, pos={}, totalLinked={}",
-                    source.dimension(),
-                    source.pos(),
-                    linkedSourceCountSnapshot()
-            );
+            LOGGER.info("World container source deleted: dimension={}, pos={}, totalLinked={}", source.dimension(), source.pos(), linkedSourceCountSnapshot());
         }
-
         return deleted;
     }
+
+    // --- Group management ---
+
+    public static List<String> getGroupNames() {
+        if (currentWorldKey == null) return List.of(currentGroupName);
+        JsonObject root = readSourcesFile();
+        JsonObject worldCtx = getWorldContext(root, currentWorldKey);
+        if (!worldCtx.has(GROUPS_KEY) || !worldCtx.get(GROUPS_KEY).isJsonObject()) {
+            return List.of(currentGroupName);
+        }
+        List<String> names = new ArrayList<>(worldCtx.getAsJsonObject(GROUPS_KEY).keySet());
+        if (names.isEmpty()) names.add(currentGroupName);
+        return names;
+    }
+
+    public static String getCurrentGroupName() {
+        return currentGroupName;
+    }
+
+    public static boolean isGroupDirty() {
+        return isDirty;
+    }
+
+    public static void createGroup(String name) {
+        if (currentWorldKey == null || name == null || name.isBlank()) return;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            if (!groups.has(name)) groups.add(name, new JsonObject());
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+            WorldContainerDumps.createGroup(currentWorldKey, name);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to create group '{}'", name, e);
+        }
+    }
+
+    public static boolean renameGroup(String oldName, String newName) {
+        if (currentWorldKey == null || oldName == null || newName == null || newName.isBlank()) return false;
+        if (Objects.equals(oldName, newName)) return false;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            if (!groups.has(oldName) || groups.has(newName)) return false;
+            JsonElement data = groups.get(oldName);
+            groups.remove(oldName);
+            groups.add(newName, data);
+            if (Objects.equals(currentGroupName, oldName)) {
+                currentGroupName = newName;
+                worldCtx.addProperty(ACTIVE_GROUP_KEY, newName);
+            }
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+            WorldContainerDumps.renameGroup(currentWorldKey, oldName, newName);
+            return true;
+        } catch (IOException e) {
+            LOGGER.warn("Failed to rename group '{}' to '{}'", oldName, newName, e);
+            return false;
+        }
+    }
+
+    public static boolean deleteGroup(String name) {
+        if (currentWorldKey == null || name == null || Objects.equals(name, currentGroupName)) return false;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            if (!groups.has(name)) return false;
+            groups.remove(name);
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+            WorldContainerDumps.deleteGroup(currentWorldKey, name);
+            return true;
+        } catch (IOException e) {
+            LOGGER.warn("Failed to delete group '{}'", name, e);
+            return false;
+        }
+    }
+
+    public static void switchGroup(Minecraft client, String name) {
+        if (currentWorldKey == null || name == null || Objects.equals(name, currentGroupName)) return;
+        saveCurrentContext();
+        SOURCES.clear();
+        currentGroupName = name;
+        isDirty = false;
+        persistActiveGroup();
+        loadCurrentContext();
+        WorldContainerDumps.switchGroup(name);
+        LOGGER.info("Switched group: world={}, group={}", currentWorldKey, currentGroupName);
+    }
+
+    // --- Queries ---
 
     public static boolean isLinked(BlockPos pos) {
         return pos != null && SOURCES.getOrDefault(pos.immutable(), false);
@@ -241,46 +253,32 @@ public final class WorldContainerSources {
 
     public static boolean isSupportedContainer(Level world, BlockPos pos) {
         Block block = world.getBlockState(pos).getBlock();
-        return block instanceof ShulkerBoxBlock
-                || block instanceof ChestBlock
-                || block instanceof BarrelBlock;
+        return block instanceof ShulkerBoxBlock || block instanceof ChestBlock || block instanceof BarrelBlock;
     }
 
     public static List<BlockPos> getSourcesSnapshot() {
         List<BlockPos> linkedSources = new ArrayList<>();
         for (Map.Entry<BlockPos, Boolean> entry : SOURCES.entrySet()) {
-            if (entry.getValue()) {
-                linkedSources.add(entry.getKey());
-            }
+            if (entry.getValue()) linkedSources.add(entry.getKey());
         }
         return linkedSources;
     }
 
     public static List<SourceEntry> getAllSourcesSnapshot() {
-        if (currentContextKey == null) {
-            return List.of();
-        }
-
+        if (currentWorldKey == null) return List.of();
         List<SourceEntry> entries = new ArrayList<>();
         addCurrentContextEntries(entries);
-
         JsonObject root = readSourcesFile();
-        JsonObject contexts = root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()
-                ? root.getAsJsonObject(CONTEXTS_KEY)
-                : new JsonObject();
-        String worldKey = getWorldKey(currentContextKey);
-
-        for (Map.Entry<String, JsonElement> contextEntry : contexts.entrySet()) {
-            String contextKey = contextEntry.getKey();
-            if (Objects.equals(contextKey, currentContextKey)
-                    || !contextKey.startsWith(worldKey + "|")
-                    || !contextEntry.getValue().isJsonArray()) {
-                continue;
-            }
-
-            addEntriesFromArray(entries, getDimension(contextKey), contextEntry.getValue().getAsJsonArray());
+        JsonObject worldCtx = getWorldContext(root, currentWorldKey);
+        JsonObject groups = worldCtx.has(GROUPS_KEY) && worldCtx.get(GROUPS_KEY).isJsonObject()
+                ? worldCtx.getAsJsonObject(GROUPS_KEY) : new JsonObject();
+        if (!groups.has(currentGroupName) || !groups.get(currentGroupName).isJsonObject()) return entries;
+        JsonObject group = groups.getAsJsonObject(currentGroupName);
+        String currentDim = getCurrentDimensionId();
+        for (Map.Entry<String, JsonElement> dimEntry : group.entrySet()) {
+            if (Objects.equals(dimEntry.getKey(), currentDim) || !dimEntry.getValue().isJsonArray()) continue;
+            addEntriesFromArray(entries, dimEntry.getKey(), dimEntry.getValue().getAsJsonArray());
         }
-
         return entries;
     }
 
@@ -294,9 +292,7 @@ public final class WorldContainerSources {
     public static int linkedSourceCountSnapshot() {
         int count = 0;
         for (SourceEntry source : getAllSourcesSnapshot()) {
-            if (source.linked()) {
-                count++;
-            }
+            if (source.linked()) count++;
         }
         return count;
     }
@@ -304,18 +300,14 @@ public final class WorldContainerSources {
     public static List<Takeitout.WorldContainerSource> getLinkedSourceReferencesSnapshot() {
         List<Takeitout.WorldContainerSource> sources = new ArrayList<>();
         for (SourceEntry source : getAllSourcesSnapshot()) {
-            if (source.linked()) {
-                sources.add(toNetworkSource(source));
-            }
+            if (source.linked()) sources.add(toNetworkSource(source));
         }
         return sources;
     }
 
     public static List<Takeitout.WorldContainerSource> getAllSourceReferencesSnapshot() {
         List<Takeitout.WorldContainerSource> sources = new ArrayList<>();
-        for (SourceEntry source : getAllSourcesSnapshot()) {
-            sources.add(toNetworkSource(source));
-        }
+        for (SourceEntry source : getAllSourcesSnapshot()) sources.add(toNetworkSource(source));
         return sources;
     }
 
@@ -340,42 +332,23 @@ public final class WorldContainerSources {
     }
 
     public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode, boolean fromUi) {
-        if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) {
-            return false;
-        }
-
+        if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) return false;
         List<Takeitout.WorldContainerSource> sources = getLinkedSourceReferencesSnapshot();
         if (sources.isEmpty()) {
             LOGGER.warn("World container request skipped: required={}, reason=no_sources", required);
             return false;
         }
-
-        if (isCoolingDownAfterFailure(required)) {
-            return false;
-        }
-
-        LOGGER.debug(
-                "World container request: required={}, sources={}, singleItemMode={}",
-                required,
-                sources.size(),
-                singleItemMode
-        );
+        if (isCoolingDownAfterFailure(required)) return false;
+        LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}", required, sources.size(), singleItemMode);
         TakeitoutClient.awaitingStack = required.copyWithCount(1);
         ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
-                sources,
-                required.copyWithCount(1),
-                singleItemMode,
-                fromUi,
-                WorldContainerDumps.getDumpReferencesSnapshot()
+                sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
         ));
         return true;
     }
 
     public static void recordResponse(ItemStack stack, boolean success) {
-        if (stack == null || stack.isEmpty()) {
-            return;
-        }
-
+        if (stack == null || stack.isEmpty()) return;
         if (success) {
             if (ItemStack.isSameItemSameComponents(lastFailedStack, stack)) {
                 lastFailedStack = ItemStack.EMPTY;
@@ -383,20 +356,13 @@ public final class WorldContainerSources {
             }
             return;
         }
-
         lastFailedStack = stack.copyWithCount(1);
         lastFailureTsMs = System.currentTimeMillis();
     }
 
     public static boolean consumeFailedResponse(ItemStack stack) {
-        if (stack == null || stack.isEmpty() || lastFailedStack.isEmpty()) {
-            return false;
-        }
-
-        if (!ItemStack.isSameItemSameComponents(lastFailedStack, stack)) {
-            return false;
-        }
-
+        if (stack == null || stack.isEmpty() || lastFailedStack.isEmpty()) return false;
+        if (!ItemStack.isSameItemSameComponents(lastFailedStack, stack)) return false;
         lastFailedStack = ItemStack.EMPTY;
         lastFailureTsMs = 0L;
         return true;
@@ -404,14 +370,22 @@ public final class WorldContainerSources {
 
     public static void updateContext(Minecraft client) {
         String nextContextKey = getContextKey(client);
-        if (Objects.equals(currentContextKey, nextContextKey)) {
-            return;
-        }
+        String nextWorldKey = nextContextKey != null ? extractWorldKey(nextContextKey) : null;
+        if (Objects.equals(currentContextKey, nextContextKey)) return;
 
+        boolean worldChanged = !Objects.equals(currentWorldKey, nextWorldKey);
         SOURCES.clear();
         currentContextKey = nextContextKey;
         lastFailedStack = ItemStack.EMPTY;
         lastFailureTsMs = 0L;
+
+        if (worldChanged) {
+            currentWorldKey = nextWorldKey;
+            isDirty = false;
+            if (currentWorldKey != null) {
+                currentGroupName = loadActiveGroupName();
+            }
+        }
 
         if (currentContextKey != null) {
             loadCurrentContext();
@@ -421,6 +395,9 @@ public final class WorldContainerSources {
     public static void clear() {
         SOURCES.clear();
         currentContextKey = null;
+        currentWorldKey = null;
+        currentGroupName = DEFAULT_GROUP;
+        isDirty = false;
         lastFailedStack = ItemStack.EMPTY;
         lastFailureTsMs = 0L;
     }
@@ -428,16 +405,17 @@ public final class WorldContainerSources {
     public static int size() {
         int count = 0;
         for (boolean linked : SOURCES.values()) {
-            if (linked) {
-                count++;
-            }
+            if (linked) count++;
         }
         return count;
     }
 
     public static String getCurrentContextLabel() {
-        return currentContextKey == null ? "unknown" : currentContextKey;
+        if (currentWorldKey == null) return "unknown";
+        return currentWorldKey + " [" + currentGroupName + "]";
     }
+
+    // --- Private helpers ---
 
     private static boolean isCoolingDownAfterFailure(ItemStack required) {
         return !lastFailedStack.isEmpty()
@@ -446,13 +424,9 @@ public final class WorldContainerSources {
     }
 
     private static String getContextKey(Minecraft client) {
-        if (client == null || client.level == null) {
-            return null;
-        }
-
+        if (client == null || client.level == null) return null;
         String dimension = client.level.dimension().identifier().toString();
         String worldKey;
-
         if (client.hasSingleplayerServer() && client.getSingleplayerServer() != null) {
             worldKey = "singleplayer:" + client.getSingleplayerServer().getWorldData().getLevelName();
         } else {
@@ -464,7 +438,6 @@ public final class WorldContainerSources {
                 worldKey = "multiplayer:unknown";
             }
         }
-
         return worldKey + "|" + dimension;
     }
 
@@ -472,96 +445,156 @@ public final class WorldContainerSources {
         return getDimension(currentContextKey);
     }
 
-    private static String getWorldKey(String contextKey) {
-        if (contextKey == null) {
-            return "unknown";
-        }
-
+    private static String extractWorldKey(String contextKey) {
+        if (contextKey == null) return "unknown";
         int separator = contextKey.lastIndexOf('|');
         return separator == -1 ? contextKey : contextKey.substring(0, separator);
     }
 
     private static String getDimension(String contextKey) {
-        if (contextKey == null) {
-            return "minecraft:overworld";
-        }
-
+        if (contextKey == null) return "minecraft:overworld";
         int separator = contextKey.lastIndexOf('|');
         return separator == -1 ? "minecraft:overworld" : contextKey.substring(separator + 1);
     }
 
-    private static String getContextKeyForDimension(String dimension) {
-        if (currentContextKey == null) {
-            return null;
+    private static String loadActiveGroupName() {
+        JsonObject root = readSourcesFile();
+        migrateIfNeeded(root);
+        JsonObject worldCtx = getWorldContext(root, currentWorldKey);
+        if (worldCtx.has(ACTIVE_GROUP_KEY)) {
+            String name = worldCtx.get(ACTIVE_GROUP_KEY).getAsString();
+            if (name != null && !name.isBlank()) return name;
         }
-
-        return getWorldKey(currentContextKey) + "|" + dimension;
+        return DEFAULT_GROUP;
     }
 
-    private static void addEntriesFromArray(List<SourceEntry> entries, String dimension, JsonArray sources) {
-        for (JsonElement element : sources) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
+    private static void migrateIfNeeded(JsonObject root) {
+        if (currentWorldKey == null) return;
+        if (!root.has(CONTEXTS_KEY) || !root.get(CONTEXTS_KEY).isJsonObject()) return;
+        JsonObject contexts = root.getAsJsonObject(CONTEXTS_KEY);
+        if (contexts.has(currentWorldKey) && contexts.get(currentWorldKey).isJsonObject()) return;
 
-            SourceEntry entry = parseSourceEntry(dimension, element.getAsJsonObject());
-            if (entry != null) {
-                entries.add(entry);
+        boolean needsMigration = false;
+        for (String key : contexts.keySet()) {
+            if (key.startsWith(currentWorldKey + "|") && contexts.get(key).isJsonArray()) {
+                needsMigration = true;
+                break;
             }
         }
-    }
+        if (!needsMigration) return;
 
-    private static SourceEntry parseSourceEntry(String dimension, JsonObject source) {
-        if (!source.has("x") || !source.has("y") || !source.has("z")) {
-            return null;
+        JsonObject defaultGroup = new JsonObject();
+        List<String> toRemove = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> entry : contexts.entrySet()) {
+            String key = entry.getKey();
+            if (key.startsWith(currentWorldKey + "|") && entry.getValue().isJsonArray()) {
+                String dimension = key.substring(currentWorldKey.length() + 1);
+                defaultGroup.add(dimension, entry.getValue());
+                toRemove.add(key);
+            }
         }
+        toRemove.forEach(contexts::remove);
+
+        JsonObject worldCtx = new JsonObject();
+        worldCtx.addProperty(ACTIVE_GROUP_KEY, DEFAULT_GROUP);
+        JsonObject groups = new JsonObject();
+        groups.add(DEFAULT_GROUP, defaultGroup);
+        worldCtx.add(GROUPS_KEY, groups);
+        contexts.add(currentWorldKey, worldCtx);
 
         try {
-            boolean linked = !source.has("linked") || source.get("linked").getAsBoolean();
-            return new SourceEntry(
-                    dimension,
-                    new BlockPos(
-                            source.get("x").getAsInt(),
-                            source.get("y").getAsInt(),
-                            source.get("z").getAsInt()
-                    ),
-                    linked
-            );
-        } catch (Exception ignored) {
-            return null;
+            Files.createDirectories(SOURCES_PATH.getParent());
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+            LOGGER.info("Migrated sources to group format: world={}", currentWorldKey);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save migrated sources", e);
+        }
+    }
+
+    private static void loadCurrentContext() {
+        JsonObject root = readSourcesFile();
+        JsonObject worldCtx = getWorldContext(root, currentWorldKey);
+        JsonObject groups = worldCtx.has(GROUPS_KEY) && worldCtx.get(GROUPS_KEY).isJsonObject()
+                ? worldCtx.getAsJsonObject(GROUPS_KEY) : new JsonObject();
+        if (!groups.has(currentGroupName) || !groups.get(currentGroupName).isJsonObject()) {
+            isDirty = false;
+            return;
+        }
+        JsonObject group = groups.getAsJsonObject(currentGroupName);
+        String dimension = getCurrentDimensionId();
+        if (group.has(dimension) && group.get(dimension).isJsonArray()) {
+            for (JsonElement element : group.getAsJsonArray(dimension)) {
+                if (!element.isJsonObject()) continue;
+                JsonObject source = element.getAsJsonObject();
+                if (!source.has("x") || !source.has("y") || !source.has("z")) continue;
+                try {
+                    boolean linked = !source.has("linked") || source.get("linked").getAsBoolean();
+                    SOURCES.put(new BlockPos(source.get("x").getAsInt(), source.get("y").getAsInt(), source.get("z").getAsInt()), linked);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        isDirty = false;
+        LOGGER.info("World container sources loaded: world={}, group={}, dimension={}, total={}", currentWorldKey, currentGroupName, dimension, SOURCES.size());
+    }
+
+    private static void saveCurrentContext() {
+        if (currentWorldKey == null) return;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            worldCtx.addProperty(ACTIVE_GROUP_KEY, currentGroupName);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            JsonObject group = getOrCreateObject(groups, currentGroupName);
+            JsonArray sources = new JsonArray();
+            for (Map.Entry<BlockPos, Boolean> entry : SOURCES.entrySet()) {
+                BlockPos source = entry.getKey();
+                JsonObject sourceObject = new JsonObject();
+                sourceObject.addProperty("x", source.getX());
+                sourceObject.addProperty("y", source.getY());
+                sourceObject.addProperty("z", source.getZ());
+                sourceObject.addProperty("linked", entry.getValue());
+                sources.add(sourceObject);
+            }
+            group.add(getCurrentDimensionId(), sources);
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save world container sources", e);
+        }
+    }
+
+    private static void persistActiveGroup() {
+        if (currentWorldKey == null) return;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            worldCtx.addProperty(ACTIVE_GROUP_KEY, currentGroupName);
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to persist active group", e);
         }
     }
 
     private static boolean updateStoredSource(SourceEntry source, boolean linked, boolean delete) {
-        String contextKey = getContextKeyForDimension(source.dimension());
-        if (contextKey == null) {
-            return false;
-        }
-
+        if (currentWorldKey == null) return false;
         try {
             Files.createDirectories(SOURCES_PATH.getParent());
             JsonObject root = readSourcesFile();
-            JsonObject contexts;
-            if (root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()) {
-                contexts = root.getAsJsonObject(CONTEXTS_KEY);
-            } else {
-                contexts = new JsonObject();
-                root.add(CONTEXTS_KEY, contexts);
-            }
-
-            JsonArray existing = contexts.has(contextKey) && contexts.get(contextKey).isJsonArray()
-                    ? contexts.getAsJsonArray(contextKey)
-                    : new JsonArray();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            JsonObject group = getOrCreateObject(groups, currentGroupName);
+            String dimension = source.dimension();
+            JsonArray existing = group.has(dimension) && group.get(dimension).isJsonArray()
+                    ? group.getAsJsonArray(dimension) : new JsonArray();
             JsonArray updated = new JsonArray();
             boolean found = false;
 
             for (JsonElement element : existing) {
-                if (!element.isJsonObject()) {
-                    continue;
-                }
-
+                if (!element.isJsonObject()) continue;
                 JsonObject sourceObject = element.getAsJsonObject();
-                SourceEntry existingEntry = parseSourceEntry(source.dimension(), sourceObject);
+                SourceEntry existingEntry = parseSourceEntry(dimension, sourceObject);
                 if (existingEntry != null && existingEntry.pos().equals(source.pos())) {
                     found = true;
                     if (!delete) {
@@ -582,7 +615,7 @@ public final class WorldContainerSources {
                 updated.add(sourceObject);
             }
 
-            contexts.add(contextKey, updated);
+            group.add(dimension, updated);
             Files.writeString(SOURCES_PATH, GSON.toJson(root));
             return found || !delete;
         } catch (IOException e) {
@@ -591,89 +624,26 @@ public final class WorldContainerSources {
         }
     }
 
-    private static void loadCurrentContext() {
-        JsonObject root = readSourcesFile();
-        if (root == null || !root.has(CONTEXTS_KEY) || !root.get(CONTEXTS_KEY).isJsonObject()) {
-            return;
-        }
-
-        JsonObject contexts = root.getAsJsonObject(CONTEXTS_KEY);
-        if (!contexts.has(currentContextKey) || !contexts.get(currentContextKey).isJsonArray()) {
-            return;
-        }
-
-        JsonArray sources = contexts.getAsJsonArray(currentContextKey);
+    private static void addEntriesFromArray(List<SourceEntry> entries, String dimension, JsonArray sources) {
         for (JsonElement element : sources) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-
-            JsonObject source = element.getAsJsonObject();
-            if (!source.has("x") || !source.has("y") || !source.has("z")) {
-                continue;
-            }
-
-            try {
-                boolean linked = !source.has("linked") || source.get("linked").getAsBoolean();
-                SOURCES.put(
-                        new BlockPos(
-                                source.get("x").getAsInt(),
-                                source.get("y").getAsInt(),
-                                source.get("z").getAsInt()
-                        ),
-                        linked
-                );
-            } catch (Exception ignored) {
-            }
+            if (!element.isJsonObject()) continue;
+            SourceEntry entry = parseSourceEntry(dimension, element.getAsJsonObject());
+            if (entry != null) entries.add(entry);
         }
-
-        LOGGER.info("World container sources loaded: context={}, total={}", currentContextKey, SOURCES.size());
     }
 
-    private static void saveCurrentContext() {
-        if (currentContextKey == null) {
-            return;
-        }
-
+    private static SourceEntry parseSourceEntry(String dimension, JsonObject source) {
+        if (!source.has("x") || !source.has("y") || !source.has("z")) return null;
         try {
-            Files.createDirectories(SOURCES_PATH.getParent());
-
-            JsonObject root = readSourcesFile();
-            if (root == null) {
-                root = new JsonObject();
-            }
-
-            JsonObject contexts;
-            if (root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()) {
-                contexts = root.getAsJsonObject(CONTEXTS_KEY);
-            } else {
-                contexts = new JsonObject();
-                root.add(CONTEXTS_KEY, contexts);
-            }
-
-            JsonArray sources = new JsonArray();
-            for (Map.Entry<BlockPos, Boolean> entry : SOURCES.entrySet()) {
-                BlockPos source = entry.getKey();
-                JsonObject sourceObject = new JsonObject();
-                sourceObject.addProperty("x", source.getX());
-                sourceObject.addProperty("y", source.getY());
-                sourceObject.addProperty("z", source.getZ());
-                sourceObject.addProperty("linked", entry.getValue());
-                sources.add(sourceObject);
-            }
-
-            contexts.add(currentContextKey, sources);
-            Files.writeString(SOURCES_PATH, GSON.toJson(root));
-        } catch (IOException e) {
-            LOGGER.warn("Failed to save world container sources", e);
+            boolean linked = !source.has("linked") || source.get("linked").getAsBoolean();
+            return new SourceEntry(dimension, new BlockPos(source.get("x").getAsInt(), source.get("y").getAsInt(), source.get("z").getAsInt()), linked);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 
     private static JsonObject readSourcesFile() {
-        if (!Files.exists(SOURCES_PATH)) {
-            return new JsonObject();
-        }
-
+        if (!Files.exists(SOURCES_PATH)) return new JsonObject();
         try {
             JsonObject root = GSON.fromJson(Files.readString(SOURCES_PATH), JsonObject.class);
             return root == null ? new JsonObject() : root;
@@ -681,6 +651,34 @@ public final class WorldContainerSources {
             LOGGER.warn("Failed to read world container sources", e);
             return new JsonObject();
         }
+    }
+
+    private static JsonObject getWorldContext(JsonObject root, String worldKey) {
+        if (worldKey == null || !root.has(CONTEXTS_KEY) || !root.get(CONTEXTS_KEY).isJsonObject()) return new JsonObject();
+        JsonObject contexts = root.getAsJsonObject(CONTEXTS_KEY);
+        if (!contexts.has(worldKey) || !contexts.get(worldKey).isJsonObject()) return new JsonObject();
+        return contexts.getAsJsonObject(worldKey);
+    }
+
+    private static JsonObject getOrCreateWorldContext(JsonObject root, String worldKey) {
+        JsonObject contexts;
+        if (root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()) {
+            contexts = root.getAsJsonObject(CONTEXTS_KEY);
+        } else {
+            contexts = new JsonObject();
+            root.add(CONTEXTS_KEY, contexts);
+        }
+        if (contexts.has(worldKey) && contexts.get(worldKey).isJsonObject()) return contexts.getAsJsonObject(worldKey);
+        JsonObject worldCtx = new JsonObject();
+        contexts.add(worldKey, worldCtx);
+        return worldCtx;
+    }
+
+    private static JsonObject getOrCreateObject(JsonObject parent, String key) {
+        if (parent.has(key) && parent.get(key).isJsonObject()) return parent.getAsJsonObject(key);
+        JsonObject obj = new JsonObject();
+        parent.add(key, obj);
+        return obj;
     }
 
     public record SourceEntry(String dimension, BlockPos pos, boolean linked) {
