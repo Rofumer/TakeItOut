@@ -561,9 +561,12 @@ public class Takeitout implements ModInitializer {
 
         if (ItemStack.isSameItemSameComponents(currentMainHand, extracted)
                 && currentMainHand.getCount() < currentMainHand.getMaxStackSize()) {
-            inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+            int canAdd = Math.min(currentMainHand.getMaxStackSize() - currentMainHand.getCount(), extracted.getCount());
+            ItemStack actualRemaining = stackInContainer.copy();
+            actualRemaining.shrink(canAdd);
+            inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
             syncWorldContainer(player, inventory);
-            currentMainHand.grow(extracted.getCount());
+            currentMainHand.grow(canAdd);
             player.setItemInHand(InteractionHand.MAIN_HAND, currentMainHand);
             syncPlayerInventory(player);
             return true;
@@ -573,9 +576,12 @@ public class Takeitout implements ModInitializer {
             ItemStack invStack = player.getInventory().getItem(i);
             if (ItemStack.isSameItemSameComponents(invStack, extracted)
                     && invStack.getCount() < invStack.getMaxStackSize()) {
-                inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+                int canAdd = Math.min(invStack.getMaxStackSize() - invStack.getCount(), extracted.getCount());
+                ItemStack actualRemaining = stackInContainer.copy();
+                actualRemaining.shrink(canAdd);
+                inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
                 syncWorldContainer(player, inventory);
-                invStack.grow(extracted.getCount());
+                invStack.grow(canAdd);
                 player.getInventory().setItem(i, invStack);
                 syncPlayerInventory(player);
                 return true;
