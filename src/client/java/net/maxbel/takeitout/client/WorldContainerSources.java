@@ -164,6 +164,49 @@ public final class WorldContainerSources {
         return deleted;
     }
 
+    public static boolean deleteAll(Minecraft client) {
+        if (client == null || client.player == null || currentContextKey == null) {
+            return false;
+        }
+
+        updateContext(client);
+
+        if (getAllSourcesSnapshot().isEmpty()) {
+            return false;
+        }
+
+        SOURCES.clear();
+
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject contexts;
+            if (root.has(CONTEXTS_KEY) && root.get(CONTEXTS_KEY).isJsonObject()) {
+                contexts = root.getAsJsonObject(CONTEXTS_KEY);
+            } else {
+                contexts = new JsonObject();
+                root.add(CONTEXTS_KEY, contexts);
+            }
+
+            String worldKey = getWorldKey(currentContextKey);
+            List<String> toRemove = new ArrayList<>();
+            for (String key : contexts.keySet()) {
+                if (key.startsWith(worldKey + "|")) {
+                    toRemove.add(key);
+                }
+            }
+            toRemove.forEach(contexts::remove);
+
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to delete all world container sources", e);
+        }
+
+        client.player.sendOverlayMessage(Component.literal("TakeItOut: all sources deleted"));
+        LOGGER.info("All world container sources deleted for world: {}", getWorldKey(currentContextKey));
+        return true;
+    }
+
     public static boolean delete(Minecraft client, SourceEntry source) {
         if (source == null) {
             return false;

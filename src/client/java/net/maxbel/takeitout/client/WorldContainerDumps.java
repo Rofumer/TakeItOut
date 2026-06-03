@@ -46,7 +46,21 @@ public final class WorldContainerDumps {
             return false;
         }
 
-        boolean enabled = !DUMPS.getOrDefault(immutable, false);
+        return setEnabled(client, immutable, !DUMPS.getOrDefault(immutable, false));
+    }
+
+    public static boolean setEnabled(Minecraft client, BlockPos pos, boolean enabled) {
+        if (client == null || client.player == null || pos == null) {
+            return false;
+        }
+
+        updateContext(client);
+
+        BlockPos immutable = pos.immutable();
+        if (!DUMPS.containsKey(immutable) && !enabled) {
+            return false;
+        }
+
         DUMPS.put(immutable, enabled);
 
         client.player.sendOverlayMessage(
@@ -55,6 +69,45 @@ public final class WorldContainerDumps {
                 )
         );
         LOGGER.info("Dump container {}: pos={}, total={}", enabled ? "marked" : "unmarked", immutable, dumpCountSnapshot());
+        saveCurrentContext();
+        return true;
+    }
+
+    public static boolean delete(Minecraft client, BlockPos pos) {
+        if (client == null || client.player == null || pos == null) {
+            return false;
+        }
+
+        updateContext(client);
+
+        boolean deleted = DUMPS.remove(pos.immutable()) != null;
+        if (deleted) {
+            client.player.sendOverlayMessage(
+                    net.minecraft.network.chat.Component.literal("TakeItOut dump deleted (" + dumpCountSnapshot() + ")")
+            );
+            LOGGER.info("Dump container deleted: pos={}, total={}", pos, dumpCountSnapshot());
+            saveCurrentContext();
+        }
+
+        return deleted;
+    }
+
+    public static boolean deleteAll(Minecraft client) {
+        if (client == null || client.player == null || currentContextKey == null) {
+            return false;
+        }
+
+        updateContext(client);
+
+        if (DUMPS.isEmpty()) {
+            return false;
+        }
+
+        DUMPS.clear();
+        client.player.sendOverlayMessage(
+                net.minecraft.network.chat.Component.literal("TakeItOut: all dump containers deleted")
+        );
+        LOGGER.info("All dump containers deleted: context={}", currentContextKey);
         saveCurrentContext();
         return true;
     }

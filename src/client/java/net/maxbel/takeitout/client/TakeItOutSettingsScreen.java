@@ -33,6 +33,8 @@ public class TakeItOutSettingsScreen extends Screen {
     private BlockPos focusedContainer;
     private EditBox searchField;
     private String searchQuery = "";
+    private boolean confirmDeleteAll = false;
+    private boolean confirmDeleteAllDumps = false;
 
     public TakeItOutSettingsScreen(Screen parent) {
         super(Component.literal("TakeItOut"));
@@ -49,6 +51,7 @@ public class TakeItOutSettingsScreen extends Screen {
             activeTab = Tab.ALL_ITEMS;
             focusedContainer = null;
             scrollOffset = 0;
+            confirmDeleteAll = false;
             searchField.setVisible(true);
             requestItems();
         }).bounds(left, tabY, tabWidth, 20).build());
@@ -223,11 +226,26 @@ public class TakeItOutSettingsScreen extends Screen {
         guiGraphics.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
         guiGraphics.text(
                 this.font,
-                trim(getContainersHeader(), listWidth - 12),
+                trim(getContainersHeader(), listWidth - 96),
                 listLeft + 6,
                 listTop - HEADER_OFFSET,
                 0xFFA7F3D0
         );
+
+        if (focusedContainer == null && !sources.isEmpty()) {
+            int deleteAllBtnX = listLeft + listWidth - 84;
+            int deleteAllBtnY = listTop - 16;
+            boolean deleteAllHovered = mouseX >= deleteAllBtnX && mouseX < deleteAllBtnX + 80
+                    && mouseY >= deleteAllBtnY && mouseY < deleteAllBtnY + 14;
+            if (confirmDeleteAll) {
+                guiGraphics.fill(deleteAllBtnX, deleteAllBtnY, deleteAllBtnX + 80, deleteAllBtnY + 14,
+                        deleteAllHovered ? 0xFFB91C1C : 0xFF7F1D1D);
+                drawBorder(guiGraphics, deleteAllBtnX, deleteAllBtnY, 80, 14, 0xFFEF4444);
+                guiGraphics.centeredText(this.font, "Confirm?", deleteAllBtnX + 40, deleteAllBtnY + 3, 0xFFFFFFFF);
+            } else {
+                drawSmallButton(guiGraphics, deleteAllBtnX, deleteAllBtnY, 80, 14, "Delete All", deleteAllHovered);
+            }
+        }
 
         if (sources.isEmpty() && dumps.isEmpty()) {
             guiGraphics.centeredText(this.font, "No containers", this.width / 2, listTop + 36, 0xFFAAAAAA);
@@ -251,7 +269,23 @@ public class TakeItOutSettingsScreen extends Screen {
         if (!dumps.isEmpty()) {
             if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
                 guiGraphics.fill(listLeft + 8, y + 9, listLeft + listWidth - 8, y + 10, 0x44F97316);
-                guiGraphics.text(this.font, "Dump Containers (" + dumps.size() + ")", listLeft + 8, y + 2, 0xFFF97316);
+                guiGraphics.text(this.font, trim("Dump Containers (" + dumps.size() + ")", listWidth - 100), listLeft + 8, y + 2, 0xFFF97316);
+
+                int deleteAllDumpsBtnX = listLeft + listWidth - 84;
+                int deleteAllDumpsBtnY = y + 7;
+                boolean deleteAllDumpsHovered = mouseX >= deleteAllDumpsBtnX && mouseX < deleteAllDumpsBtnX + 80
+                        && mouseY >= deleteAllDumpsBtnY && mouseY < deleteAllDumpsBtnY + 14;
+                if (confirmDeleteAllDumps) {
+                    guiGraphics.fill(deleteAllDumpsBtnX, deleteAllDumpsBtnY, deleteAllDumpsBtnX + 80, deleteAllDumpsBtnY + 14,
+                            deleteAllDumpsHovered ? 0xFFB91C1C : 0xFF7F1D1D);
+                    drawBorder(guiGraphics, deleteAllDumpsBtnX, deleteAllDumpsBtnY, 80, 14, 0xFFEF4444);
+                    guiGraphics.centeredText(this.font, "Confirm?", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
+                } else {
+                    guiGraphics.fill(deleteAllDumpsBtnX, deleteAllDumpsBtnY, deleteAllDumpsBtnX + 80, deleteAllDumpsBtnY + 14,
+                            deleteAllDumpsHovered ? 0xFF92400E : 0xFF78350F);
+                    drawBorder(guiGraphics, deleteAllDumpsBtnX, deleteAllDumpsBtnY, 80, 14, 0xFFF97316);
+                    guiGraphics.centeredText(this.font, "Delete All", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
+                }
             }
             y += CONTAINER_ROW_HEIGHT;
 
@@ -284,11 +318,14 @@ public class TakeItOutSettingsScreen extends Screen {
 
         BlockPos pos = dump.pos();
         String label = (dump.enabled() ? "Dump" : "Disabled") + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ();
-        guiGraphics.text(this.font, trim(label, width - 72), x + 4, y + 7, dump.enabled() ? 0xFFFBBF24 : 0xFFAAAAAA);
+        guiGraphics.text(this.font, trim(label, width - 132), x + 4, y + 7, dump.enabled() ? 0xFFFBBF24 : 0xFFAAAAAA);
 
-        int buttonX = x + width - 62;
-        drawSmallButton(guiGraphics, buttonX, y + 2, 58, 18, dump.enabled() ? "Unmark" : "Mark",
-                hovered && mouseX >= buttonX && mouseX < buttonX + 58);
+        int markButtonX = x + width - 122;
+        int deleteButtonX = x + width - 58;
+        drawSmallButton(guiGraphics, markButtonX, y + 2, 58, 18, dump.enabled() ? "Unmark" : "Mark",
+                hovered && mouseX >= markButtonX && mouseX < markButtonX + 58);
+        drawSmallButton(guiGraphics, deleteButtonX, y + 2, 54, 18, "Delete",
+                hovered && mouseX >= deleteButtonX && mouseX < deleteButtonX + 54);
     }
 
     private void renderContainerRow(
@@ -421,6 +458,47 @@ public class TakeItOutSettingsScreen extends Screen {
         int listTop = LIST_TOP;
         int listWidth = 430;
         int listBottom = this.height - LIST_BOTTOM_MARGIN;
+        int deleteAllBtnX = listLeft + listWidth - 84;
+
+        // Check Sources Delete All button (above list)
+        if (focusedContainer == null && !sources.isEmpty()) {
+            if (mouseX >= deleteAllBtnX && mouseX < deleteAllBtnX + 80
+                    && mouseY >= listTop - 16 && mouseY < listTop - 2) {
+                confirmDeleteAllDumps = false;
+                if (confirmDeleteAll) {
+                    confirmDeleteAll = false;
+                    if (WorldContainerSources.deleteAll(this.minecraft)) {
+                        requestItems();
+                    }
+                } else {
+                    confirmDeleteAll = true;
+                }
+                return true;
+            }
+        }
+
+        // Check Dumps Delete All button (in dump section header)
+        if (!dumps.isEmpty()) {
+            int dumpHeaderY = listTop + 6 - scrollOffset + sources.size() * CONTAINER_ROW_HEIGHT;
+            if (mouseX >= deleteAllBtnX && mouseX < deleteAllBtnX + 80
+                    && mouseY >= dumpHeaderY + 7 && mouseY < dumpHeaderY + 21) {
+                confirmDeleteAll = false;
+                if (confirmDeleteAllDumps) {
+                    confirmDeleteAllDumps = false;
+                    if (WorldContainerDumps.deleteAll(this.minecraft)) {
+                        requestItems();
+                    }
+                } else {
+                    confirmDeleteAllDumps = true;
+                }
+                return true;
+            }
+        }
+
+        // Clicking anywhere else resets both confirm states
+        confirmDeleteAll = false;
+        confirmDeleteAllDumps = false;
+
         int y = listTop + 6 - scrollOffset;
 
         for (WorldContainerSources.SourceEntry source : sources) {
@@ -433,7 +511,6 @@ public class TakeItOutSettingsScreen extends Screen {
                     }
                     return true;
                 }
-
                 if (mouseX >= deleteButtonX && mouseX < deleteButtonX + 54) {
                     if (WorldContainerSources.delete(this.minecraft, source)) {
                         requestItems();
@@ -448,11 +525,19 @@ public class TakeItOutSettingsScreen extends Screen {
             y += CONTAINER_ROW_HEIGHT; // skip section header
 
             for (WorldContainerDumps.DumpEntry dump : dumps) {
-                int buttonX = listLeft + 8 + listWidth - 16 - 62;
-                if (y >= listTop && y + 22 <= listBottom && mouseY >= y + 2 && mouseY < y + 20
-                        && mouseX >= buttonX && mouseX < buttonX + 58) {
-                    WorldContainerDumps.toggle(this.minecraft, dump.pos());
-                    return true;
+                int markButtonX = listLeft + 8 + listWidth - 16 - 122;
+                int deleteButtonX = listLeft + 8 + listWidth - 16 - 58;
+                if (y >= listTop && y + 22 <= listBottom && mouseY >= y + 2 && mouseY < y + 20) {
+                    if (mouseX >= markButtonX && mouseX < markButtonX + 58) {
+                        WorldContainerDumps.setEnabled(this.minecraft, dump.pos(), !dump.enabled());
+                        return true;
+                    }
+                    if (mouseX >= deleteButtonX && mouseX < deleteButtonX + 54) {
+                        if (WorldContainerDumps.delete(this.minecraft, dump.pos())) {
+                            requestItems();
+                        }
+                        return true;
+                    }
                 }
                 y += CONTAINER_ROW_HEIGHT;
             }
@@ -528,6 +613,9 @@ public class TakeItOutSettingsScreen extends Screen {
                     + focusedContainer.getY() + " "
                     + focusedContainer.getZ();
         }
+        int linked = WorldContainerSources.linkedSourceCountSnapshot();
+        int limit = TakeitoutClient.SERVER_SCAN_LIMIT;
+        header += " | Linked: " + linked + (limit > 0 ? "/" + limit : "");
         return header;
     }
 
