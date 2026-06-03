@@ -38,7 +38,6 @@ public class TakeItOutSettingsScreen extends Screen {
     private boolean confirmDeleteAllDumps = false;
 
     // Groups tab state
-    private String pendingSwitchGroup = null;
     private String groupInputMode = null;   // null, "create", or "rename"
     private String groupInputTarget = null; // old name when renaming
     private EditBox groupNameField;
@@ -77,7 +76,6 @@ public class TakeItOutSettingsScreen extends Screen {
             activeTab = Tab.GROUPS;
             focusedContainer = null;
             scrollOffset = 0;
-            pendingSwitchGroup = null;
             groupInputMode = null;
             searchField.setVisible(false);
             groupNameField.setVisible(false);
@@ -154,8 +152,8 @@ public class TakeItOutSettingsScreen extends Screen {
             int dumpHeight = dumps.isEmpty() ? 0 : (CONTAINER_ROW_HEIGHT + dumps.size() * CONTAINER_ROW_HEIGHT);
             contentHeight = sourceHeight + dumpHeight;
         } else {
-            int headerRows = groupInputMode != null ? 1 : 0;
-            contentHeight = (WorldContainerSources.getGroupNames().size() + headerRows) * CONTAINER_ROW_HEIGHT;
+            int inputRow = groupInputMode != null ? 1 : 0;
+            contentHeight = (WorldContainerSources.getGroupNames().size() + inputRow) * CONTAINER_ROW_HEIGHT;
         }
         int maxScroll = Math.max(0, contentHeight - getListHeight());
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (scrollY * 18)));
@@ -396,7 +394,6 @@ public class TakeItOutSettingsScreen extends Screen {
     private void renderGroups(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY) {
         List<String> groups = WorldContainerSources.getGroupNames();
         String activeGroup = WorldContainerSources.getCurrentGroupName();
-        boolean dirty = WorldContainerSources.isGroupDirty();
         int listLeft = this.width / 2 - 215;
         int listTop = LIST_TOP;
         int listWidth = 430;
@@ -404,8 +401,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
         guiGraphics.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
 
-        String header = "Groups" + (dirty ? "  §e[modified]§r" : "");
-        guiGraphics.text(this.font, header, listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
+        guiGraphics.text(this.font, "Groups", listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
 
         // New Group button in header
         int newBtnX = listLeft + listWidth - 84;
@@ -434,7 +430,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
         for (String group : groups) {
             if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
-                renderGroupRow(guiGraphics, group, activeGroup, dirty, listLeft + 8, y, listWidth - 16, mouseX, mouseY, groups.size());
+                renderGroupRow(guiGraphics, group, activeGroup, listLeft + 8, y, listWidth - 16, mouseX, mouseY, groups.size());
             }
             y += CONTAINER_ROW_HEIGHT;
         }
@@ -446,48 +442,28 @@ public class TakeItOutSettingsScreen extends Screen {
             GuiGraphicsExtractor guiGraphics,
             String group,
             String activeGroup,
-            boolean dirty,
             int x, int y, int width,
             int mouseX, int mouseY,
             int totalGroups
     ) {
         boolean isActive = group.equals(activeGroup);
-        boolean isPending = group.equals(pendingSwitchGroup);
         boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
 
-        int bgColor = isActive ? 0x5522D3EE : (hovered ? 0x33FFFFFF : 0x22FFFFFF);
-        guiGraphics.fill(x, y, x + width, y + 22, bgColor);
+        guiGraphics.fill(x, y, x + width, y + 22, isActive ? 0x5522D3EE : (hovered ? 0x33FFFFFF : 0x22FFFFFF));
+        if (isActive) guiGraphics.fill(x, y, x + 3, y + 22, 0xFF22D3EE);
 
         if (isActive) {
-            guiGraphics.fill(x, y, x + 3, y + 22, 0xFF22D3EE);
-        }
-
-        if (isPending) {
-            // Confirm switch dialog
-            String msg = "Modified — switch anyway?";
-            guiGraphics.text(this.font, trim(msg, width - 148), x + 8, y + 7, 0xFFFFBB33);
-            int yesBtnX = x + width - 138;
-            int noBtnX = x + width - 66;
-            boolean yesHov = hovered && mouseX >= yesBtnX && mouseX < yesBtnX + 66;
-            boolean noHov = hovered && mouseX >= noBtnX && mouseX < noBtnX + 62;
-            guiGraphics.fill(yesBtnX, y + 2, yesBtnX + 66, y + 20, yesHov ? 0xFFB91C1C : 0xFF7F1D1D);
-            drawBorder(guiGraphics, yesBtnX, y + 2, 66, 18, 0xFFEF4444);
-            guiGraphics.centeredText(this.font, "Switch", yesBtnX + 33, y + 7, 0xFFFFFFFF);
-            drawSmallButton(guiGraphics, noBtnX, y + 2, 62, 18, "Cancel", noHov);
-        } else if (isActive) {
-            String label = "(active) " + group;
-            guiGraphics.text(this.font, trim(label, width - 16), x + 8, y + 7, 0xFF22D3EE);
+            guiGraphics.text(this.font, trim("(active) " + group, width - 16), x + 8, y + 7, 0xFF22D3EE);
         } else {
             guiGraphics.text(this.font, trim(group, width - 202), x + 8, y + 7, 0xFFFFFFFF);
             int switchBtnX = x + width - 194;
             int renameBtnX = x + width - 126;
             int deleteBtnX = x + width - 62;
-            boolean canDelete = totalGroups > 1;
             drawSmallButton(guiGraphics, switchBtnX, y + 2, 62, 18, "Switch",
                     hovered && mouseX >= switchBtnX && mouseX < switchBtnX + 62);
             drawSmallButton(guiGraphics, renameBtnX, y + 2, 58, 18, "Rename",
                     hovered && mouseX >= renameBtnX && mouseX < renameBtnX + 58);
-            if (canDelete) {
+            if (totalGroups > 1) {
                 drawSmallButton(guiGraphics, deleteBtnX, y + 2, 58, 18, "Delete",
                         hovered && mouseX >= deleteBtnX && mouseX < deleteBtnX + 58);
             }
@@ -546,24 +522,9 @@ public class TakeItOutSettingsScreen extends Screen {
 
         for (String group : groups) {
             boolean isActive = group.equals(activeGroup);
-            boolean isPending = group.equals(pendingSwitchGroup);
 
             if (mouseY >= y + 2 && mouseY < y + 20 && y >= listTop && y + 22 <= listBottom) {
-                if (isPending) {
-                    // Yes / No buttons
-                    int yesBtnX = listLeft + 8 + (listWidth - 16) - 138;
-                    int noBtnX = listLeft + 8 + (listWidth - 16) - 66;
-                    if (mouseX >= yesBtnX && mouseX < yesBtnX + 66) {
-                        pendingSwitchGroup = null;
-                        WorldContainerSources.switchGroup(this.minecraft, group);
-                        requestItems();
-                        return true;
-                    }
-                    if (mouseX >= noBtnX && mouseX < noBtnX + 62) {
-                        pendingSwitchGroup = null;
-                        return true;
-                    }
-                } else if (!isActive) {
+                if (!isActive) {
                     int rowX = listLeft + 8;
                     int rowWidth = listWidth - 16;
                     int switchBtnX = rowX + rowWidth - 194;
@@ -571,12 +532,8 @@ public class TakeItOutSettingsScreen extends Screen {
                     int deleteBtnX = rowX + rowWidth - 62;
 
                     if (mouseX >= switchBtnX && mouseX < switchBtnX + 62) {
-                        if (WorldContainerSources.isGroupDirty()) {
-                            pendingSwitchGroup = group;
-                        } else {
-                            WorldContainerSources.switchGroup(this.minecraft, group);
-                            requestItems();
-                        }
+                        WorldContainerSources.switchGroup(this.minecraft, group);
+                        requestItems();
                         return true;
                     }
                     if (mouseX >= renameBtnX && mouseX < renameBtnX + 58) {
@@ -595,12 +552,6 @@ public class TakeItOutSettingsScreen extends Screen {
                 }
             }
             y += CONTAINER_ROW_HEIGHT;
-        }
-
-        // Click anywhere else clears pending switch
-        if (pendingSwitchGroup != null) {
-            pendingSwitchGroup = null;
-            return true;
         }
 
         return false;
