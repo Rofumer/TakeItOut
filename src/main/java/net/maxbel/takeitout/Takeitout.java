@@ -426,7 +426,7 @@ public class Takeitout implements ModInitializer {
         }
 
         ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
-        LOGGER.warn(
+        LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
                 requested,
