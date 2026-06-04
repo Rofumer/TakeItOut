@@ -46,8 +46,6 @@ public class LitematicaMixin {
     @Unique
     private static final Logger LOGGER = LoggerFactory.getLogger("TakeItOut");
     @Unique
-    private static final boolean VERBOSE_LOG = false;
-    @Unique
     private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
     @Unique
     private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
@@ -132,7 +130,7 @@ public class LitematicaMixin {
 
         if (waitingForItem && requestTsMs > 0
                 && System.currentTimeMillis() - requestTsMs > expectedWaitTicks * 50L * 3) {
-            LOGGER.warn(
+            LOGGER.debug(
                     "[RMB_FLOW] wall-clock timeout: no easyPlaceOnUseTick fired, resetting wait. waitingState={}, elapsedMs={}",
                     waitingState,
                     System.currentTimeMillis() - requestTsMs
@@ -165,7 +163,7 @@ public class LitematicaMixin {
 
         if (required.isEmpty() || !inHand.is(required.getItem())) {
             if (!required.isEmpty() && !waitingForItem) {
-                LOGGER.warn(
+                LOGGER.debug(
                         "[RMB_FLOW] missing required item: hologramPos={}, hologramState={}, worldState={}, required={}, inHand={}, selectedHotbarSlot={}",
                         pos,
                         state,
@@ -213,7 +211,7 @@ public class LitematicaMixin {
     private static Minecraft checkItemAndTick(Minecraft client) {
         if (waitingForItem && client != null && client.player != null && waitingState != null) {
             if (requestTsMs > 0 && System.currentTimeMillis() - requestTsMs > expectedWaitTicks * 50L * 3) {
-                LOGGER.warn(
+                LOGGER.debug(
                         "[RMB_FLOW] checkItemAndTick wall-clock timeout: stale wait state cleared (likely reconnect). waitingState={}, elapsedMs={}",
                         waitingState,
                         System.currentTimeMillis() - requestTsMs
@@ -242,7 +240,7 @@ public class LitematicaMixin {
             }
 
             if (WorldContainerSources.consumeFailedResponse(required.copyWithCount(1))) {
-                LOGGER.warn(
+                LOGGER.debug(
                         "[RMB_FLOW] item request failed: required={}, selectedHotbarSlot={}, mainHand={}",
                         required,
                         slotToHotbarHuman(client.player.getInventory().getSelectedSlot()),
@@ -299,7 +297,7 @@ public class LitematicaMixin {
 
                 int hardTimeout = expectedWaitTicks + Math.max(10, expectedWaitTicks / 2);
                 if (waitTicks >= hardTimeout) {
-                    LOGGER.warn(
+                    LOGGER.debug(
                             "[RMB_FLOW] timeout waiting item from shulker/world container: expectedWaitTicks={}, waitedTicks={}, retries={}, elapsedMs={}",
                             expectedWaitTicks,
                             waitTicks,
@@ -328,7 +326,7 @@ public class LitematicaMixin {
                 return interactionResult;
             }
         } catch (Throwable t) {
-            LOGGER.warn("[RMB_FLOW] auto place retry reflective call failed", t);
+            LOGGER.debug("[RMB_FLOW] auto place retry reflective call failed", t);
         }
 
         return InteractionResult.PASS;
@@ -424,7 +422,7 @@ public class LitematicaMixin {
                             TakeitoutClient.awaitingStack = required.copyWithCount(1);
                             ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         } else {
-                            LOGGER.warn("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
+                            LOGGER.debug("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
                         }
                     }
                 } else {
@@ -466,7 +464,7 @@ public class LitematicaMixin {
         boolean placed = arePlacementEquivalent(worldState, hologramState);
 
         if (!placed || cir.getReturnValue() == InteractionResult.FAIL) {
-            LOGGER.warn(
+            LOGGER.debug(
                     "[RMB_FLOW] place result: result={}, hologramPos={}, hologramState={}, worldState={}, placedMatchesHologram={}, selectedHotbarSlot={}, mainHand={}",
                     cir.getReturnValue(),
                     pos,
@@ -575,8 +573,6 @@ public class LitematicaMixin {
 
     @Unique
     private static void logVerbose(String message, Object... args) {
-        if (VERBOSE_LOG) {
-            LOGGER.info(message, args);
-        }
+        LOGGER.debug(message, args);
     }
 }
