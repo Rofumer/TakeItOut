@@ -516,7 +516,7 @@ public class Takeitout implements ModInitializer {
 
         for (int i = 0; i < items.size(); i++) {
             WorldContainerItemCount existing = items.get(i);
-            if (ItemStack.isSameItemSameComponents(existing.stack(), keyStack)) {
+            if (existing.stack().is(keyStack.getItem())) {
                 items.set(i, new WorldContainerItemCount(existing.stack(), existing.count() + stack.getCount()));
                 return;
             }
@@ -791,7 +791,7 @@ public class Takeitout implements ModInitializer {
     private static int getSlotWithStack(Container inventory, ItemStack stackReference) {
         for (int i = 0; i < inventory.getContainerSize(); ++i) {
             ItemStack stack = inventory.getItem(i);
-            if (stack != null && !stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, stackReference)) {
+            if (stack != null && !stack.isEmpty() && stack.is(stackReference.getItem())) {
                 return i;
             }
         }

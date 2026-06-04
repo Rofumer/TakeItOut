@@ -163,23 +163,27 @@ public class LitematicaMixin {
         lastEasyPlacePos = pos.immutable();
         lastEasyPlaceTargetState = state;
 
-        if (!ItemStack.isSameItemSameComponents(inHand, required)) {
-            logVerbose(
-                    "[RMB_FLOW] missing required item: hologramPos={}, hologramState={}, worldState={}, required={}, inHand={}, selectedHotbarSlot={}",
-                    pos,
-                    state,
-                    worldState,
-                    required,
-                    inHand,
-                    slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
-            );
+        if (required.isEmpty() || !inHand.is(required.getItem())) {
+            if (!required.isEmpty() && !waitingForItem) {
+                LOGGER.warn(
+                        "[RMB_FLOW] missing required item: hologramPos={}, hologramState={}, worldState={}, required={}, inHand={}, selectedHotbarSlot={}",
+                        pos,
+                        state,
+                        worldState,
+                        required,
+                        inHand,
+                        slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
+                );
+            } else if (required.isEmpty()) {
+                return;
+            }
 
             if (!waitingForItem) {
                 logVerbose("[RMB_FLOW] requesting pick block for missing item");
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
                 // Swap may be immediate (client-side inventory). Re-check before canceling.
                 inHand = mc.player.getMainHandItem();
-                if (ItemStack.isSameItemSameComponents(inHand, required)) {
+                if (!required.isEmpty() && inHand.is(required.getItem())) {
                     logVerbose("[RMB_FLOW] item swapped immediately, proceeding without cancel. selectedHotbarSlot={}", slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
                     return;
                 }
@@ -208,11 +212,25 @@ public class LitematicaMixin {
     )
     private static Minecraft checkItemAndTick(Minecraft client) {
         if (waitingForItem && client != null && client.player != null && waitingState != null) {
+            if (requestTsMs > 0 && System.currentTimeMillis() - requestTsMs > expectedWaitTicks * 50L * 3) {
+                LOGGER.warn(
+                        "[RMB_FLOW] checkItemAndTick wall-clock timeout: stale wait state cleared (likely reconnect). waitingState={}, elapsedMs={}",
+                        waitingState,
+                        System.currentTimeMillis() - requestTsMs
+                );
+                waitingForItem = false;
+                waitingState = null;
+                waitTicks = 0;
+                retryCount = 0;
+                autoPlaceRetriedForCurrentWait = false;
+                return client;
+            }
+
             ItemStack inHand = client.player.getMainHandItem();
             ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(waitingState);
             int inventorySlot = InventoryUtils.findSlotWithItem(client.player.containerMenu, required, true);
 
-            if (!ItemStack.isSameItemSameComponents(inHand, required) && inventorySlot != -1) {
+            if (!required.isEmpty() && !inHand.is(required.getItem()) && inventorySlot != -1) {
                 logVerbose(
                         "[RMB_FLOW] required item arrived in inventory: slot={}, selectedHotbarSlot={}, stack={}",
                         inventorySlot,
@@ -238,7 +256,7 @@ public class LitematicaMixin {
                 return client;
             }
 
-            if (ItemStack.isSameItemSameComponents(inHand, required)) {
+            if (!required.isEmpty() && inHand.is(required.getItem())) {
                 if (!autoPlaceRetriedForCurrentWait
                         && !autoPlaceRetryInProgress
                         && lastEasyPlacePos != null
@@ -357,9 +375,15 @@ public class LitematicaMixin {
                 slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
         );
 
-        if (!ItemStack.isSameItemSameComponents(mc.player.getMainHandItem(), required)) {
+        if (required.isEmpty() || !mc.player.getMainHandItem().is(required.getItem())) {
+            if (required.isEmpty()) {
+                fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
+                cir.setReturnValue(true);
+                cir.cancel();
+                return;
+            }
             if (!TakeitoutClient.awaitingStack.isEmpty()
-                    && ItemStack.isSameItemSameComponents(TakeitoutClient.awaitingStack, required.copyWithCount(1))) {
+                    && TakeitoutClient.awaitingStack.is(required.getItem())) {
                 logVerbose(
                         "[RMB_FLOW] duplicate request skipped: required={}, awaiting={}, selectedHotbarSlot={}",
                         required,

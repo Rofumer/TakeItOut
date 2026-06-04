@@ -362,7 +362,7 @@ public final class WorldContainerSources {
 
     public static boolean consumeFailedResponse(ItemStack stack) {
         if (stack == null || stack.isEmpty() || lastFailedStack.isEmpty()) return false;
-        if (!ItemStack.isSameItemSameComponents(lastFailedStack, stack)) return false;
+        if (!lastFailedStack.is(stack.getItem())) return false;
         lastFailedStack = ItemStack.EMPTY;
         lastFailureTsMs = 0L;
         return true;
@@ -419,7 +419,7 @@ public final class WorldContainerSources {
 
     private static boolean isCoolingDownAfterFailure(ItemStack required) {
         return !lastFailedStack.isEmpty()
-                && ItemStack.isSameItemSameComponents(lastFailedStack, required)
+                && lastFailedStack.is(required.getItem())
                 && System.currentTimeMillis() - lastFailureTsMs < FAILURE_RETRY_DELAY_MS;
     }
 

@@ -95,7 +95,7 @@ public class TakeitoutClient implements ClientModInitializer {
                     WorldContainerSources.recordResponse(payload.stack(), payload.success());
                     if (!payload.success()
                             && !awaitingStack.isEmpty()
-                            && ItemStack.isSameItemSameComponents(awaitingStack, payload.stack())) {
+                            && awaitingStack.is(payload.stack().getItem())) {
                         awaitingStack = ItemStack.EMPTY;
                         awaitingStackTicks = 0;
                         if (context.client().player != null) {
@@ -133,6 +133,8 @@ public class TakeitoutClient implements ClientModInitializer {
                 WorldContainerSources.updateContext(client);
                 WorldContainerDumps.updateContext(client);
                 lastSourceWorld = client.level;
+                awaitingStack = ItemStack.EMPTY;
+                awaitingStackTicks = 0;
             }
 
             if (client.player != null && !awaitingStack.isEmpty()) {
