@@ -126,8 +126,22 @@ public class LitematicaMixin {
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state);
         ItemStack inHand = mc.player.getMainHandItem();
 
-        if (!worldState.isAir()) {
+        if (!worldState.canBeReplaced()) {
             return;
+        }
+
+        if (waitingForItem && requestTsMs > 0
+                && System.currentTimeMillis() - requestTsMs > expectedWaitTicks * 50L * 3) {
+            LOGGER.warn(
+                    "[RMB_FLOW] wall-clock timeout: no easyPlaceOnUseTick fired, resetting wait. waitingState={}, elapsedMs={}",
+                    waitingState,
+                    System.currentTimeMillis() - requestTsMs
+            );
+            waitingForItem = false;
+            waitingState = null;
+            waitTicks = 0;
+            retryCount = 0;
+            autoPlaceRetriedForCurrentWait = false;
         }
 
         if (waitingForItem && waitingState != null && !waitingState.equals(state)) {
@@ -163,6 +177,12 @@ public class LitematicaMixin {
             if (!waitingForItem) {
                 logVerbose("[RMB_FLOW] requesting pick block for missing item");
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
+                // Swap may be immediate (client-side inventory). Re-check before canceling.
+                inHand = mc.player.getMainHandItem();
+                if (ItemStack.isSameItemSameComponents(inHand, required)) {
+                    logVerbose("[RMB_FLOW] item swapped immediately, proceeding without cancel. selectedHotbarSlot={}", slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
+                    return;
+                }
                 waitingForItem = true;
                 waitingState = state;
                 waitTicks = 0;

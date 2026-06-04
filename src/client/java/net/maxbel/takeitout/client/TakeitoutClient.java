@@ -293,7 +293,8 @@ public class TakeitoutClient implements ClientModInitializer {
 
         if (state.targetState != null
                 && !state.targetState.isAir()
-                && (state.currentState == null || !state.targetState.equals(state.currentState))) {
+                && (state.currentState == null || state.currentState.canBeReplaced())
+                && !state.targetState.equals(state.currentState)) {
             if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
                 WorldUtils.doSchematicWorldPickBlock(true, mc);
                 return true;

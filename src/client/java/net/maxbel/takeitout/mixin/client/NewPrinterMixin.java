@@ -63,7 +63,7 @@ public class NewPrinterMixin {
             if (ctx.requiredState.equals(ctx.currentState)) {
                 continue;
             }
-            if (ctx.currentState != null && !ctx.currentState.isAir()) {
+            if (ctx.currentState != null && !ctx.currentState.canBeReplaced()) {
                 continue;
             }
 

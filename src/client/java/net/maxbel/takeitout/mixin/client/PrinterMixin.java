@@ -55,7 +55,7 @@ public abstract class PrinterMixin {
                 if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
                     continue;
                 }
-                if (!state.targetState.equals(state.currentState) && !state.currentState.isAir()) {
+                if (!state.targetState.equals(state.currentState) && !state.currentState.canBeReplaced()) {
                     continue;
                 }
 
