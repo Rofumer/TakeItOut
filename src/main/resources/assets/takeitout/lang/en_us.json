@@ -12,5 +12,7 @@
   "message.takeitout.container_source_render.off": "Container source render: OFF",
   "key.category.takeitout.takeitout": "TakeItOut",
   "takeitout.msg.stacked_shulker_skipped":"Action prevented (Take It Out Mod): Stacked shulkers",
-  "message.takeitout.item_not_found": "Not found in containers: %s"
+  "message.takeitout.item_not_found": "Not found in containers: %s",
+  "tooltip.takeitout.take_stack": "LMB: take stack",
+  "tooltip.takeitout.take_single": "RMB: take 1 item"
 }

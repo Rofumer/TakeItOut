@@ -28,6 +28,8 @@ public class TakeItOutSettingsScreen extends Screen {
     private static final int LIST_TOP = 66;
     private static final int LIST_BOTTOM_MARGIN = 36;
     private static final int HEADER_OFFSET = 12;
+    private static final int SCROLLBAR_WIDTH = 6;
+    private static final int LIST_CONTENT_PADDING = 6;
 
     private final Screen parent;
     private Tab activeTab = Tab.ALL_ITEMS;
@@ -37,6 +39,9 @@ public class TakeItOutSettingsScreen extends Screen {
     private String searchQuery = "";
     private boolean confirmDeleteAll = false;
     private boolean confirmDeleteAllDumps = false;
+    private boolean scrollbarDragging = false;
+    private int scrollbarDragStartY;
+    private int scrollbarDragStartOffset;
 
     // Groups tab state
     private String groupInputMode = null;   // null, "create", or "rename"
@@ -142,30 +147,38 @@ public class TakeItOutSettingsScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int contentHeight;
-        if (activeTab == Tab.ALL_ITEMS) {
-            contentHeight = getSortedItems().size() * 22;
-        } else if (activeTab == Tab.CONTAINERS) {
-            int sourceHeight = getVisibleContainerSources().size() * CONTAINER_ROW_HEIGHT;
-            List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
-                    ? WorldContainerDumps.getAllDumpsSnapshot()
-                    : List.of();
-            int dumpHeight = dumps.isEmpty() ? 0 : (CONTAINER_ROW_HEIGHT + dumps.size() * CONTAINER_ROW_HEIGHT);
-            contentHeight = sourceHeight + dumpHeight;
-        } else {
-            int inputRow = groupInputMode != null ? 1 : 0;
-            int localRows = WorldContainerSources.getGroupNames().size() + inputRow;
-            int serverRows = SharedGroupsClient.serverSupportsSharedGroups
-                    ? 1 + SharedGroupsClient.SHARED_GROUPS.size() : 0;
-            contentHeight = (localRows + serverRows) * CONTAINER_ROW_HEIGHT;
-        }
-        int maxScroll = Math.max(0, contentHeight - getListHeight());
+        int maxScroll = Math.max(0, getContentHeight() - getListHeight());
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (scrollY * 18)));
         return true;
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == 0) {
+            int listLeft = getActiveListLeft();
+            int listWidth = getActiveListWidth();
+            int trackX = listLeft + listWidth - SCROLLBAR_WIDTH;
+            int listTop = LIST_TOP;
+            int listBottom = this.height - LIST_BOTTOM_MARGIN;
+            if (event.x() >= trackX && event.x() < listLeft + listWidth && event.y() >= listTop && event.y() < listBottom) {
+                int contentHeight = getContentHeight();
+                int[] thumb = getScrollbarThumb(listTop, listBottom, contentHeight);
+                if (thumb != null) {
+                    if (event.y() >= thumb[0] && event.y() < thumb[0] + thumb[1]) {
+                        scrollbarDragging = true;
+                        scrollbarDragStartY = (int) event.y();
+                        scrollbarDragStartOffset = scrollOffset;
+                    } else {
+                        int listHeight = listBottom - listTop;
+                        int maxScroll = Math.max(0, contentHeight - listHeight);
+                        float ratio = (float) (event.y() - listTop) / listHeight;
+                        scrollOffset = Math.max(0, Math.min(maxScroll, (int) (ratio * contentHeight)));
+                    }
+                    return true;
+                }
+            }
+        }
+
         if (activeTab == Tab.CONTAINERS && event.button() == 0 && handleContainerClick((int) event.x(), (int) event.y())) {
             return true;
         }
@@ -180,6 +193,35 @@ public class TakeItOutSettingsScreen extends Screen {
         }
 
         return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
+        if (scrollbarDragging) {
+            int listTop = LIST_TOP;
+            int listBottom = this.height - LIST_BOTTOM_MARGIN;
+            int listHeight = listBottom - listTop;
+            int contentHeight = getContentHeight();
+            if (contentHeight > listHeight) {
+                int thumbHeight = Math.max(20, listHeight * listHeight / contentHeight);
+                int maxThumbTravel = listHeight - thumbHeight;
+                int maxScroll = contentHeight - listHeight;
+                int delta = (int) event.y() - scrollbarDragStartY;
+                int newOffset = scrollbarDragStartOffset + (int) ((long) delta * maxScroll / maxThumbTravel);
+                scrollOffset = Math.max(0, Math.min(maxScroll, newOffset));
+            }
+            return true;
+        }
+        return super.mouseDragged(event, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (scrollbarDragging && event.button() == 0) {
+            scrollbarDragging = false;
+            return true;
+        }
+        return super.mouseReleased(event);
     }
 
     // --- All Items tab ---
@@ -217,10 +259,11 @@ public class TakeItOutSettingsScreen extends Screen {
             y += 22;
         }
         guiGraphics.disableScissor();
+        renderScrollbar(guiGraphics, listLeft, listTop, listWidth, listBottom, LIST_CONTENT_PADDING + items.size() * 22);
 
         if (hoveredItem != null) {
-            String line1 = "ЛКМ: взять стак";
-            String line2 = "ПКМ: взять 1 предмет";
+            String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
+            String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
             int tw = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
             int th = 32;
             int tx = Math.min(mouseX + 12, this.width - tw - 4);
@@ -323,6 +366,10 @@ public class TakeItOutSettingsScreen extends Screen {
         }
 
         guiGraphics.disableScissor();
+
+        int sourceHeight = sources.size() * CONTAINER_ROW_HEIGHT;
+        int dumpHeight = dumps.isEmpty() ? 0 : (CONTAINER_ROW_HEIGHT + dumps.size() * CONTAINER_ROW_HEIGHT);
+        renderScrollbar(guiGraphics, listLeft, listTop, listWidth, listBottom, LIST_CONTENT_PADDING + sourceHeight + dumpHeight);
 
         if (hoveredSource != null) {
             renderContainerContentsTooltip(guiGraphics, hoveredSource, mouseX, mouseY);
@@ -455,6 +502,12 @@ public class TakeItOutSettingsScreen extends Screen {
         }
 
         guiGraphics.disableScissor();
+
+        int inputRow = groupInputMode != null ? 1 : 0;
+        int localRows = groups.size() + inputRow;
+        int serverRows = SharedGroupsClient.serverSupportsSharedGroups
+                ? 1 + SharedGroupsClient.SHARED_GROUPS.size() : 0;
+        renderScrollbar(guiGraphics, listLeft, listTop, listWidth, listBottom, LIST_CONTENT_PADDING + (localRows + serverRows) * CONTAINER_ROW_HEIGHT);
     }
 
     private void renderGroupRow(
@@ -861,6 +914,55 @@ public class TakeItOutSettingsScreen extends Screen {
         return this.minecraft.level.getBlockState(source.pos()).getBlock().asItem().getDefaultInstance();
     }
 
+    private int getActiveListLeft() {
+        return activeTab == Tab.ALL_ITEMS ? this.width / 2 - 155 : this.width / 2 - 215;
+    }
+
+    private int getActiveListWidth() {
+        return activeTab == Tab.ALL_ITEMS ? 310 : 430;
+    }
+
+    private int getContentHeight() {
+        if (activeTab == Tab.ALL_ITEMS) {
+            return LIST_CONTENT_PADDING + getSortedItems().size() * 22;
+        } else if (activeTab == Tab.CONTAINERS) {
+            int sourceHeight = getVisibleContainerSources().size() * CONTAINER_ROW_HEIGHT;
+            List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
+                    ? WorldContainerDumps.getAllDumpsSnapshot()
+                    : List.of();
+            int dumpHeight = dumps.isEmpty() ? 0 : (CONTAINER_ROW_HEIGHT + dumps.size() * CONTAINER_ROW_HEIGHT);
+            return LIST_CONTENT_PADDING + sourceHeight + dumpHeight;
+        } else {
+            int inputRow = groupInputMode != null ? 1 : 0;
+            int localRows = WorldContainerSources.getGroupNames().size() + inputRow;
+            int serverRows = SharedGroupsClient.serverSupportsSharedGroups
+                    ? 1 + SharedGroupsClient.SHARED_GROUPS.size() : 0;
+            return LIST_CONTENT_PADDING + (localRows + serverRows) * CONTAINER_ROW_HEIGHT;
+        }
+    }
+
+    private int[] getScrollbarThumb(int listTop, int listBottom, int contentHeight) {
+        int listHeight = listBottom - listTop;
+        if (contentHeight <= listHeight) return null;
+        int thumbHeight = Math.max(20, listHeight * listHeight / contentHeight);
+        int maxThumbTravel = listHeight - thumbHeight;
+        int maxScroll = contentHeight - listHeight;
+        int thumbY = listTop + (maxScroll > 0 ? (int) ((long) scrollOffset * maxThumbTravel / maxScroll) : 0);
+        return new int[]{thumbY, thumbHeight};
+    }
+
+    private void renderScrollbar(GuiGraphicsExtractor guiGraphics, int listLeft, int listTop, int listWidth, int listBottom, int contentHeight) {
+        int listHeight = listBottom - listTop;
+        if (contentHeight <= listHeight) return;
+        int trackX = listLeft + listWidth - SCROLLBAR_WIDTH;
+        guiGraphics.fill(trackX, listTop, trackX + SCROLLBAR_WIDTH, listBottom, 0x33FFFFFF);
+        int[] thumb = getScrollbarThumb(listTop, listBottom, contentHeight);
+        if (thumb != null) {
+            int color = scrollbarDragging ? 0xCCFFFFFF : 0x88FFFFFF;
+            guiGraphics.fill(trackX + 1, thumb[0], trackX + SCROLLBAR_WIDTH - 1, thumb[0] + thumb[1], color);
+        }
+    }
+
     private String trim(String value, int width) {
         return this.font.plainSubstrByWidth(value, width);
     }
@@ -868,7 +970,7 @@ public class TakeItOutSettingsScreen extends Screen {
     private void drawSmallButton(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height, String label, boolean hovered) {
         guiGraphics.fill(x, y, x + width, y + height, hovered ? 0xFF4B5563 : 0xFF2F2F2F);
         drawBorder(guiGraphics, x, y, width, height, 0xFF9CA3AF);
-        guiGraphics.centeredText(this.font, label, x + width / 2, y + 5, 0xFFFFFFFF);
+        guiGraphics.centeredText(this.font, label, x + width / 2, y + height / 2 - 4, 0xFFFFFFFF);
     }
 
     private void drawBorder(GuiGraphicsExtractor guiGraphics, int x, int y, int width, int height, int color) {
