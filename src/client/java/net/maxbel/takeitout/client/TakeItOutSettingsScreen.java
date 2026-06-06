@@ -1,5 +1,6 @@
 package net.maxbel.takeitout.client;
 
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -153,7 +154,10 @@ public class TakeItOutSettingsScreen extends Screen {
             contentHeight = sourceHeight + dumpHeight;
         } else {
             int inputRow = groupInputMode != null ? 1 : 0;
-            contentHeight = (WorldContainerSources.getGroupNames().size() + inputRow) * CONTAINER_ROW_HEIGHT;
+            int localRows = WorldContainerSources.getGroupNames().size() + inputRow;
+            int serverRows = SharedGroupsClient.serverSupportsSharedGroups
+                    ? 1 + SharedGroupsClient.SHARED_GROUPS.size() : 0;
+            contentHeight = (localRows + serverRows) * CONTAINER_ROW_HEIGHT;
         }
         int maxScroll = Math.max(0, contentHeight - getListHeight());
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (scrollY * 18)));
@@ -435,6 +439,21 @@ public class TakeItOutSettingsScreen extends Screen {
             y += CONTAINER_ROW_HEIGHT;
         }
 
+        if (SharedGroupsClient.serverSupportsSharedGroups) {
+            if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
+                guiGraphics.fill(listLeft + 8, y + 10, listLeft + listWidth - 8, y + 11, 0x44FFD700);
+                guiGraphics.text(this.font, "Server Groups (" + SharedGroupsClient.SHARED_GROUPS.size() + ")", listLeft + 8, y + 2, 0xFFFFD700);
+            }
+            y += CONTAINER_ROW_HEIGHT;
+
+            for (Takeitout.SharedGroupEntry shared : SharedGroupsClient.SHARED_GROUPS) {
+                if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
+                    renderSharedGroupRow(guiGraphics, shared, listLeft + 8, y, listWidth - 16, mouseX, mouseY);
+                }
+                y += CONTAINER_ROW_HEIGHT;
+            }
+        }
+
         guiGraphics.disableScissor();
     }
 
@@ -453,7 +472,18 @@ public class TakeItOutSettingsScreen extends Screen {
         if (isActive) guiGraphics.fill(x, y, x + 3, y + 22, 0xFF22D3EE);
 
         if (isActive) {
-            guiGraphics.text(this.font, trim("(active) " + group, width - 16), x + 8, y + 7, 0xFF22D3EE);
+            if (SharedGroupsClient.serverSupportsSharedGroups) {
+                String playerId = this.minecraft != null && this.minecraft.player != null
+                        ? this.minecraft.player.getGameProfile().id().toString() : "";
+                boolean alreadyShared = SharedGroupsClient.SHARED_GROUPS.stream()
+                        .anyMatch(g -> g.authorId().equals(playerId) && g.name().equals(group));
+                int shareBtnX = x + width - 76;
+                guiGraphics.text(this.font, trim("(active) " + group, width - 90), x + 8, y + 7, 0xFF22D3EE);
+                drawSmallButton(guiGraphics, shareBtnX, y + 2, 72, 18, alreadyShared ? "Update" : "Share",
+                        hovered && mouseX >= shareBtnX && mouseX < shareBtnX + 72);
+            } else {
+                guiGraphics.text(this.font, trim("(active) " + group, width - 16), x + 8, y + 7, 0xFF22D3EE);
+            }
         } else {
             guiGraphics.text(this.font, trim(group, width - 202), x + 8, y + 7, 0xFFFFFFFF);
             int switchBtnX = x + width - 194;
@@ -467,6 +497,31 @@ public class TakeItOutSettingsScreen extends Screen {
                 drawSmallButton(guiGraphics, deleteBtnX, y + 2, 58, 18, "Delete",
                         hovered && mouseX >= deleteBtnX && mouseX < deleteBtnX + 58);
             }
+        }
+    }
+
+    private void renderSharedGroupRow(
+            GuiGraphicsExtractor guiGraphics,
+            Takeitout.SharedGroupEntry shared,
+            int x, int y, int width,
+            int mouseX, int mouseY
+    ) {
+        boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
+        boolean isOwn = this.minecraft != null && this.minecraft.player != null
+                && shared.authorId().equals(this.minecraft.player.getGameProfile().id().toString());
+
+        guiGraphics.fill(x, y, x + width, y + 22, hovered ? 0x33FFD700 : 0x22FFD700);
+
+        int removeBtnX = x + width - 64;
+        int importBtnX = isOwn ? removeBtnX - 70 : x + width - 68;
+
+        String label = shared.name() + " - " + shared.authorName();
+        guiGraphics.text(this.font, trim(label, importBtnX - x - 8), x + 4, y + 7, 0xFFFFFFFF);
+        drawSmallButton(guiGraphics, importBtnX, y + 2, 64, 18, "Import",
+                hovered && mouseX >= importBtnX && mouseX < importBtnX + 64);
+        if (isOwn) {
+            drawSmallButton(guiGraphics, removeBtnX, y + 2, 60, 18, "Remove",
+                    hovered && mouseX >= removeBtnX && mouseX < removeBtnX + 60);
         }
     }
 
@@ -524,7 +579,18 @@ public class TakeItOutSettingsScreen extends Screen {
             boolean isActive = group.equals(activeGroup);
 
             if (mouseY >= y + 2 && mouseY < y + 20 && y >= listTop && y + 22 <= listBottom) {
-                if (!isActive) {
+                if (isActive) {
+                    if (SharedGroupsClient.serverSupportsSharedGroups) {
+                        int rowX = listLeft + 8;
+                        int rowWidth = listWidth - 16;
+                        int shareBtnX = rowX + rowWidth - 76;
+                        if (mouseX >= shareBtnX && mouseX < shareBtnX + 72) {
+                            List<Takeitout.SharedGroupDimension> data = WorldContainerSources.getGroupDataForPublishing();
+                            ClientPlayNetworking.send(new Takeitout.PublishGroupPayload(group, data));
+                            return true;
+                        }
+                    }
+                } else {
                     int rowX = listLeft + 8;
                     int rowWidth = listWidth - 16;
                     int switchBtnX = rowX + rowWidth - 194;
@@ -552,6 +618,31 @@ public class TakeItOutSettingsScreen extends Screen {
                 }
             }
             y += CONTAINER_ROW_HEIGHT;
+        }
+
+        if (SharedGroupsClient.serverSupportsSharedGroups) {
+            y += CONTAINER_ROW_HEIGHT; // skip server groups header row
+            for (Takeitout.SharedGroupEntry shared : SharedGroupsClient.SHARED_GROUPS) {
+                if (mouseY >= y + 2 && mouseY < y + 20 && y >= listTop && y + 22 <= listBottom) {
+                    boolean isOwn = this.minecraft != null && this.minecraft.player != null
+                            && shared.authorId().equals(this.minecraft.player.getGameProfile().id().toString());
+
+                    int rowX = listLeft + 8;
+                    int rowWidth = listWidth - 16;
+                    int removeBtnX = rowX + rowWidth - 64;
+                    int importBtnX = isOwn ? removeBtnX - 70 : rowX + rowWidth - 68;
+
+                    if (mouseX >= importBtnX && mouseX < importBtnX + 64) {
+                        WorldContainerSources.importSharedGroup(shared.name(), shared.dimensions());
+                        return true;
+                    }
+                    if (isOwn && mouseX >= removeBtnX && mouseX < removeBtnX + 60) {
+                        ClientPlayNetworking.send(new Takeitout.UnpublishGroupPayload(shared.id()));
+                        return true;
+                    }
+                }
+                y += CONTAINER_ROW_HEIGHT;
+            }
         }
 
         return false;

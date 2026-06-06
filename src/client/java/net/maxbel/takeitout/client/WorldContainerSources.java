@@ -233,6 +233,69 @@ public final class WorldContainerSources {
         }
     }
 
+    public static List<Takeitout.SharedGroupDimension> getGroupDataForPublishing() {
+        if (currentWorldKey == null) return List.of();
+        saveCurrentContext();
+        List<Takeitout.SharedGroupDimension> result = new ArrayList<>();
+        JsonObject root = readSourcesFile();
+        JsonObject worldCtx = getWorldContext(root, currentWorldKey);
+        JsonObject groups = worldCtx.has(GROUPS_KEY) && worldCtx.get(GROUPS_KEY).isJsonObject()
+                ? worldCtx.getAsJsonObject(GROUPS_KEY) : new JsonObject();
+        if (!groups.has(currentGroupName) || !groups.get(currentGroupName).isJsonObject()) return result;
+        JsonObject group = groups.getAsJsonObject(currentGroupName);
+        for (Map.Entry<String, JsonElement> dimEntry : group.entrySet()) {
+            if (!dimEntry.getValue().isJsonArray()) continue;
+            List<Takeitout.SharedSourceEntry> sources = new ArrayList<>();
+            for (JsonElement el : dimEntry.getValue().getAsJsonArray()) {
+                if (!el.isJsonObject()) continue;
+                JsonObject src = el.getAsJsonObject();
+                if (!src.has("x") || !src.has("y") || !src.has("z")) continue;
+                try {
+                    boolean linked = !src.has("linked") || src.get("linked").getAsBoolean();
+                    long pos = BlockPos.asLong(src.get("x").getAsInt(), src.get("y").getAsInt(), src.get("z").getAsInt());
+                    sources.add(new Takeitout.SharedSourceEntry(pos, linked));
+                } catch (Exception ignored) {}
+            }
+            result.add(new Takeitout.SharedGroupDimension(dimEntry.getKey(), sources));
+        }
+        return result;
+    }
+
+    public static void importSharedGroup(String groupName, List<Takeitout.SharedGroupDimension> dimensions) {
+        if (currentWorldKey == null || groupName == null || groupName.isBlank() || dimensions == null) return;
+        try {
+            Files.createDirectories(SOURCES_PATH.getParent());
+            JsonObject root = readSourcesFile();
+            JsonObject worldCtx = getOrCreateWorldContext(root, currentWorldKey);
+            JsonObject groups = getOrCreateObject(worldCtx, GROUPS_KEY);
+            String name = groupName;
+            int suffix = 1;
+            while (groups.has(name)) {
+                name = groupName + " (" + suffix++ + ")";
+            }
+            JsonObject group = new JsonObject();
+            for (Takeitout.SharedGroupDimension dim : dimensions) {
+                JsonArray sources = new JsonArray();
+                for (Takeitout.SharedSourceEntry src : dim.sources()) {
+                    BlockPos pos = BlockPos.of(src.position());
+                    JsonObject srcObj = new JsonObject();
+                    srcObj.addProperty("x", pos.getX());
+                    srcObj.addProperty("y", pos.getY());
+                    srcObj.addProperty("z", pos.getZ());
+                    srcObj.addProperty("linked", src.linked());
+                    sources.add(srcObj);
+                }
+                group.add(dim.dimension(), sources);
+            }
+            groups.add(name, group);
+            Files.writeString(SOURCES_PATH, GSON.toJson(root));
+            WorldContainerDumps.createGroup(currentWorldKey, name);
+            LOGGER.info("Imported shared group: world={}, name={}", currentWorldKey, name);
+        } catch (IOException e) {
+            LOGGER.warn("Failed to import shared group '{}'", groupName, e);
+        }
+    }
+
     public static void switchGroup(Minecraft client, String name) {
         if (currentWorldKey == null || name == null || Objects.equals(name, currentGroupName)) return;
         saveCurrentContext();

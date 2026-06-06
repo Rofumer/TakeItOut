@@ -128,6 +128,14 @@ public class TakeitoutClient implements ClientModInitializer {
                 context.client().execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit())
         );
 
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SharedGroupsListPayload.ID, (payload, context) ->
+                context.client().execute(() -> {
+                    SharedGroupsClient.SHARED_GROUPS.clear();
+                    SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
+                    SharedGroupsClient.serverSupportsSharedGroups = true;
+                })
+        );
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.level != lastSourceWorld) {
                 WorldContainerSources.updateContext(client);
@@ -135,6 +143,9 @@ public class TakeitoutClient implements ClientModInitializer {
                 lastSourceWorld = client.level;
                 awaitingStack = ItemStack.EMPTY;
                 awaitingStackTicks = 0;
+                if (client.level == null) {
+                    SharedGroupsClient.clear();
+                }
             }
 
             if (client.player != null && !awaitingStack.isEmpty()) {

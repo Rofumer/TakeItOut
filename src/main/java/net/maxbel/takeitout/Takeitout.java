@@ -48,11 +48,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public class Takeitout implements ModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/server");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
+    private static final Path SHARED_GROUPS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-shared-groups.json");
+    private static final int MAX_GROUPS_PER_PLAYER = 10;
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
     private static final String LINKED_CONTAINER_SCAN_LIMIT_KEY = "linked_container_scan_limit";
@@ -258,6 +261,98 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    public record SharedSourceEntry(long position, boolean linked) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedSourceEntry> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.LONG,
+                        SharedSourceEntry::position,
+                        ByteBufCodecs.BOOL,
+                        SharedSourceEntry::linked,
+                        SharedSourceEntry::new
+                );
+    }
+
+    public record SharedGroupDimension(String dimension, List<SharedSourceEntry> sources) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupDimension> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
+                        SharedGroupDimension::dimension,
+                        ByteBufCodecs.collection(ArrayList::new, SharedSourceEntry.CODEC),
+                        SharedGroupDimension::sources,
+                        SharedGroupDimension::new
+                );
+    }
+
+    public record SharedGroupEntry(String id, String name, String authorName, String authorId, List<SharedGroupDimension> dimensions) {
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupEntry> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
+                        SharedGroupEntry::id,
+                        ByteBufCodecs.STRING_UTF8,
+                        SharedGroupEntry::name,
+                        ByteBufCodecs.STRING_UTF8,
+                        SharedGroupEntry::authorName,
+                        ByteBufCodecs.STRING_UTF8,
+                        SharedGroupEntry::authorId,
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        SharedGroupEntry::dimensions,
+                        SharedGroupEntry::new
+                );
+    }
+
+    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<PublishGroupPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "publish_group"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, PublishGroupPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
+                        PublishGroupPayload::name,
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        PublishGroupPayload::dimensions,
+                        PublishGroupPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
+    public record UnpublishGroupPayload(String groupId) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<UnpublishGroupPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "unpublish_group"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, UnpublishGroupPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
+                        UnpublishGroupPayload::groupId,
+                        UnpublishGroupPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
+    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SharedGroupsListPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "shared_groups_list"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupsListPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupEntry.CODEC),
+                        SharedGroupsListPayload::groups,
+                        SharedGroupsListPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
     @Override
     public void onInitialize() {
         loadServerConfig();
@@ -266,9 +361,12 @@ public class Takeitout implements ModInitializer {
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(PublishGroupPayload.ID, PublishGroupPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(GetShulkerStackPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetShulkerStackPayload(context.player(), payload))
@@ -282,10 +380,137 @@ public class Takeitout implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(DumpInventoryPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleDumpInventoryPayload(context.player(), payload))
         );
-
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-                sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit))
+        ServerPlayNetworking.registerGlobalReceiver(PublishGroupPayload.ID, (payload, context) ->
+                context.server().execute(() -> handlePublishGroupPayload(context.player(), payload))
         );
+        ServerPlayNetworking.registerGlobalReceiver(UnpublishGroupPayload.ID, (payload, context) ->
+                context.server().execute(() -> handleUnpublishGroupPayload(context.player(), payload))
+        );
+
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit));
+            sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
+        });
+    }
+
+    private static void handlePublishGroupPayload(ServerPlayer player, PublishGroupPayload payload) {
+        String name = payload.name();
+        if (name == null || name.isBlank() || name.length() > 64) return;
+        if (payload.dimensions() == null) return;
+
+        String playerId = player.getGameProfile().id().toString();
+        String playerName = player.getGameProfile().name();
+
+        List<SharedGroupEntry> groups = loadSharedGroups();
+        groups.removeIf(g -> g.authorId().equals(playerId) && g.name().equals(name));
+
+        long playerGroupCount = groups.stream().filter(g -> g.authorId().equals(playerId)).count();
+        if (playerGroupCount >= MAX_GROUPS_PER_PLAYER) {
+            player.sendSystemMessage(Component.literal("TakeItOut: shared group limit reached (" + MAX_GROUPS_PER_PLAYER + ")"));
+            return;
+        }
+
+        String groupId = UUID.randomUUID().toString();
+        groups.add(new SharedGroupEntry(groupId, name, playerName, playerId, payload.dimensions()));
+        saveSharedGroups(groups);
+        broadcastSharedGroups(player.level().getServer(), groups);
+        player.sendSystemMessage(Component.literal("TakeItOut: group \"" + name + "\" shared on server"));
+    }
+
+    private static void handleUnpublishGroupPayload(ServerPlayer player, UnpublishGroupPayload payload) {
+        String groupId = payload.groupId();
+        if (groupId == null || groupId.isBlank()) return;
+
+        String playerId = player.getGameProfile().id().toString();
+        List<SharedGroupEntry> groups = loadSharedGroups();
+        boolean removed = groups.removeIf(g -> g.id().equals(groupId) && g.authorId().equals(playerId));
+
+        if (removed) {
+            saveSharedGroups(groups);
+            broadcastSharedGroups(player.level().getServer(), groups);
+            player.sendSystemMessage(Component.literal("TakeItOut: group removed from server"));
+        }
+    }
+
+    private static List<SharedGroupEntry> loadSharedGroups() {
+        if (!Files.exists(SHARED_GROUPS_PATH)) return new ArrayList<>();
+        try {
+            JsonArray arr = GSON.fromJson(Files.readString(SHARED_GROUPS_PATH), JsonArray.class);
+            if (arr == null) return new ArrayList<>();
+            List<SharedGroupEntry> groups = new ArrayList<>();
+            for (JsonElement el : arr) {
+                if (!el.isJsonObject()) continue;
+                JsonObject obj = el.getAsJsonObject();
+                try {
+                    String id = obj.get("id").getAsString();
+                    String name = obj.get("name").getAsString();
+                    String authorName = obj.get("authorName").getAsString();
+                    String authorId = obj.get("authorId").getAsString();
+                    List<SharedGroupDimension> dimensions = new ArrayList<>();
+                    if (obj.has("dimensions") && obj.get("dimensions").isJsonArray()) {
+                        for (JsonElement dimEl : obj.getAsJsonArray("dimensions")) {
+                            if (!dimEl.isJsonObject()) continue;
+                            JsonObject dimObj = dimEl.getAsJsonObject();
+                            String dimension = dimObj.get("dimension").getAsString();
+                            List<SharedSourceEntry> sources = new ArrayList<>();
+                            if (dimObj.has("sources") && dimObj.get("sources").isJsonArray()) {
+                                for (JsonElement srcEl : dimObj.getAsJsonArray("sources")) {
+                                    if (!srcEl.isJsonObject()) continue;
+                                    JsonObject srcObj = srcEl.getAsJsonObject();
+                                    sources.add(new SharedSourceEntry(srcObj.get("pos").getAsLong(), srcObj.get("linked").getAsBoolean()));
+                                }
+                            }
+                            dimensions.add(new SharedGroupDimension(dimension, sources));
+                        }
+                    }
+                    groups.add(new SharedGroupEntry(id, name, authorName, authorId, dimensions));
+                } catch (Exception ignored) {}
+            }
+            return groups;
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load shared groups", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private static void saveSharedGroups(List<SharedGroupEntry> groups) {
+        try {
+            Files.createDirectories(SHARED_GROUPS_PATH.getParent());
+            JsonArray arr = new JsonArray();
+            for (SharedGroupEntry group : groups) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("id", group.id());
+                obj.addProperty("name", group.name());
+                obj.addProperty("authorName", group.authorName());
+                obj.addProperty("authorId", group.authorId());
+                JsonArray dims = new JsonArray();
+                for (SharedGroupDimension dim : group.dimensions()) {
+                    JsonObject dimObj = new JsonObject();
+                    dimObj.addProperty("dimension", dim.dimension());
+                    JsonArray sources = new JsonArray();
+                    for (SharedSourceEntry src : dim.sources()) {
+                        JsonObject srcObj = new JsonObject();
+                        srcObj.addProperty("pos", src.position());
+                        srcObj.addProperty("linked", src.linked());
+                        sources.add(srcObj);
+                    }
+                    dimObj.add("sources", sources);
+                    dims.add(dimObj);
+                }
+                obj.add("dimensions", dims);
+                arr.add(obj);
+            }
+            Files.writeString(SHARED_GROUPS_PATH, GSON.toJson(arr));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save shared groups", e);
+        }
+    }
+
+    private static void broadcastSharedGroups(net.minecraft.server.MinecraftServer server, List<SharedGroupEntry> groups) {
+        SharedGroupsListPayload packet = new SharedGroupsListPayload(groups);
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            ServerPlayNetworking.send(p, packet);
+        }
     }
 
     private static void handleGetShulkerStackPayload(ServerPlayer player, GetShulkerStackPayload payload) {
