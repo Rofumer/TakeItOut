@@ -105,6 +105,45 @@ public final class WorldContainerSources {
         return changed;
     }
 
+    public static int linkAll(Minecraft client, BlockPos corner1, BlockPos corner2) {
+        if (client == null || client.player == null || client.level == null) return 0;
+        updateContext(client);
+
+        int minX = Math.min(corner1.getX(), corner2.getX());
+        int minY = Math.min(corner1.getY(), corner2.getY());
+        int minZ = Math.min(corner1.getZ(), corner2.getZ());
+        int maxX = Math.max(corner1.getX(), corner2.getX());
+        int maxY = Math.max(corner1.getY(), corner2.getY());
+        int maxZ = Math.max(corner1.getZ(), corner2.getZ());
+
+        int count = 0;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (isSupportedContainer(client.level, pos)) {
+                        SOURCES.put(pos, true);
+                        isDirty = true;
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count > 0) {
+            int linkedCount = linkedSourceCountSnapshot();
+            int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
+            String suffix = scanLimit > 0 && linkedCount > scanLimit
+                    ? " §eWarning: linked (" + linkedCount + ") exceeds scan limit (" + scanLimit + ")" : "";
+            client.player.sendOverlayMessage(Component.literal("Box select: " + count + " linked (" + linkedCount + " total)" + suffix));
+            LOGGER.info("Box select linked {} containers in [{},{},{}]-[{},{},{}], totalLinked={}", count, minX, minY, minZ, maxX, maxY, maxZ, linkedCount);
+            saveCurrentContext();
+        } else {
+            client.player.sendOverlayMessage(Component.literal("Box select: no containers found"));
+        }
+        return count;
+    }
+
     public static boolean delete(Minecraft client, BlockPos pos) {
         if (client == null || client.player == null || pos == null) return false;
         updateContext(client);

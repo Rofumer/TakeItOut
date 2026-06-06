@@ -5,6 +5,7 @@ import fi.dy.masa.malilib.hotkeys.IKeybind;
 import fi.dy.masa.malilib.hotkeys.KeyAction;
 import fi.dy.masa.malilib.hotkeys.KeybindSettings;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -55,6 +56,13 @@ public final class TakeItOutHotkeys {
             "Send replaceable blocks from your inventory to marked dump containers."
     );
 
+    public static final ConfigHotkey BOX_SELECT_CORNER = hotkey(
+            "boxSelectCorner",
+            "",
+            "Box Select Corner",
+            "First press sets the first corner; second press sets the second corner and links all containers inside the cuboid."
+    );
+
     public static final List<ConfigHotkey> HOTKEY_LIST = List.of(
             OPEN_CONFIG_GUI,
             AUTO_TAKE_OUT,
@@ -62,8 +70,11 @@ public final class TakeItOutHotkeys {
             LINK_LOOKED_AT_CONTAINER,
             TOGGLE_CONTAINER_SOURCE_RENDER,
             MARK_DUMP_CONTAINER,
-            DUMP_NOW
+            DUMP_NOW,
+            BOX_SELECT_CORNER
     );
+
+    private static BlockPos boxCorner1 = null;
 
     private TakeItOutHotkeys() {
     }
@@ -145,6 +156,49 @@ public final class TakeItOutHotkeys {
             TakeitoutClient.dumpNow(client);
             return true;
         });
+
+        BOX_SELECT_CORNER.getKeybind().setCallback((KeyAction action, IKeybind key) -> {
+            if (action != KeyAction.PRESS) {
+                return false;
+            }
+
+            Minecraft client = Minecraft.getInstance();
+            if (client.screen != null || client.player == null || client.level == null) {
+                return false;
+            }
+
+            if (!(client.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+                client.player.sendOverlayMessage(Component.literal("Box select: look at a block"));
+                return false;
+            }
+
+            BlockPos pos = hit.getBlockPos().immutable();
+
+            if (boxCorner1 == null) {
+                boxCorner1 = pos;
+                client.player.sendOverlayMessage(Component.literal(
+                        "Box select: first corner at " + pos.getX() + " " + pos.getY() + " " + pos.getZ()
+                ));
+                return true;
+            }
+
+            BlockPos corner1 = boxCorner1;
+            boxCorner1 = null;
+
+            if (TakeItOutConfigs.BOX_SELECT_CREATES_NEW_GROUP.getBooleanValue()) {
+                WorldContainerSources.updateContext(client);
+                String groupName = "Box " + corner1.getX() + "," + corner1.getY() + "," + corner1.getZ();
+                WorldContainerSources.createGroup(groupName);
+                WorldContainerSources.switchGroup(client, groupName);
+            }
+
+            WorldContainerSources.linkAll(client, corner1, pos);
+            return true;
+        });
+    }
+
+    public static void clearBoxSelection() {
+        boxCorner1 = null;
     }
 
     private static ConfigHotkey hotkey(String name, String defaultKey, String displayName, String comment) {

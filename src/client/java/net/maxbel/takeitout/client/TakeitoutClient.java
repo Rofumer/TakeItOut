@@ -143,6 +143,7 @@ public class TakeitoutClient implements ClientModInitializer {
                 lastSourceWorld = client.level;
                 awaitingStack = ItemStack.EMPTY;
                 awaitingStackTicks = 0;
+                TakeItOutHotkeys.clearBoxSelection();
                 if (client.level == null) {
                     SharedGroupsClient.clear();
                 }
