@@ -738,10 +738,14 @@ public class Takeitout implements ModInitializer {
 
     private static void addItemCount(List<WorldContainerItemCount> items, ItemStack stack) {
         ItemStack keyStack = stack.copyWithCount(1);
+        boolean shulker = isShulkerItem(stack);
 
         for (int i = 0; i < items.size(); i++) {
             WorldContainerItemCount existing = items.get(i);
-            if (existing.stack().is(keyStack.getItem())) {
+            boolean matches = shulker
+                    ? ItemStack.isSameItemSameComponents(existing.stack(), keyStack)
+                    : existing.stack().is(keyStack.getItem());
+            if (matches) {
                 items.set(i, new WorldContainerItemCount(existing.stack(), existing.count() + stack.getCount()));
                 return;
             }
@@ -1014,10 +1018,14 @@ public class Takeitout implements ModInitializer {
     }
 
     private static int getSlotWithStack(Container inventory, ItemStack stackReference) {
+        boolean shulker = isShulkerItem(stackReference);
         for (int i = 0; i < inventory.getContainerSize(); ++i) {
             ItemStack stack = inventory.getItem(i);
-            if (stack != null && !stack.isEmpty() && stack.is(stackReference.getItem())) {
-                return i;
+            if (stack != null && !stack.isEmpty()) {
+                boolean matches = shulker
+                        ? ItemStack.isSameItemSameComponents(stack, stackReference)
+                        : stack.is(stackReference.getItem());
+                if (matches) return i;
             }
         }
         return -1;

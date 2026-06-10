@@ -7,15 +7,23 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.core.BlockPos;
 
+import net.minecraft.core.NonNullList;
+
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class TakeItOutSettingsScreen extends Screen {
     private enum Tab {
@@ -262,16 +270,20 @@ public class TakeItOutSettingsScreen extends Screen {
         renderScrollbar(guiGraphics, listLeft, listTop, listWidth, listBottom, LIST_CONTENT_PADDING + items.size() * 22);
 
         if (hoveredItem != null) {
-            String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
-            String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
-            int tw = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
-            int th = 32;
-            int tx = Math.min(mouseX + 12, this.width - tw - 4);
-            int ty = Math.min(mouseY + 12, this.height - th - 4);
-            guiGraphics.fill(tx, ty, tx + tw, ty + th, 0xEE101010);
-            drawBorder(guiGraphics, tx, ty, tw, th, 0xFF9CA3AF);
-            guiGraphics.text(this.font, line1, tx + 6, ty + 6, 0xFFFFFFFF);
-            guiGraphics.text(this.font, line2, tx + 6, ty + 18, 0xFFFFFFFF);
+            if (isShulkerStack(hoveredItem.stack())) {
+                renderShulkerContentsTooltip(guiGraphics, hoveredItem.stack(), mouseX, mouseY);
+            } else {
+                String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
+                String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
+                int tw = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
+                int th = 32;
+                int tx = Math.min(mouseX + 12, this.width - tw - 4);
+                int ty = Math.min(mouseY + 12, this.height - th - 4);
+                guiGraphics.fill(tx, ty, tx + tw, ty + th, 0xEE101010);
+                drawBorder(guiGraphics, tx, ty, tw, th, 0xFF9CA3AF);
+                guiGraphics.text(this.font, line1, tx + 6, ty + 6, 0xFFFFFFFF);
+                guiGraphics.text(this.font, line2, tx + 6, ty + 18, 0xFFFFFFFF);
+            }
         }
     }
 
@@ -284,6 +296,43 @@ public class TakeItOutSettingsScreen extends Screen {
         guiGraphics.item(stack, x, y + 3);
         guiGraphics.text(this.font, stack.getHoverName(), x + 24, y + 8, 0xFFFFFFFF);
         guiGraphics.text(this.font, count, countX, y + 8, 0xFFA7F3D0);
+        if (isShulkerStack(stack)) {
+            String summary = shulkerContentSummary(stack);
+            if (!summary.isEmpty()) {
+                int nameEnd = x + 24 + this.font.width(stack.getHoverName()) + 4;
+                int maxWidth = countX - nameEnd - 4;
+                guiGraphics.text(this.font, trim(summary, maxWidth), nameEnd, y + 8, 0xFF888888);
+            }
+        }
+    }
+
+    private static boolean isShulkerStack(ItemStack stack) {
+        return !stack.isEmpty() && stack.getItem() instanceof BlockItem bi && bi.getBlock() instanceof ShulkerBoxBlock;
+    }
+
+    private static String shulkerContentSummary(ItemStack shulker) {
+        ItemContainerContents contents = shulker.getOrDefault(DataComponents.CONTAINER, ItemContainerContents.EMPTY);
+        NonNullList<ItemStack> stacks = NonNullList.withSize(27, ItemStack.EMPTY);
+        contents.copyInto(stacks);
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (ItemStack inner : stacks) {
+            if (!inner.isEmpty()) {
+                counts.merge(inner.getHoverName().getString(), inner.getCount(), Integer::sum);
+            }
+        }
+        if (counts.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("(");
+        int i = 0;
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (i > 0) sb.append(", ");
+            sb.append(e.getKey()).append(" x").append(e.getValue());
+            if (++i >= 3) {
+                if (counts.size() > 3) sb.append("...");
+                break;
+            }
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
     // --- Containers tab ---
@@ -438,6 +487,55 @@ public class TakeItOutSettingsScreen extends Screen {
             rowY += 20;
         }
         if (items.size() > rows) guiGraphics.text(this.font, "+" + (items.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+    }
+
+    private void renderShulkerContentsTooltip(GuiGraphicsExtractor guiGraphics, ItemStack shulker, int mouseX, int mouseY) {
+        NonNullList<ItemStack> raw = NonNullList.withSize(27, ItemStack.EMPTY);
+        shulker.getOrDefault(DataComponents.CONTAINER, ItemContainerContents.EMPTY).copyInto(raw);
+        Map<String, ItemStack> byName = new LinkedHashMap<>();
+        for (ItemStack s : raw) {
+            if (!s.isEmpty()) byName.merge(s.getHoverName().getString(), s, (a, b) -> {
+                ItemStack merged = a.copy();
+                merged.setCount(a.getCount() + b.getCount());
+                return merged;
+            });
+        }
+        List<ItemStack> entries = new ArrayList<>(byName.values());
+
+        String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
+        String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
+        int rows = Math.min(entries.size(), 10);
+        int width = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
+        for (int i = 0; i < rows; i++) {
+            ItemStack s = entries.get(i);
+            String cnt = "x" + s.getCount();
+            width = Math.max(width, 28 + this.font.width(s.getHoverName()) + this.font.width(cnt) + 20);
+        }
+        if (entries.size() > rows) width = Math.max(width, this.font.width("+" + (entries.size() - rows) + " more") + 12);
+        int height = 18 + Math.max(1, rows) * 20 + (entries.size() > rows ? 10 : 0) + 28;
+        int x = Math.min(mouseX + 12, this.width - width - 4);
+        int y = Math.min(mouseY + 12, this.height - height - 4);
+        guiGraphics.fill(x, y, x + width, y + height, 0xEE101010);
+        drawBorder(guiGraphics, x, y, width, height, 0xFF9CA3AF);
+        guiGraphics.text(this.font, "Contents", x + 6, y + 6, 0xFFA7F3D0);
+        if (entries.isEmpty()) {
+            guiGraphics.text(this.font, "Empty", x + 6, y + 24, 0xFFAAAAAA);
+        } else {
+            int rowY = y + 20;
+            for (int i = 0; i < rows; i++) {
+                ItemStack s = entries.get(i);
+                String cnt = "x" + s.getCount();
+                guiGraphics.item(s, x + 6, rowY);
+                guiGraphics.text(this.font, trim(s.getHoverName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
+                guiGraphics.text(this.font, cnt, x + width - this.font.width(cnt) - 6, rowY + 5, 0xFFA7F3D0);
+                rowY += 20;
+            }
+            if (entries.size() > rows) guiGraphics.text(this.font, "+" + (entries.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+        }
+        int actY = y + height - 26;
+        guiGraphics.fill(x, actY, x + width, actY + 1, 0x44FFFFFF);
+        guiGraphics.text(this.font, line1, x + 6, actY + 4, 0xFFFFFFFF);
+        guiGraphics.text(this.font, line2, x + 6, actY + 15, 0xFFFFFFFF);
     }
 
     // --- Groups tab ---
