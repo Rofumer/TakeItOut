@@ -60,7 +60,7 @@ public final class TakeItOutHotkeys {
             "boxSelectCorner",
             "",
             "Box Select Corner",
-            "First press sets the first corner; second press sets the second corner and links all containers inside the cuboid."
+            "First press sets the first corner; second press sets the second corner and links all containers inside the cuboid. If all containers in the region are already linked, unlinks them instead."
     );
 
     public static final List<ConfigHotkey> HOTKEY_LIST = List.of(
@@ -192,7 +192,11 @@ public final class TakeItOutHotkeys {
                 WorldContainerSources.switchGroup(client, groupName);
             }
 
-            WorldContainerSources.linkAll(client, corner1, pos);
+            if (WorldContainerSources.areAllLinked(client.level, corner1, pos)) {
+                WorldContainerSources.unlinkAll(client, corner1, pos);
+            } else {
+                WorldContainerSources.linkAll(client, corner1, pos);
+            }
             return true;
         });
     }

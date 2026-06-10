@@ -144,6 +144,65 @@ public final class WorldContainerSources {
         return count;
     }
 
+    public static int unlinkAll(Minecraft client, BlockPos corner1, BlockPos corner2) {
+        if (client == null || client.player == null || client.level == null) return 0;
+        updateContext(client);
+
+        int minX = Math.min(corner1.getX(), corner2.getX());
+        int minY = Math.min(corner1.getY(), corner2.getY());
+        int minZ = Math.min(corner1.getZ(), corner2.getZ());
+        int maxX = Math.max(corner1.getX(), corner2.getX());
+        int maxY = Math.max(corner1.getY(), corner2.getY());
+        int maxZ = Math.max(corner1.getZ(), corner2.getZ());
+
+        int count = 0;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (isSupportedContainer(client.level, pos) && SOURCES.getOrDefault(pos, false)) {
+                        SOURCES.put(pos, false);
+                        isDirty = true;
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count > 0) {
+            int linkedCount = linkedSourceCountSnapshot();
+            client.player.sendOverlayMessage(Component.literal("Box select: " + count + " unlinked (" + linkedCount + " total)"));
+            LOGGER.info("Box select unlinked {} containers in [{},{},{}]-[{},{},{}], totalLinked={}", count, minX, minY, minZ, maxX, maxY, maxZ, linkedCount);
+            saveCurrentContext();
+        } else {
+            client.player.sendOverlayMessage(Component.literal("Box select: no linked containers found"));
+        }
+        return count;
+    }
+
+    public static boolean areAllLinked(Level level, BlockPos corner1, BlockPos corner2) {
+        int minX = Math.min(corner1.getX(), corner2.getX());
+        int minY = Math.min(corner1.getY(), corner2.getY());
+        int minZ = Math.min(corner1.getZ(), corner2.getZ());
+        int maxX = Math.max(corner1.getX(), corner2.getX());
+        int maxY = Math.max(corner1.getY(), corner2.getY());
+        int maxZ = Math.max(corner1.getZ(), corner2.getZ());
+
+        boolean foundAny = false;
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    if (isSupportedContainer(level, pos)) {
+                        foundAny = true;
+                        if (!SOURCES.getOrDefault(pos, false)) return false;
+                    }
+                }
+            }
+        }
+        return foundAny;
+    }
+
     public static boolean delete(Minecraft client, BlockPos pos) {
         if (client == null || client.player == null || pos == null) return false;
         updateContext(client);
