@@ -650,6 +650,57 @@ public class Takeitout implements ModInitializer {
             }
         }
 
+        // Second pass: item not found directly — find a shulker box containing the most of the requested item
+        if (!isShulkerItem(requested)) {
+            int bestShulkerSlot = -1;
+            int bestShulkerCount = 0;
+            Container bestShulkerInventory = null;
+            BlockPos bestShulkerPos = null;
+
+            int scanned = 0;
+            for (WorldContainerSource source : payload.sources()) {
+                if (scanned >= scanLimit) break;
+                scanned++;
+
+                Container inventory = getWorldContainerInventory(player, source);
+                if (inventory == null) continue;
+
+                BlockPos pos = BlockPos.of(source.position());
+                for (int i = 0; i < inventory.getContainerSize(); i++) {
+                    ItemStack stack = inventory.getItem(i);
+                    if (stack == null || stack.isEmpty() || !isShulkerItem(stack)) continue;
+
+                    ItemContainerContents contents = stack.getOrDefault(DataComponents.CONTAINER, ItemContainerContents.EMPTY);
+                    int count = 0;
+                    for (ItemStack shulkerItem : copyContainerContents(contents)) {
+                        if (!shulkerItem.isEmpty() && shulkerItem.is(requested.getItem())) {
+                            count += shulkerItem.getCount();
+                        }
+                    }
+
+                    if (count > bestShulkerCount) {
+                        bestShulkerCount = count;
+                        bestShulkerSlot = i;
+                        bestShulkerInventory = inventory;
+                        bestShulkerPos = pos;
+                    }
+                }
+            }
+
+            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
+                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                LOGGER.debug(
+                        "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
+                        player.getName().getString(),
+                        requested,
+                        bestShulkerPos,
+                        bestShulkerSlot,
+                        bestShulkerCount
+                );
+                return;
+            }
+        }
+
         ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
