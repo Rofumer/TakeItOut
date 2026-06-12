@@ -973,10 +973,23 @@ public class TakeItOutSettingsScreen extends Screen {
         List<Takeitout.WorldContainerItemCount> items = new ArrayList<>(TakeitoutClient.WORLD_CONTAINER_ITEMS);
         if (!searchQuery.isBlank()) {
             String q = searchQuery.toLowerCase();
-            items.removeIf(item -> !item.stack().getHoverName().getString().toLowerCase().contains(q));
+            items.removeIf(item -> !itemMatchesQuery(item.stack(), q));
         }
         sortItems(items);
         return items;
+    }
+
+    private static boolean itemMatchesQuery(ItemStack stack, String q) {
+        if (stack.getHoverName().getString().toLowerCase().contains(q)) return true;
+        if (isShulkerStack(stack)) {
+            ItemContainerContents contents = stack.getOrDefault(DataComponents.CONTAINER, ItemContainerContents.EMPTY);
+            NonNullList<ItemStack> stacks = NonNullList.withSize(27, ItemStack.EMPTY);
+            contents.copyInto(stacks);
+            for (ItemStack inner : stacks) {
+                if (!inner.isEmpty() && inner.getHoverName().getString().toLowerCase().contains(q)) return true;
+            }
+        }
+        return false;
     }
 
     private List<Takeitout.WorldContainerItemCount> getSortedItemsForSource(String source) {
