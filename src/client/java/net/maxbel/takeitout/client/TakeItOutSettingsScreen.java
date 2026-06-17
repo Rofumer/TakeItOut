@@ -96,7 +96,7 @@ public class TakeItOutSettingsScreen extends Screen {
         }).bounds(left + (tabWidth + 4) * 2, tabY, tabWidth, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Settings"), button ->
-                this.minecraft.setScreen(TakeItOutKeybindsScreen.create(this))
+                this.minecraft.gui.setScreen(TakeItOutKeybindsScreen.create(this))
         ).bounds(left + (tabWidth + 4) * 3, tabY, tabWidth, 20).build());
 
         int auxLeft = left + (tabWidth + 4) * 4;
@@ -113,7 +113,7 @@ public class TakeItOutSettingsScreen extends Screen {
                 })
                 .bounds(auxLeft + 152, tabY, 96, 20).build());
 
-        addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.minecraft.setScreen(parent))
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.minecraft.gui.setScreen(parent))
                 .bounds(this.width / 2 - 100, this.height - 28, 200, 20).build());
 
         int listLeft = this.width / 2 - 155;

@@ -162,8 +162,8 @@ public class TakeitoutClient implements ClientModInitializer {
             }
 
             while (openSettingsKeyBinding.consumeClick()) {
-                if (client.screen == null) {
-                    client.setScreen(new TakeItOutSettingsScreen(null));
+                if (client.gui.screen() == null) {
+                    client.gui.setScreen(new TakeItOutSettingsScreen(null));
                 }
             }
         });

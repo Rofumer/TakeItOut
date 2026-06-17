@@ -5,7 +5,7 @@ import fi.dy.masa.litematica.gui.GuiMaterialList;
 import fi.dy.masa.litematica.materials.MaterialListBase;
 import fi.dy.masa.litematica.materials.MaterialListEntry;
 import fi.dy.masa.litematica.materials.MaterialListUtils;
-import fi.dy.masa.malilib.util.ItemType;
+import fi.dy.masa.malilib.util.data.ItemType;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
@@ -102,7 +102,7 @@ public final class WorldContainerMaterialListCache {
         materialList.refreshPreFilteredList();
         materialList.recreateFilteredList();
 
-        if (client.screen instanceof GuiMaterialList gui) {
+        if (client.gui.screen() instanceof GuiMaterialList gui) {
             gui.initGui();
         }
     }

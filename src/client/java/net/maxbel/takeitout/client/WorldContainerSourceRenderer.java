@@ -1,19 +1,12 @@
 package net.maxbel.takeitout.client;
 
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
-import net.minecraft.client.Camera;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.ShapeRenderer;
-import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-
-import java.util.List;
 
 public final class WorldContainerSourceRenderer {
     private static final float OUTLINE_ALPHA = 1.0F;
@@ -33,23 +26,17 @@ public final class WorldContainerSourceRenderer {
 
     public static void register() {
         LevelRenderEvents.BEFORE_GIZMOS.register(context -> {
-            Minecraft client = Minecraft.getInstance();
-            if (!TakeitoutClient.RENDER_CONTAINER_SOURCES || client.level == null) {
+            if (!TakeitoutClient.RENDER_CONTAINER_SOURCES) {
                 return;
             }
 
-            Camera camera = context.gameRenderer().getMainCamera();
-            if (!camera.isInitialized()) {
+            var cameraState = context.levelState().cameraRenderState;
+            if (!cameraState.initialized) {
                 return;
             }
 
-            Vec3 cameraPos = camera.position();
-            MultiBufferSource consumers = context.bufferSource();
-            if (consumers == null) {
-                return;
-            }
-
-            VertexConsumer vertexConsumer = consumers.getBuffer(RenderTypes.lines());
+            Vec3 cameraPos = cameraState.pos;
+            SubmitNodeCollector collector = context.submitNodeCollector();
             int color = TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR;
 
             for (BlockPos source : WorldContainerSources.getSourcesSnapshot()) {
@@ -57,16 +44,15 @@ public final class WorldContainerSourceRenderer {
                     continue;
                 }
 
-                ShapeRenderer.renderShape(
-                        context.poseStack(),
-                        vertexConsumer,
-                        OUTLINE_SHAPE,
+                var poseStack = context.poseStack();
+                poseStack.pushPose();
+                poseStack.translate(
                         source.getX() - cameraPos.x,
                         source.getY() - cameraPos.y,
-                        source.getZ() - cameraPos.z,
-                        color,
-                        OUTLINE_ALPHA
+                        source.getZ() - cameraPos.z
                 );
+                collector.submitShapeOutline(poseStack, OUTLINE_SHAPE, RenderTypes.lines(), color, OUTLINE_ALPHA, false);
+                poseStack.popPose();
             }
 
             int dumpColor = 0xFFF97316;
@@ -75,16 +61,15 @@ public final class WorldContainerSourceRenderer {
                     continue;
                 }
 
-                ShapeRenderer.renderShape(
-                        context.poseStack(),
-                        vertexConsumer,
-                        OUTLINE_SHAPE,
+                var poseStack = context.poseStack();
+                poseStack.pushPose();
+                poseStack.translate(
                         dump.getX() - cameraPos.x,
                         dump.getY() - cameraPos.y,
-                        dump.getZ() - cameraPos.z,
-                        dumpColor,
-                        OUTLINE_ALPHA
+                        dump.getZ() - cameraPos.z
                 );
+                collector.submitShapeOutline(poseStack, OUTLINE_SHAPE, RenderTypes.lines(), dumpColor, OUTLINE_ALPHA, false);
+                poseStack.popPose();
             }
         });
     }

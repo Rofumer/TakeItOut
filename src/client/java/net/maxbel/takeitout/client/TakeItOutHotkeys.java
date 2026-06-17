@@ -82,8 +82,8 @@ public final class TakeItOutHotkeys {
     public static void initCallbacks() {
         OPEN_CONFIG_GUI.getKeybind().setCallback((KeyAction action, IKeybind key) -> {
             Minecraft client = Minecraft.getInstance();
-            if (client.screen == null) {
-                client.setScreen(new TakeItOutSettingsScreen(null));
+            if (client.gui.screen() == null) {
+                client.gui.setScreen(new TakeItOutSettingsScreen(null));
             }
             return true;
         });
@@ -104,7 +104,7 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.screen != null || client.player == null || client.level == null) {
+            if (client.gui.screen() != null || client.player == null || client.level == null) {
                 return false;
             }
 
@@ -129,7 +129,7 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.screen != null || client.player == null || client.level == null) {
+            if (client.gui.screen() != null || client.player == null || client.level == null) {
                 return false;
             }
 
@@ -149,7 +149,7 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.screen != null || client.player == null) {
+            if (client.gui.screen() != null || client.player == null) {
                 return false;
             }
 
@@ -163,7 +163,7 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.screen != null || client.player == null || client.level == null) {
+            if (client.gui.screen() != null || client.player == null || client.level == null) {
                 return false;
             }
 

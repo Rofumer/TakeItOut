@@ -53,7 +53,7 @@ public class MouseMixin {
             return;
         }
 
-        if (this.minecraft.screen != null) {
+        if (this.minecraft.gui.screen() != null) {
             return;
         }
 
