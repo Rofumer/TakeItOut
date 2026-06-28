@@ -1,6 +1,5 @@
 package net.maxbel.takeitout.mixin.client;
 
-import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.materials.MaterialCache;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
@@ -339,11 +338,6 @@ public class LitematicaMixin {
             return;
         }
 
-        if (!isSelectedHotbarSlotAllowedByLitematica()) {
-            logVerbose("[RMB_FLOW] pick blocked by PICK_BLOCKABLE_SLOTS, selected={}", slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
-            return;
-        }
-
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
@@ -396,10 +390,7 @@ public class LitematicaMixin {
             int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
             logVerbose("[RMB_FLOW] required item not in hand. direct inventory slot={}", slot);
 
-            if (slot != -1) {
-                logVerbose("[RMB_FLOW] swapping item from slot {} to selected hotbar {}", slot, slotToHotbarHuman(mc.player.getInventory().getSelectedSlot()));
-                InventoryUtils.swapItemToMainHand(required, mc);
-            } else {
+            if (slot == -1) {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
                 logVerbose("[RMB_FLOW] searching shulker with required item. shulkerSlot={}", shulkerSlot);
 
@@ -532,43 +523,6 @@ public class LitematicaMixin {
         }
 
         return true;
-    }
-
-    @Unique
-    private static boolean isSelectedHotbarSlotAllowedByLitematica() {
-        try {
-            String raw = Configs.Generic.PICK_BLOCKABLE_SLOTS.getStringValue();
-            if (raw == null || raw.trim().isEmpty()) {
-                return true;
-            }
-
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.player == null) {
-                return true;
-            }
-
-            int selected = mc.player.getInventory().getSelectedSlot();
-
-            for (String part : raw.split(",")) {
-                part = part.trim();
-                if (part.isEmpty()) {
-                    continue;
-                }
-
-                try {
-                    int oneBased = Integer.parseInt(part);
-                    int zeroBased = oneBased - 1;
-                    if (zeroBased == selected) {
-                        return true;
-                    }
-                } catch (NumberFormatException ignored) {
-                }
-            }
-
-            return false;
-        } catch (Throwable ignored) {
-            return true;
-        }
     }
 
     @Unique
