@@ -34,7 +34,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private static final int CONTAINER_ROW_HEIGHT = 28;
-    private static final int LIST_TOP = 66;
+    private static final int LIST_TOP = 82;
     private static final int LIST_BOTTOM_MARGIN = 36;
     private static final int HEADER_OFFSET = 12;
     private static final int SCROLLBAR_WIDTH = 6;
