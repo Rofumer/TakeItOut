@@ -399,8 +399,8 @@ public class Takeitout implements ModInitializer {
             return;
         }
 
-        String playerId = player.getGameProfile().id().toString();
-        String playerName = player.getGameProfile().name();
+        String playerId = player.getGameProfile().getId().toString();
+        String playerName = player.getGameProfile().getName();
 
         List<SharedGroupEntry> groups = loadSharedGroups();
         groups.removeIf(g -> g.authorId().equals(playerId) && g.name().equals(name));
@@ -424,7 +424,7 @@ public class Takeitout implements ModInitializer {
             return;
         }
 
-        String playerId = player.getGameProfile().id().toString();
+        String playerId = player.getGameProfile().getId().toString();
         List<SharedGroupEntry> groups = loadSharedGroups();
         boolean removed = groups.removeIf(g -> g.id().equals(groupId) && g.authorId().equals(playerId));
 
@@ -602,7 +602,7 @@ public class Takeitout implements ModInitializer {
                 player.getName().getString(),
                 shulkerSlot,
                 slotInShulker,
-                player.getInventory().getSelectedSlot(),
+                player.getInventory().selectedSlot,
                 singleItemMode,
                 currentMainHand,
                 extracted

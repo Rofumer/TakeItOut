@@ -1,9 +1,10 @@
 package net.maxbel.takeitout.client;
 
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.RenderLayers;
+import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.VertexRendering;
@@ -26,10 +27,10 @@ public class WorldContainerSourceRenderer {
     );
 
     public static void register() {
-        WorldRenderEvents.END_MAIN.register(WorldContainerSourceRenderer::render);
+        WorldRenderEvents.END.register(WorldContainerSourceRenderer::render);
     }
 
-    private static void render(net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext context) {
+    private static void render(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (!TakeitoutClient.RENDER_CONTAINER_SOURCES || client.world == null) {
             return;
@@ -40,13 +41,13 @@ public class WorldContainerSourceRenderer {
             return;
         }
 
-        Vec3d cameraPos = camera.getCameraPos();
+        Vec3d cameraPos = camera.getPos();
         VertexConsumerProvider consumers = context.consumers();
         if (consumers == null) {
             return;
         }
 
-        VertexConsumer vertexConsumer = consumers.getBuffer(RenderLayers.lines());
+        VertexConsumer vertexConsumer = consumers.getBuffer(RenderLayer.getLines());
 
         for (BlockPos source : WorldContainerSources.getSourcesSnapshot()) {
             if (source.toCenterPos().squaredDistanceTo(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
@@ -54,14 +55,13 @@ public class WorldContainerSourceRenderer {
             }
 
             VertexRendering.drawOutline(
-                    context.matrices(),
+                    context.matrixStack(),
                     vertexConsumer,
                     OUTLINE_SHAPE,
                     source.getX() - cameraPos.x,
                     source.getY() - cameraPos.y,
                     source.getZ() - cameraPos.z,
-                    TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR,
-                    OUTLINE_ALPHA
+                    TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR
             );
         }
 
@@ -72,14 +72,13 @@ public class WorldContainerSourceRenderer {
             }
 
             VertexRendering.drawOutline(
-                    context.matrices(),
+                    context.matrixStack(),
                     vertexConsumer,
                     OUTLINE_SHAPE,
                     dump.getX() - cameraPos.x,
                     dump.getY() - cameraPos.y,
                     dump.getZ() - cameraPos.z,
-                    dumpColor,
-                    OUTLINE_ALPHA
+                    dumpColor
             );
         }
     }

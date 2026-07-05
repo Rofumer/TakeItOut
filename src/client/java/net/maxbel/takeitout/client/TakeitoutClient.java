@@ -27,7 +27,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.client.world.ClientWorld;
 //import fi.dy.masa.litematica.util.WorldUtils;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 //import fi.dy.masa.litematica.world.SchematicWorldHandler;
 //import fi.dy.masa.litematica.world.WorldSchematic;
@@ -44,8 +43,7 @@ import java.util.Map;
 public class TakeitoutClient implements ClientModInitializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path SETTINGS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-client.json");
-    private static final Identifier CATEGORY_ID = Identifier.of("takeitout", "takeitout");
-    private static final KeyBinding.Category CATEGORY = KeyBinding.Category.create(CATEGORY_ID);
+    private static final String CATEGORY = "key.categories.takeitout";
     public static final int DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF22C55E;
 
     private static KeyBinding openSettingsKeyBinding;

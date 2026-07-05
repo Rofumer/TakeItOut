@@ -13,7 +13,6 @@ import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
-import net.minecraft.client.input.MouseInput;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Item;
 import net.minecraft.util.Hand;
@@ -46,9 +45,9 @@ public class MouseMixin {
     @Shadow @Final private MinecraftClient client;
 
     @Inject(method = "onMouseButton", at = @At("HEAD"), cancellable = true)
-    private void onMouseButton(long window, MouseInput input, int action, CallbackInfo ci) {
+    private void onMouseButton(long window, int button, int action, int mods, CallbackInfo ci) {
         // Интересует только нажатие правой кнопки (GLFW_PRESS = 1)
-        if (input.button() != 1 || action != 1) {
+        if (button != 1 || action != 1) {
             return;
         }
 
@@ -136,7 +135,7 @@ public class MouseMixin {
             return;
         }
 
-        int selectedSlot = client.player.getInventory().getSelectedSlot();
+        int selectedSlot = client.player.getInventory().selectedSlot;
         ItemStack inHand = client.player.getStackInHand(Hand.MAIN_HAND);
         ItemStack wanted = new ItemStack(st.targetState.getBlock().asItem());
         ItemStack current = new ItemStack(st.currentState.getBlock().asItem());

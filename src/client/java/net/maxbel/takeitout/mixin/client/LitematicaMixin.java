@@ -225,7 +225,7 @@ public class LitematicaMixin {
 
         BlockState state = world.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
-        int selectedSlot = mc.player.getInventory().getSelectedSlot();
+        int selectedSlot = mc.player.getInventory().selectedSlot;
         ItemStack handBefore = mc.player.getMainHandStack();
         boolean easyPlaceMode = Configs.Generic.EASY_PLACE_MODE.getBooleanValue();
 
@@ -265,7 +265,7 @@ public class LitematicaMixin {
                         "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
                         waitingShulkerStack,
                         mc.player.getMainHandStack(),
-                        mc.player.getInventory().getSelectedSlot()
+                        mc.player.getInventory().selectedSlot
                 );
                 waitingForShulkerResponse = false;
                 waitingShulkerStack = ItemStack.EMPTY;
@@ -278,7 +278,7 @@ public class LitematicaMixin {
                             waitingShulkerStack,
                             inventorySlot,
                             mc.player.getMainHandStack(),
-                            mc.player.getInventory().getSelectedSlot()
+                            mc.player.getInventory().selectedSlot
                     );
                     InventoryUtils.swapItemToMainHand(waitingShulkerStack, mc);
                     waitingForShulkerResponse = false;
@@ -395,7 +395,7 @@ public class LitematicaMixin {
                 pos,
                 required,
                 mc.player.getMainHandStack(),
-                mc.player.getInventory().getSelectedSlot()
+                mc.player.getInventory().selectedSlot
         );
 
         cir.setReturnValue(true);

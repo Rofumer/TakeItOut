@@ -5,7 +5,6 @@ import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.Block;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -172,25 +171,25 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
-        if (click.button() == 0) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
             int listLeft = getActiveListLeft();
             int listWidth = getActiveListWidth();
             int trackX = listLeft + listWidth - SCROLLBAR_WIDTH;
             int listTop = LIST_TOP;
             int listBottom = this.height - LIST_BOTTOM_MARGIN;
-            if (click.x() >= trackX && click.x() < listLeft + listWidth && click.y() >= listTop && click.y() < listBottom) {
+            if (mouseX >= trackX && mouseX < listLeft + listWidth && mouseY >= listTop && mouseY < listBottom) {
                 int contentHeight = getContentHeight();
                 int[] thumb = getScrollbarThumb(listTop, listBottom, contentHeight);
                 if (thumb != null) {
-                    if (click.y() >= thumb[0] && click.y() < thumb[0] + thumb[1]) {
+                    if (mouseY >= thumb[0] && mouseY < thumb[0] + thumb[1]) {
                         scrollbarDragging = true;
-                        scrollbarDragStartY = (int) click.y();
+                        scrollbarDragStartY = (int) mouseY;
                         scrollbarDragStartOffset = scrollOffset;
                     } else {
                         int listHeight = listBottom - listTop;
                         int maxScroll = Math.max(0, contentHeight - listHeight);
-                        float ratio = (float) (click.y() - listTop) / listHeight;
+                        float ratio = (float) (mouseY - listTop) / listHeight;
                         scrollOffset = Math.max(0, Math.min(maxScroll, (int) (ratio * contentHeight)));
                     }
                     return true;
@@ -198,24 +197,24 @@ public class TakeItOutSettingsScreen extends Screen {
             }
         }
 
-        if (activeTab == Tab.CONTAINERS && click.button() == 0 && handleContainerClick((int) click.x(), (int) click.y())) {
+        if (activeTab == Tab.CONTAINERS && button == 0 && handleContainerClick((int) mouseX, (int) mouseY)) {
             return true;
         }
 
-        if (activeTab == Tab.ALL_ITEMS && (click.button() == 0 || click.button() == 1)
-                && handleAllItemsClick((int) click.x(), (int) click.y(), click.button())) {
+        if (activeTab == Tab.ALL_ITEMS && (button == 0 || button == 1)
+                && handleAllItemsClick((int) mouseX, (int) mouseY, button)) {
             return true;
         }
 
-        if (activeTab == Tab.GROUPS && click.button() == 0 && handleGroupsClick((int) click.x(), (int) click.y())) {
+        if (activeTab == Tab.GROUPS && button == 0 && handleGroupsClick((int) mouseX, (int) mouseY)) {
             return true;
         }
 
-        return super.mouseClicked(click, doubled);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
         if (scrollbarDragging) {
             int listTop = LIST_TOP;
             int listBottom = this.height - LIST_BOTTOM_MARGIN;
@@ -225,22 +224,22 @@ public class TakeItOutSettingsScreen extends Screen {
                 int thumbHeight = Math.max(20, listHeight * listHeight / contentHeight);
                 int maxThumbTravel = listHeight - thumbHeight;
                 int maxScroll = contentHeight - listHeight;
-                int delta = (int) click.y() - scrollbarDragStartY;
+                int delta = (int) mouseY - scrollbarDragStartY;
                 int newOffset = scrollbarDragStartOffset + (int) ((long) delta * maxScroll / maxThumbTravel);
                 scrollOffset = Math.max(0, Math.min(maxScroll, newOffset));
             }
             return true;
         }
-        return super.mouseDragged(click, deltaX, deltaY);
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
-        if (scrollbarDragging && click.button() == 0) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (scrollbarDragging && button == 0) {
             scrollbarDragging = false;
             return true;
         }
-        return super.mouseReleased(click);
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     private void renderAllItems(DrawContext context, int mouseX, int mouseY) {
@@ -685,7 +684,7 @@ public class TakeItOutSettingsScreen extends Screen {
         if (isActive) {
             if (SharedGroupsClient.serverSupportsSharedGroups) {
                 String playerId = this.client != null && this.client.player != null
-                        ? this.client.player.getGameProfile().id().toString() : "";
+                        ? this.client.player.getGameProfile().getId().toString() : "";
                 boolean alreadyShared = SharedGroupsClient.SHARED_GROUPS.stream()
                         .anyMatch(g -> g.authorId().equals(playerId) && g.name().equals(group));
                 int shareBtnX = x + width - 76;
@@ -719,7 +718,7 @@ public class TakeItOutSettingsScreen extends Screen {
     ) {
         boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
         boolean isOwn = this.client != null && this.client.player != null
-                && shared.authorId().equals(this.client.player.getGameProfile().id().toString());
+                && shared.authorId().equals(this.client.player.getGameProfile().getId().toString());
 
         context.fill(x, y, x + width, y + 22, hovered ? 0x33FFD700 : 0x22FFD700);
 
@@ -834,7 +833,7 @@ public class TakeItOutSettingsScreen extends Screen {
             for (Takeitout.SharedGroupEntry shared : SharedGroupsClient.SHARED_GROUPS) {
                 if (mouseY >= y + 2 && mouseY < y + 20 && y >= listTop && y + 22 <= listBottom) {
                     boolean isOwn = this.client != null && this.client.player != null
-                            && shared.authorId().equals(this.client.player.getGameProfile().id().toString());
+                            && shared.authorId().equals(this.client.player.getGameProfile().getId().toString());
 
                     int rowX = listLeft + 8;
                     int rowWidth = listWidth - 16;
