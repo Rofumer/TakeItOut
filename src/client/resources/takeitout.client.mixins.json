@@ -17,9 +17,5 @@
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "mixins": [
-    "PrinterMixin",
-    "NewPrinterMixin"
-  ]
+  }
 }
