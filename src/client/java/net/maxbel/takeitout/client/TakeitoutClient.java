@@ -44,7 +44,7 @@ import java.util.Map;
 public class TakeitoutClient implements ClientModInitializer {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path SETTINGS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-client.json");
-    private static final Identifier CATEGORY_ID = Identifier.of("takeitout", "key_category");
+    private static final Identifier CATEGORY_ID = Identifier.of("takeitout", "takeitout");
     private static final KeyBinding.Category CATEGORY = KeyBinding.Category.create(CATEGORY_ID);
     public static final int DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF22C55E;
 
@@ -52,7 +52,7 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean AUTOTAKEOUT;
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
-    public static boolean AUTO_SELECT_HOTBAR_SLOT;
+    public static int SERVER_SCAN_LIMIT = -1;
     public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
@@ -71,7 +71,6 @@ public class TakeitoutClient implements ClientModInitializer {
         AUTOTAKEOUT = false;
         TAKE_SINGLE_ITEM_MODE = false;
         RENDER_CONTAINER_SOURCES = true;
-        AUTO_SELECT_HOTBAR_SLOT = false;
         ITEM_SORT_MODE = ItemSortMode.NAME;
         CONTAINER_SOURCE_OUTLINE_COLOR = DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR;
         awaitingStack = ItemStack.EMPTY;
@@ -95,9 +94,15 @@ public class TakeitoutClient implements ClientModInitializer {
                 WorldContainerSources.recordResponse(payload.stack(), payload.success());
                 if (!payload.success()
                         && !awaitingStack.isEmpty()
-                        && ItemStack.areItemsAndComponentsEqual(awaitingStack, payload.stack())) {
+                        && awaitingStack.isOf(payload.stack().getItem())) {
                     awaitingStack = ItemStack.EMPTY;
                     awaitingStackTicks = 0;
+                    if (context.client().player != null) {
+                        context.client().player.sendMessage(
+                                Text.translatable("message.takeitout.item_not_found", payload.stack().getName()),
+                                true
+                        );
+                    }
                 }
             });
         });
@@ -114,10 +119,27 @@ public class TakeitoutClient implements ClientModInitializer {
                 }
             });
         });
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.ServerConfigSyncPayload.ID, (payload, context) ->
+                context.client().execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit())
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SharedGroupsListPayload.ID, (payload, context) ->
+                context.client().execute(() -> {
+                    SharedGroupsClient.SHARED_GROUPS.clear();
+                    SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
+                    SharedGroupsClient.serverSupportsSharedGroups = true;
+                })
+        );
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.world != lastSourceWorld) {
                 WorldContainerSources.updateContext(client);
+                WorldContainerDumps.updateContext(client);
                 lastSourceWorld = client.world;
+                TakeItOutHotkeys.clearBoxSelection();
+                if (client.world == null) {
+                    SharedGroupsClient.clear();
+                }
             }
 
             if (client.player != null && !awaitingStack.isEmpty()) {
@@ -185,6 +207,20 @@ public class TakeitoutClient implements ClientModInitializer {
         }
     }
 
+    public static void dumpNow(MinecraftClient client) {
+        if (client.player == null) {
+            return;
+        }
+
+        List<Takeitout.WorldContainerSource> dumps = WorldContainerDumps.getDumpReferencesSnapshot();
+        if (dumps.isEmpty()) {
+            client.player.sendMessage(Text.literal("TakeItOut: no dump containers marked"), true);
+            return;
+        }
+
+        ClientPlayNetworking.send(new Takeitout.DumpInventoryPayload(dumps));
+    }
+
     public static void setContainerSourceOutlineColor(int color) {
         applyContainerSourceOutlineColor(color);
         saveSettings();
@@ -244,7 +280,8 @@ public class TakeitoutClient implements ClientModInitializer {
                     if (state.currentState != null && state.targetState.equals(state.currentState)) {
                         return false;
                     }
-                    if (!state.targetState.isAir()) {
+                    if (!state.targetState.isAir()
+                            && (state.currentState == null || state.currentState.isReplaceable())) {
                         if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
                             WorldUtils.doSchematicWorldPickBlock(true, mc);
                             return true;
@@ -277,9 +314,6 @@ public class TakeitoutClient implements ClientModInitializer {
             if (obj.has("render_container_sources")) {
                 RENDER_CONTAINER_SOURCES = obj.get("render_container_sources").getAsBoolean();
             }
-            if (obj.has("auto_select_hotbar_slot")) {
-                AUTO_SELECT_HOTBAR_SLOT = obj.get("auto_select_hotbar_slot").getAsBoolean();
-            }
             if (obj.has("item_sort_mode")) {
                 ITEM_SORT_MODE = ItemSortMode.fromString(obj.get("item_sort_mode").getAsString());
             }
@@ -297,7 +331,6 @@ public class TakeitoutClient implements ClientModInitializer {
             obj.addProperty("autotakeout", AUTOTAKEOUT);
             obj.addProperty("single_item_mode", TAKE_SINGLE_ITEM_MODE);
             obj.addProperty("render_container_sources", RENDER_CONTAINER_SOURCES);
-            obj.addProperty("auto_select_hotbar_slot", AUTO_SELECT_HOTBAR_SLOT);
             obj.addProperty("item_sort_mode", ITEM_SORT_MODE.id);
             obj.addProperty("container_source_outline_color", formatColor(CONTAINER_SOURCE_OUTLINE_COLOR));
             Files.writeString(SETTINGS_PATH, GSON.toJson(obj));

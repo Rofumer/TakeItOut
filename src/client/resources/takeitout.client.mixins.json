@@ -15,13 +15,13 @@
     "MixinClientPlayerEntity",
     "MouseMixin",
     "PickBlockMixin",
-    "PlayerInventoryAccessor",
     "UpdatedSlot"
   ],
   "injectors": {
     "defaultRequire": 1
   },
   "mixins": [
-    "PrinterMixin"
+    "PrinterMixin",
+    "NewPrinterMixin"
   ]
 }

@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.Block;
@@ -28,6 +29,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
@@ -42,18 +44,23 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public class Takeitout implements ModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/server");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
+    private static final Path SHARED_GROUPS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-shared-groups.json");
+    private static final int MAX_GROUPS_PER_PLAYER = 10;
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
     private static final String LINKED_CONTAINER_SCAN_LIMIT_KEY = "linked_container_scan_limit";
+    private static final String ALLOW_ALL_ITEMS_TAKE_KEY = "allow_all_items_take";
     private static final int DEFAULT_LINKED_CONTAINER_SCAN_LIMIT = 64;
     private static final Set<String> ALLOWED_EXCHANGE_DIMENSIONS = new HashSet<>();
     private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+    private static boolean allowAllItemsTake = true;
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPayload {
         public static final CustomPayload.Id<GetShulkerStackPayload> ID =
@@ -112,7 +119,7 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode) implements CustomPayload {
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps) implements CustomPayload {
         public static final CustomPayload.Id<GetWorldContainerStackPayload> ID =
                 new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_stack"));
 
@@ -124,6 +131,10 @@ public class Takeitout implements ModInitializer {
                         GetWorldContainerStackPayload::stack,
                         PacketCodecs.BOOLEAN,
                         GetWorldContainerStackPayload::singleItemMode,
+                        PacketCodecs.BOOLEAN,
+                        GetWorldContainerStackPayload::fromUi,
+                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackPayload::dumps,
                         GetWorldContainerStackPayload::new
                 );
 
@@ -213,6 +224,132 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements CustomPayload {
+        public static final CustomPayload.Id<DumpInventoryPayload> ID =
+                new CustomPayload.Id<>(Identifier.of("takeitout", "dump_inventory"));
+
+        public static final PacketCodec<RegistryByteBuf, DumpInventoryPayload> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        DumpInventoryPayload::dumps,
+                        DumpInventoryPayload::new
+                );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPayload {
+        public static final CustomPayload.Id<ServerConfigSyncPayload> ID =
+                new CustomPayload.Id<>(Identifier.of("takeitout", "server_config_sync"));
+
+        public static final PacketCodec<RegistryByteBuf, ServerConfigSyncPayload> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.VAR_INT,
+                        ServerConfigSyncPayload::linkedContainerScanLimit,
+                        ServerConfigSyncPayload::new
+                );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    public record SharedSourceEntry(long position, boolean linked) {
+        public static final PacketCodec<RegistryByteBuf, SharedSourceEntry> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.LONG,
+                        SharedSourceEntry::position,
+                        PacketCodecs.BOOLEAN,
+                        SharedSourceEntry::linked,
+                        SharedSourceEntry::new
+                );
+    }
+
+    public record SharedGroupDimension(String dimension, List<SharedSourceEntry> sources) {
+        public static final PacketCodec<RegistryByteBuf, SharedGroupDimension> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.STRING,
+                        SharedGroupDimension::dimension,
+                        PacketCodecs.collection(ArrayList::new, SharedSourceEntry.CODEC),
+                        SharedGroupDimension::sources,
+                        SharedGroupDimension::new
+                );
+    }
+
+    public record SharedGroupEntry(String id, String name, String authorName, String authorId, List<SharedGroupDimension> dimensions) {
+        public static final PacketCodec<RegistryByteBuf, SharedGroupEntry> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.STRING,
+                        SharedGroupEntry::id,
+                        PacketCodecs.STRING,
+                        SharedGroupEntry::name,
+                        PacketCodecs.STRING,
+                        SharedGroupEntry::authorName,
+                        PacketCodecs.STRING,
+                        SharedGroupEntry::authorId,
+                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        SharedGroupEntry::dimensions,
+                        SharedGroupEntry::new
+                );
+    }
+
+    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements CustomPayload {
+        public static final CustomPayload.Id<PublishGroupPayload> ID =
+                new CustomPayload.Id<>(Identifier.of("takeitout", "publish_group"));
+
+        public static final PacketCodec<RegistryByteBuf, PublishGroupPayload> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.STRING,
+                        PublishGroupPayload::name,
+                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        PublishGroupPayload::dimensions,
+                        PublishGroupPayload::new
+                );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    public record UnpublishGroupPayload(String groupId) implements CustomPayload {
+        public static final CustomPayload.Id<UnpublishGroupPayload> ID =
+                new CustomPayload.Id<>(Identifier.of("takeitout", "unpublish_group"));
+
+        public static final PacketCodec<RegistryByteBuf, UnpublishGroupPayload> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.STRING,
+                        UnpublishGroupPayload::groupId,
+                        UnpublishGroupPayload::new
+                );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
+    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) implements CustomPayload {
+        public static final CustomPayload.Id<SharedGroupsListPayload> ID =
+                new CustomPayload.Id<>(Identifier.of("takeitout", "shared_groups_list"));
+
+        public static final PacketCodec<RegistryByteBuf, SharedGroupsListPayload> CODEC =
+                PacketCodec.tuple(
+                        PacketCodecs.collection(ArrayList::new, SharedGroupEntry.CODEC),
+                        SharedGroupsListPayload::groups,
+                        SharedGroupsListPayload::new
+                );
+
+        @Override
+        public Id<? extends CustomPayload> getId() {
+            return ID;
+        }
+    }
+
     @Override
     public void onInitialize() {
         loadServerConfig();
@@ -220,8 +357,13 @@ public class Takeitout implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(PublishGroupPayload.ID, PublishGroupPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
         PayloadTypeRegistry.playS2C().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(GetShulkerStackPayload.ID, (payload, context) -> {
             context.server().execute(() -> handleGetShulkerStack(context.player(), payload));
@@ -232,6 +374,169 @@ public class Takeitout implements ModInitializer {
         ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) -> {
             context.server().execute(() -> handleGetWorldContainerItems(context.player(), payload));
         });
+        ServerPlayNetworking.registerGlobalReceiver(DumpInventoryPayload.ID, (payload, context) -> {
+            context.server().execute(() -> handleDumpInventoryPayload(context.player(), payload));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(PublishGroupPayload.ID, (payload, context) -> {
+            context.server().execute(() -> handlePublishGroupPayload(context.player(), payload));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(UnpublishGroupPayload.ID, (payload, context) -> {
+            context.server().execute(() -> handleUnpublishGroupPayload(context.player(), payload));
+        });
+
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit));
+            sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
+        });
+    }
+
+    private static void handlePublishGroupPayload(ServerPlayerEntity player, PublishGroupPayload payload) {
+        String name = payload.name();
+        if (name == null || name.isBlank() || name.length() > 64) {
+            return;
+        }
+        if (payload.dimensions() == null) {
+            return;
+        }
+
+        String playerId = player.getGameProfile().id().toString();
+        String playerName = player.getGameProfile().name();
+
+        List<SharedGroupEntry> groups = loadSharedGroups();
+        groups.removeIf(g -> g.authorId().equals(playerId) && g.name().equals(name));
+
+        long playerGroupCount = groups.stream().filter(g -> g.authorId().equals(playerId)).count();
+        if (playerGroupCount >= MAX_GROUPS_PER_PLAYER) {
+            player.sendMessage(Text.literal("TakeItOut: shared group limit reached (" + MAX_GROUPS_PER_PLAYER + ")"), false);
+            return;
+        }
+
+        String groupId = UUID.randomUUID().toString();
+        groups.add(new SharedGroupEntry(groupId, name, playerName, playerId, payload.dimensions()));
+        saveSharedGroups(groups);
+        broadcastSharedGroups(getServerFromPlayer(player), groups);
+        player.sendMessage(Text.literal("TakeItOut: group \"" + name + "\" shared on server"), false);
+    }
+
+    private static void handleUnpublishGroupPayload(ServerPlayerEntity player, UnpublishGroupPayload payload) {
+        String groupId = payload.groupId();
+        if (groupId == null || groupId.isBlank()) {
+            return;
+        }
+
+        String playerId = player.getGameProfile().id().toString();
+        List<SharedGroupEntry> groups = loadSharedGroups();
+        boolean removed = groups.removeIf(g -> g.id().equals(groupId) && g.authorId().equals(playerId));
+
+        if (removed) {
+            saveSharedGroups(groups);
+            broadcastSharedGroups(getServerFromPlayer(player), groups);
+            player.sendMessage(Text.literal("TakeItOut: group removed from server"), false);
+        }
+    }
+
+    private static List<SharedGroupEntry> loadSharedGroups() {
+        if (!Files.exists(SHARED_GROUPS_PATH)) {
+            return new ArrayList<>();
+        }
+
+        try {
+            JsonArray arr = GSON.fromJson(Files.readString(SHARED_GROUPS_PATH), JsonArray.class);
+            if (arr == null) {
+                return new ArrayList<>();
+            }
+
+            List<SharedGroupEntry> groups = new ArrayList<>();
+            for (JsonElement el : arr) {
+                if (!el.isJsonObject()) {
+                    continue;
+                }
+                JsonObject obj = el.getAsJsonObject();
+                try {
+                    String id = obj.get("id").getAsString();
+                    String name = obj.get("name").getAsString();
+                    String authorName = obj.get("authorName").getAsString();
+                    String authorId = obj.get("authorId").getAsString();
+                    List<SharedGroupDimension> dimensions = new ArrayList<>();
+                    if (obj.has("dimensions") && obj.get("dimensions").isJsonArray()) {
+                        for (JsonElement dimEl : obj.getAsJsonArray("dimensions")) {
+                            if (!dimEl.isJsonObject()) {
+                                continue;
+                            }
+                            JsonObject dimObj = dimEl.getAsJsonObject();
+                            String dimension = dimObj.get("dimension").getAsString();
+                            List<SharedSourceEntry> sources = new ArrayList<>();
+                            if (dimObj.has("sources") && dimObj.get("sources").isJsonArray()) {
+                                for (JsonElement srcEl : dimObj.getAsJsonArray("sources")) {
+                                    if (!srcEl.isJsonObject()) {
+                                        continue;
+                                    }
+                                    JsonObject srcObj = srcEl.getAsJsonObject();
+                                    sources.add(new SharedSourceEntry(srcObj.get("pos").getAsLong(), srcObj.get("linked").getAsBoolean()));
+                                }
+                            }
+                            dimensions.add(new SharedGroupDimension(dimension, sources));
+                        }
+                    }
+                    groups.add(new SharedGroupEntry(id, name, authorName, authorId, dimensions));
+                } catch (Exception ignored) {
+                }
+            }
+            return groups;
+        } catch (Exception e) {
+            LOGGER.warn("Failed to load shared groups", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private static void saveSharedGroups(List<SharedGroupEntry> groups) {
+        try {
+            Files.createDirectories(SHARED_GROUPS_PATH.getParent());
+            JsonArray arr = new JsonArray();
+            for (SharedGroupEntry group : groups) {
+                JsonObject obj = new JsonObject();
+                obj.addProperty("id", group.id());
+                obj.addProperty("name", group.name());
+                obj.addProperty("authorName", group.authorName());
+                obj.addProperty("authorId", group.authorId());
+                JsonArray dims = new JsonArray();
+                for (SharedGroupDimension dim : group.dimensions()) {
+                    JsonObject dimObj = new JsonObject();
+                    dimObj.addProperty("dimension", dim.dimension());
+                    JsonArray sources = new JsonArray();
+                    for (SharedSourceEntry src : dim.sources()) {
+                        JsonObject srcObj = new JsonObject();
+                        srcObj.addProperty("pos", src.position());
+                        srcObj.addProperty("linked", src.linked());
+                        sources.add(srcObj);
+                    }
+                    dimObj.add("sources", sources);
+                    dims.add(dimObj);
+                }
+                obj.add("dimensions", dims);
+                arr.add(obj);
+            }
+            Files.writeString(SHARED_GROUPS_PATH, GSON.toJson(arr));
+        } catch (IOException e) {
+            LOGGER.warn("Failed to save shared groups", e);
+        }
+    }
+
+    private static net.minecraft.server.MinecraftServer getServerFromPlayer(ServerPlayerEntity player) {
+        if (player.getEntityWorld() instanceof ServerWorld serverWorld) {
+            return serverWorld.getServer();
+        }
+        return null;
+    }
+
+    private static void broadcastSharedGroups(net.minecraft.server.MinecraftServer server, List<SharedGroupEntry> groups) {
+        if (server == null) {
+            return;
+        }
+        SharedGroupsListPayload packet = new SharedGroupsListPayload(groups);
+        for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+            ServerPlayNetworking.send(p, packet);
+        }
     }
 
     private static void handleGetShulkerStack(ServerPlayerEntity player, GetShulkerStackPayload payload) {
@@ -413,6 +718,12 @@ public class Takeitout implements ModInitializer {
             return;
         }
 
+        if (payload.fromUi() && !allowAllItemsTake) {
+            player.sendMessage(Text.literal("TakeItOut: taking items via All Items tab is disabled on this server"), false);
+            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+            return;
+        }
+
         int checked = 0;
         int invalidSourceCount = 0;
         int emptySourceCount = 0;
@@ -432,7 +743,7 @@ public class Takeitout implements ModInitializer {
             }
 
             int slot = getSlotWithStack(inventory, requested);
-            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode())) {
+            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
                 ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
@@ -451,8 +762,64 @@ public class Takeitout implements ModInitializer {
             }
         }
 
+        // Second pass: item not found directly — find a shulker box containing the most of the requested item
+        if (!isShulkerItem(requested)) {
+            int bestShulkerSlot = -1;
+            int bestShulkerCount = 0;
+            Inventory bestShulkerInventory = null;
+            BlockPos bestShulkerPos = null;
+
+            int scanned = 0;
+            for (WorldContainerSource source : payload.sources()) {
+                if (scanned >= scanLimit) {
+                    break;
+                }
+                scanned++;
+
+                Inventory inventory = getWorldContainerInventory(player, source);
+                if (inventory == null) {
+                    continue;
+                }
+
+                BlockPos pos = BlockPos.fromLong(source.position());
+                for (int i = 0; i < inventory.size(); i++) {
+                    ItemStack stack = inventory.getStack(i);
+                    if (stack == null || stack.isEmpty() || !isShulkerItem(stack)) {
+                        continue;
+                    }
+
+                    int count = 0;
+                    for (ItemStack shulkerItem : copyContainerContents(stack)) {
+                        if (!shulkerItem.isEmpty() && shulkerItem.isOf(requested.getItem())) {
+                            count += shulkerItem.getCount();
+                        }
+                    }
+
+                    if (count > bestShulkerCount) {
+                        bestShulkerCount = count;
+                        bestShulkerSlot = i;
+                        bestShulkerInventory = inventory;
+                        bestShulkerPos = pos;
+                    }
+                }
+            }
+
+            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
+                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                LOGGER.debug(
+                        "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
+                        player.getName().getString(),
+                        requested,
+                        bestShulkerPos,
+                        bestShulkerSlot,
+                        bestShulkerCount
+                );
+                return;
+            }
+        }
+
         ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
-        LOGGER.warn(
+        LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
                 requested,
@@ -502,6 +869,39 @@ public class Takeitout implements ModInitializer {
         ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
     }
 
+    private static void handleDumpInventoryPayload(ServerPlayerEntity player, DumpInventoryPayload payload) {
+        if (payload.dumps() == null || payload.dumps().isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
+            ItemStack stack = player.getInventory().getStack(i);
+            if (!canReplaceInventoryItem(stack)) {
+                continue;
+            }
+
+            ItemStack remaining = stack.copy();
+            for (WorldContainerSource dump : payload.dumps()) {
+                if (remaining.isEmpty()) {
+                    break;
+                }
+                Inventory dumpInventory = getWorldContainerInventory(player, dump);
+                if (dumpInventory == null) {
+                    continue;
+                }
+                remaining = insertIntoInventory(dumpInventory, remaining);
+                syncWorldContainer(player, dumpInventory);
+            }
+
+            if (remaining.getCount() != stack.getCount()) {
+                player.getInventory().setStack(i, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
+            }
+        }
+
+        syncPlayerInventory(player);
+        LOGGER.debug("DumpInventory: player={}", player.getName().getString());
+    }
+
     private static void addItemCount(List<WorldContainerItemCount> items, ItemStack stack) {
         ItemStack keyStack = stack.copyWithCount(1);
 
@@ -516,7 +916,14 @@ public class Takeitout implements ModInitializer {
         items.add(new WorldContainerItemCount(keyStack, stack.getCount()));
     }
 
-    private static boolean extractFromWorldContainer(ServerPlayerEntity player, Inventory inventory, BlockPos pos, int slot, boolean singleItemMode) {
+    private static boolean extractFromWorldContainer(
+            ServerPlayerEntity player,
+            Inventory inventory,
+            BlockPos pos,
+            int slot,
+            boolean singleItemMode,
+            List<WorldContainerSource> dumps
+    ) {
         if (slot < 0 || slot >= inventory.size()) {
             return false;
         }
@@ -543,6 +950,35 @@ public class Takeitout implements ModInitializer {
             return true;
         }
 
+        if (ItemStack.areItemsAndComponentsEqual(currentMainHand, extracted)
+                && currentMainHand.getCount() < currentMainHand.getMaxCount()) {
+            int canAdd = Math.min(currentMainHand.getMaxCount() - currentMainHand.getCount(), extracted.getCount());
+            ItemStack actualRemaining = stackInContainer.copy();
+            actualRemaining.decrement(canAdd);
+            inventory.setStack(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
+            syncWorldContainer(player, inventory);
+            currentMainHand.increment(canAdd);
+            player.setStackInHand(Hand.MAIN_HAND, currentMainHand);
+            syncPlayerInventory(player);
+            return true;
+        }
+
+        for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
+            ItemStack invStack = player.getInventory().getStack(i);
+            if (ItemStack.areItemsAndComponentsEqual(invStack, extracted)
+                    && invStack.getCount() < invStack.getMaxCount()) {
+                int canAdd = Math.min(invStack.getMaxCount() - invStack.getCount(), extracted.getCount());
+                ItemStack actualRemaining = stackInContainer.copy();
+                actualRemaining.decrement(canAdd);
+                inventory.setStack(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
+                syncWorldContainer(player, inventory);
+                invStack.increment(canAdd);
+                player.getInventory().setStack(i, invStack);
+                syncPlayerInventory(player);
+                return true;
+            }
+        }
+
         int freeSlot = player.getInventory().getEmptySlot();
         if (freeSlot != -1) {
             inventory.setStack(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
@@ -554,17 +990,33 @@ public class Takeitout implements ModInitializer {
         }
 
         inventory.setStack(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
-        if (canInsertIntoInventory(inventory, currentMainHand)) {
-            ItemStack leftover = insertIntoInventory(inventory, currentMainHand);
-            if (!leftover.isEmpty()) {
-                inventory.setStack(slot, stackInContainer);
-                return false;
+        if (canReplaceInventoryItem(currentMainHand)) {
+            Inventory insertTarget = null;
+            for (WorldContainerSource dumpSource : dumps) {
+                Inventory dumpInv = getWorldContainerInventory(player, dumpSource);
+                if (dumpInv != null && canInsertIntoInventory(dumpInv, currentMainHand)) {
+                    insertTarget = dumpInv;
+                    break;
+                }
             }
+            if (insertTarget == null && canInsertIntoInventory(inventory, currentMainHand)) {
+                insertTarget = inventory;
+            }
+            if (insertTarget != null) {
+                ItemStack leftover = insertIntoInventory(insertTarget, currentMainHand);
+                if (!leftover.isEmpty()) {
+                    inventory.setStack(slot, stackInContainer);
+                    return false;
+                }
 
-            syncWorldContainer(player, inventory);
-            player.setStackInHand(Hand.MAIN_HAND, extracted);
-            syncPlayerInventory(player);
-            return true;
+                syncWorldContainer(player, inventory);
+                if (insertTarget != inventory) {
+                    syncWorldContainer(player, insertTarget);
+                }
+                player.setStackInHand(Hand.MAIN_HAND, extracted);
+                syncPlayerInventory(player);
+                return true;
+            }
         }
 
         inventory.setStack(slot, stackInContainer);
@@ -572,7 +1024,30 @@ public class Takeitout implements ModInitializer {
         if (remainingInContainer.isEmpty()) {
             for (int i = Math.min(36, player.getInventory().size()) - 1; i >= 0; --i) {
                 ItemStack item = player.getInventory().getStack(i);
-                if (!canReplaceInventoryItem(item) || !inventory.isValid(slot, item)) {
+                if (!canReplaceInventoryItem(item)) {
+                    continue;
+                }
+
+                boolean dumped = false;
+                for (WorldContainerSource dumpSource : dumps) {
+                    Inventory dumpInv = getWorldContainerInventory(player, dumpSource);
+                    if (dumpInv != null && canInsertIntoInventory(dumpInv, item)) {
+                        insertIntoInventory(dumpInv, item);
+                        syncWorldContainer(player, dumpInv);
+                        inventory.setStack(slot, ItemStack.EMPTY);
+                        syncWorldContainer(player, inventory);
+                        player.getInventory().setStack(i, currentMainHand);
+                        player.setStackInHand(Hand.MAIN_HAND, extracted);
+                        syncPlayerInventory(player);
+                        dumped = true;
+                        break;
+                    }
+                }
+                if (dumped) {
+                    return true;
+                }
+
+                if (!inventory.isValid(slot, item)) {
                     continue;
                 }
 
@@ -816,6 +1291,7 @@ public class Takeitout implements ModInitializer {
         ALLOWED_EXCHANGE_DIMENSIONS.clear();
         linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
         linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
+        allowAllItemsTake = true;
 
         if (!Files.exists(SERVER_CONFIG_PATH)) {
             saveDefaultServerConfig();
@@ -841,6 +1317,13 @@ public class Takeitout implements ModInitializer {
                 saveServerConfig(root);
             }
 
+            if (root.has(ALLOW_ALL_ITEMS_TAKE_KEY)) {
+                allowAllItemsTake = root.get(ALLOW_ALL_ITEMS_TAKE_KEY).getAsBoolean();
+            } else {
+                root.addProperty(ALLOW_ALL_ITEMS_TAKE_KEY, allowAllItemsTake);
+                saveServerConfig(root);
+            }
+
             JsonArray allowedDimensions = root.getAsJsonArray(ALLOWED_EXCHANGE_DIMENSIONS_KEY);
             for (JsonElement element : allowedDimensions) {
                 if (!element.isJsonPrimitive()) {
@@ -861,9 +1344,10 @@ public class Takeitout implements ModInitializer {
             }
 
             LOGGER.info(
-                    "Server config loaded: linkedContainerExchangeMode={}, linkedContainerScanLimit={}, allowedExchangeDimensions={}",
+                    "Server config loaded: linkedContainerExchangeMode={}, linkedContainerScanLimit={}, allowAllItemsTake={}, allowedExchangeDimensions={}",
                     linkedContainerExchangeMode.id,
                     linkedContainerScanLimit,
+                    allowAllItemsTake,
                     ALLOWED_EXCHANGE_DIMENSIONS.isEmpty() ? "all" : ALLOWED_EXCHANGE_DIMENSIONS
             );
         } catch (Exception e) {
@@ -909,6 +1393,7 @@ public class Takeitout implements ModInitializer {
         JsonObject root = new JsonObject();
         root.addProperty(LINKED_CONTAINER_EXCHANGE_MODE_KEY, linkedContainerExchangeMode.id);
         root.addProperty(LINKED_CONTAINER_SCAN_LIMIT_KEY, linkedContainerScanLimit);
+        root.addProperty(ALLOW_ALL_ITEMS_TAKE_KEY, allowAllItemsTake);
         root.add(ALLOWED_EXCHANGE_DIMENSIONS_KEY, new JsonArray());
 
         saveServerConfig(root);

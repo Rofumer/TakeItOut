@@ -12,8 +12,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 
-import java.util.List;
-
 public class WorldContainerSourceRenderer {
     private static final float OUTLINE_ALPHA = 1.0F;
     private static final double OUTLINE_PADDING = 0.002D;
@@ -50,12 +48,7 @@ public class WorldContainerSourceRenderer {
 
         VertexConsumer vertexConsumer = consumers.getBuffer(RenderLayers.lines());
 
-        List<BlockPos> sources = WorldContainerSources.getSourcesSnapshot();
-        if (sources.isEmpty()) {
-            return;
-        }
-
-        for (BlockPos source : sources) {
+        for (BlockPos source : WorldContainerSources.getSourcesSnapshot()) {
             if (source.toCenterPos().squaredDistanceTo(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
                 continue;
             }
@@ -68,6 +61,24 @@ public class WorldContainerSourceRenderer {
                     source.getY() - cameraPos.y,
                     source.getZ() - cameraPos.z,
                     TakeitoutClient.CONTAINER_SOURCE_OUTLINE_COLOR,
+                    OUTLINE_ALPHA
+            );
+        }
+
+        int dumpColor = 0xFFF97316;
+        for (BlockPos dump : WorldContainerDumps.getDumpSnapshot()) {
+            if (dump.toCenterPos().squaredDistanceTo(cameraPos) > MAX_RENDER_DISTANCE_SQUARED) {
+                continue;
+            }
+
+            VertexRendering.drawOutline(
+                    context.matrices(),
+                    vertexConsumer,
+                    OUTLINE_SHAPE,
+                    dump.getX() - cameraPos.x,
+                    dump.getY() - cameraPos.y,
+                    dump.getZ() - cameraPos.z,
+                    dumpColor,
                     OUTLINE_ALPHA
             );
         }

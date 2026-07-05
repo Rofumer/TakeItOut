@@ -13,6 +13,7 @@ import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FenceBlock;
 import net.minecraft.block.MushroomBlock;
+import net.minecraft.block.RedstoneWireBlock;
 import net.minecraft.block.WallBlock;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.inventory.Inventory;
@@ -46,6 +47,7 @@ public class LitematicaMixin {
     @Unique private static final Set<String> PLACE_STATE_IGNORED_PROPERTIES = Set.of("lit", "powered", "open");
     @Unique private static final Set<String> FENCE_WALL_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up");
     @Unique private static final Set<String> MUSHROOM_BLOCK_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "up", "down");
+    @Unique private static final Set<String> REDSTONE_WIRE_IGNORED_PROPERTIES = Set.of("north", "south", "east", "west", "power");
 
     @Unique private static boolean waitingForShulkerResponse = false;
     @Unique private static ItemStack waitingShulkerStack = ItemStack.EMPTY;
@@ -87,7 +89,7 @@ public class LitematicaMixin {
 
         if (waitingForShulkerResponse) {
             if (WorldContainerSources.consumeFailedResponse(waitingShulkerStack)) {
-                LOGGER.warn(
+                LOGGER.debug(
                         "EasyPlace world-container wait failed: expected={}, inHand={}",
                         waitingShulkerStack,
                         inHand
@@ -96,7 +98,7 @@ public class LitematicaMixin {
                 waitingShulkerStack = ItemStack.EMPTY;
                 waitingShulkerRequestTsMs = 0L;
             } else
-            if (!waitingShulkerStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(inHand, waitingShulkerStack)) {
+            if (!waitingShulkerStack.isEmpty() && inHand.isOf(waitingShulkerStack.getItem())) {
                 LOGGER.debug(
                         "EasyPlace shulker wait resolved: expected={}, inHand={}",
                         waitingShulkerStack,
@@ -113,7 +115,7 @@ public class LitematicaMixin {
                     return;
                 }
 
-                LOGGER.warn(
+                LOGGER.debug(
                         "EasyPlace shulker wait timeout in pre-check: expected={}, inHand={}, elapsedMs={}",
                         waitingShulkerStack,
                         inHand,
@@ -125,17 +127,17 @@ public class LitematicaMixin {
             }
         }
 
-        if (ItemStack.areItemsAndComponentsEqual(inHand, required)) {
+        if (inHand.isOf(required.getItem())) {
             return;
         }
 
-        if (mc.world != null && arePlacementEquivalent(mc.world.getBlockState(lastEasyPlaceTargetPos), lastEasyPlaceTargetState)) {
+        if (mc.world != null && !mc.world.getBlockState(lastEasyPlaceTargetPos).isReplaceable()) {
             return;
         }
 
         WorldUtils.doSchematicWorldPickBlock(true, mc);
 
-        if (!ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), required)) {
+        if (!mc.player.getMainHandStack().isOf(required.getItem())) {
             cir.setReturnValue(ActionResult.FAIL);
             cir.cancel();
         }
@@ -172,7 +174,7 @@ public class LitematicaMixin {
                     false
             );
         } else {
-            LOGGER.warn(
+            LOGGER.debug(
                     "EasyPlace result: pos={}, actionResult={}, actionSucceeded={}, worldState={}, targetState={}, placedMatchesTarget={}",
                     lastEasyPlaceTargetPos,
                     cir.getReturnValue(),
@@ -209,12 +211,6 @@ public class LitematicaMixin {
     private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
-
-        // Если текущий слот запрещён pickBlockableSlots — НЕ вмешиваемся вообще.
-        // Важно: НЕ cancel, иначе Easy Place перестанет работать.
-        if (!isSelectedHotbarSlotAllowedByLitematica()) {
-            return; // пусть оригинальный doSchematicWorldPickBlock от Litematica отработает сам
-        }
 
         final int range = (int) getValidBlockRange(mc);
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
@@ -255,7 +251,7 @@ public class LitematicaMixin {
 
         if (easyPlaceMode && waitingForShulkerResponse && !waitingShulkerStack.isEmpty()) {
             if (WorldContainerSources.consumeFailedResponse(waitingShulkerStack)) {
-                LOGGER.warn(
+                LOGGER.debug(
                         "PickBlock world-container response failed: expected={}, inHand={}",
                         waitingShulkerStack,
                         mc.player.getMainHandStack()
@@ -264,7 +260,7 @@ public class LitematicaMixin {
                 waitingShulkerStack = ItemStack.EMPTY;
                 waitingShulkerRequestTsMs = 0L;
             } else
-            if (ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), waitingShulkerStack)) {
+            if (mc.player.getMainHandStack().isOf(waitingShulkerStack.getItem())) {
                 LOGGER.debug(
                         "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
                         waitingShulkerStack,
@@ -302,7 +298,7 @@ public class LitematicaMixin {
                         return;
                     }
 
-                    LOGGER.warn(
+                    LOGGER.debug(
                             "PickBlock shulker response timeout: expected={}, inHand={}, elapsedMs={}, retrying",
                             waitingShulkerStack,
                             mc.player.getMainHandStack(),
@@ -324,8 +320,8 @@ public class LitematicaMixin {
         );
 
         // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
-        if (!ItemStack.areItemsAndComponentsEqual(mc.player.getMainHandStack(), required)) {
-            if (!awaitingStack.isEmpty() && ItemStack.areItemsAndComponentsEqual(awaitingStack, required.copyWithCount(1))) {
+        if (!mc.player.getMainHandStack().isOf(required.getItem())) {
+            if (!awaitingStack.isEmpty() && awaitingStack.isOf(required.getItem())) {
                 LOGGER.debug(
                         "PickBlock duplicate request skipped: required={}, awaiting={}, handSlot={}",
                         required,
@@ -339,15 +335,7 @@ public class LitematicaMixin {
 
             int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
 
-            if (slot != -1) {
-                LOGGER.debug(
-                        "PickBlock source=inventory: required={}, sourceSlot={}, handSlot={}",
-                        required,
-                        slot,
-                        selectedSlot
-                );
-                InventoryUtils.swapItemToMainHand(required, mc);
-            } else {
+            if (slot == -1) {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
                 if (shulkerSlot != -1) {
                     Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
@@ -371,7 +359,7 @@ public class LitematicaMixin {
                         cir.cancel();
                         return;
                     } else {
-                        LOGGER.warn(
+                        LOGGER.debug(
                                 "PickBlock shulker-miss: required={}, shulkerSlot={}, handSlot={}",
                                 required,
                                 shulkerSlot,
@@ -379,7 +367,7 @@ public class LitematicaMixin {
                         );
                     }
                 } else {
-                    LOGGER.warn(
+                    LOGGER.debug(
                             "PickBlock miss: required={} not found in inventory or shulkers, trying world containers, sources={}, handSlot={}",
                             required,
                             WorldContainerSources.size(),
@@ -425,7 +413,9 @@ public class LitematicaMixin {
         return ((targetState.getBlock() instanceof FenceBlock || targetState.getBlock() instanceof WallBlock)
                 && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
                 || (targetState.getBlock() instanceof MushroomBlock
-                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name));
+                && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name))
+                || (targetState.getBlock() instanceof RedstoneWireBlock
+                && REDSTONE_WIRE_IGNORED_PROPERTIES.contains(name));
     }
 
     @Unique
@@ -455,34 +445,4 @@ public class LitematicaMixin {
         return true;
     }
 
-    @Unique
-    private static boolean isSelectedHotbarSlotAllowedByLitematica() {
-        try {
-            String raw = Configs.Generic.PICK_BLOCKABLE_SLOTS.getStringValue(); // например "1,2,3,4,5"
-            if (raw == null || raw.trim().isEmpty()) {
-                return true; // пусто = не ограничено
-            }
-
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc == null || mc.player == null) return true;
-
-            int selected = mc.player.getInventory().getSelectedSlot(); // 0..8
-
-            for (String part : raw.split(",")) {
-                part = part.trim();
-                if (part.isEmpty()) continue;
-
-                try {
-                    int oneBased = Integer.parseInt(part);
-                    int zeroBased = oneBased - 1;
-                    if (zeroBased == selected) return true;
-                } catch (NumberFormatException ignored) {}
-            }
-
-            return false;
-        } catch (Throwable ignored) {
-            // если Litematica/Configs недоступны или что-то пошло не так — не ломаем работу
-            return true;
-        }
-    }
 }

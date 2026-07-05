@@ -11,12 +11,13 @@ import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.hit.HitResult;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.maxbel.takeitout.client.*;
 
 @Mixin(value = {MinecraftClient.class})
@@ -26,38 +27,36 @@ public abstract class PickBlockMixin {
 
     @Shadow @Nullable public ClientWorld world;
 
-    //@Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerInventory;getSlotWithStack(Lnet/minecraft/item/ItemStack;)I"))
-    @Redirect(method = {"doItemPick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/util/hit/BlockHitResult;getBlockPos()Lnet/minecraft/util/math/BlockPos;"))
+    @Shadow @Nullable public HitResult crosshairTarget;
 
-    //public int pickFromShulker(PlayerInventory playerInventory, ItemStack stack) {
-    public BlockPos pickFromShulker(BlockHitResult instance) {
+    @Inject(
+            method = {"doItemPick"},
+            at = @At("HEAD"),
+            require = 0
+    )
+    private void takeitout$pickBlock(CallbackInfo ci) {
+        if (this.world == null || this.player == null) return;
+        if (this.player.getAbilities().creativeMode) return;
+        if (!(this.crosshairTarget instanceof BlockHitResult blockHitResult)) return;
 
-        ItemStack stack;
-
-        BlockState blockState =  this.world.getBlockState(instance.getBlockPos());
+        BlockState blockState = this.world.getBlockState(blockHitResult.getBlockPos());
         Block block = blockState.getBlock();
-        stack = block.asItem().getDefaultStack();
+        ItemStack stack = block.asItem().getDefaultStack();
 
-        PlayerInventory playerInventory = this.player.getInventory();
-        int slot = playerInventory.getSlotWithStack(stack);
+        PlayerInventory inventory = this.player.getInventory();
+        if (inventory.getSlotWithStack(stack) != -1) return;
 
-        if (this.player.getAbilities().creativeMode) {
-            return instance.getBlockPos();
-        }
-
-        if (slot != -1) {
-            return instance.getBlockPos();
-        }
-        int shulker = Util.getShulkerWithStack(playerInventory, stack);
+        int shulker = Util.getShulkerWithStack(inventory, stack);
         if (shulker != -1) {
-            slot = Util.getSlotWithStack(ItemStackInventory.getInventoryFromShulker(this.player.getInventory().getStack(shulker)), stack);
-            if (slot != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
+            int inner = Util.getSlotWithStack(
+                    ItemStackInventory.getInventoryFromShulker(inventory.getStack(shulker)),
+                    stack
+            );
+            if (inner != -1) {
+                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
             }
         } else {
             WorldContainerSources.requestStack(MinecraftClient.getInstance(), stack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);
         }
-
-        return instance.getBlockPos();
     }
 }
