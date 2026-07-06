@@ -53,7 +53,7 @@ public abstract class PickBlockMixin {
                     stack
             );
             if (inner != -1) {
-                ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
+                ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE).toBuf());
             }
         } else {
             WorldContainerSources.requestStack(MinecraftClient.getInstance(), stack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);

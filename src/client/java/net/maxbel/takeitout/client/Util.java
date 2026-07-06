@@ -1,12 +1,13 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 
@@ -63,16 +64,12 @@ public class Util {
     }
 
     public static boolean isShulkerEmpty(ItemStack shulkerStack) {
-        ContainerComponent container = shulkerStack.get(DataComponentTypes.CONTAINER);
-        if (container == null) {
+        NbtCompound blockEntityTag = BlockItem.getBlockEntityNbt(shulkerStack);
+        if (blockEntityTag == null || !blockEntityTag.contains("Items", NbtElement.LIST_TYPE)) {
             return true;
         }
-        for (ItemStack innerStack : container.stream().toList()) {
-            if (!innerStack.isEmpty()) {
-                return false;
-            }
-        }
-        return true;
+        NbtList items = blockEntityTag.getList("Items", NbtElement.COMPOUND_TYPE);
+        return items.isEmpty();
     }
 
     public static int getSlotWithNoShulker(Inventory inventory) {

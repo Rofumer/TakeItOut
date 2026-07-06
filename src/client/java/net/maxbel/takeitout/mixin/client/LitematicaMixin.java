@@ -211,7 +211,7 @@ public class LitematicaMixin {
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
 
-        final int range = (int) mc.player.getBlockInteractionRange();
+        final int range = (int) mc.interactionManager.getReachDistance();
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {
@@ -348,7 +348,7 @@ public class LitematicaMixin {
                                 selectedSlot
                         );
                         awaitingStack = required.copyWithCount(1);
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
+                        ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE).toBuf());
                         if (easyPlaceMode) {
                             waitingForShulkerResponse = true;
                             waitingShulkerStack = required.copyWithCount(1);

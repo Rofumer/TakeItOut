@@ -2,8 +2,8 @@ package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import me.aleksilassila.litematica.printer.Printer;
-import me.aleksilassila.litematica.printer.SchematicBlockState;
+import me.aleksilassila.litematica.printer.v1_20.Printer;
+import me.aleksilassila.litematica.printer.v1_20.SchematicBlockState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
@@ -39,7 +39,7 @@ public abstract class PrinterMixin {
     @Final
     public ClientPlayerEntity player;
 
-    @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("TAIL"), remap = false)
+    @Inject(method = "me.aleksilassila.litematica.printer.v1_20.Printer.onGameTick", at = @At("TAIL"), remap = false)
     public void methodHookTail(CallbackInfoReturnable<Boolean> cir) {
         if (TakeitoutClient.AUTOTAKEOUT && awaitingStack.isEmpty()) {
 
@@ -52,7 +52,7 @@ public abstract class PrinterMixin {
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             List<BlockPos> positions = this.getReachablePositions();
             for (BlockPos position : positions) {
-                SchematicBlockState state = new SchematicBlockState(this.player.getEntityWorld(), worldSchematic, position);
+                SchematicBlockState state = new SchematicBlockState(this.player.getWorld(), worldSchematic, position);
                 if (state.targetState.equals(state.currentState) || state.targetState.isAir()) {
                     continue;
                 }
@@ -68,7 +68,7 @@ public abstract class PrinterMixin {
                     slot = getSlotWithStack((Inventory) (getInventoryFromShulker((ItemStack) player.getInventory().getStack(shulker))), itemStack);
                     if (slot != -1) {
                         awaitingStack = itemStack;
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(slot, shulker, TAKE_SINGLE_ITEM_MODE));
+                        ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(slot, shulker, TAKE_SINGLE_ITEM_MODE).toBuf());
                         break;
                     }
                 }
@@ -80,7 +80,7 @@ public abstract class PrinterMixin {
         }
     }
 
-    @Inject(method = "me.aleksilassila.litematica.printer.Printer.onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
+    @Inject(method = "me.aleksilassila.litematica.printer.v1_20.Printer.onGameTick", at = @At("HEAD"), remap = false, cancellable = true)
     public void methodHookHead(CallbackInfoReturnable<Boolean> cir) {
 
         if (!awaitingStack.isEmpty()) {

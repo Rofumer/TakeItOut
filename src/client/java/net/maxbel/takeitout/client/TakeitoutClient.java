@@ -87,16 +87,17 @@ public class TakeitoutClient implements ClientModInitializer {
                 CATEGORY
         ));
         WorldContainerSourceRenderer.register();
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerStackResponsePayload.ID, (payload, context) -> {
-            context.client().execute(() -> {
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, (client, handler, buf, responseSender) -> {
+            Takeitout.WorldContainerStackResponsePayload payload = Takeitout.WorldContainerStackResponsePayload.read(buf);
+            client.execute(() -> {
                 WorldContainerSources.recordResponse(payload.stack(), payload.success());
                 if (!payload.success()
                         && !awaitingStack.isEmpty()
                         && awaitingStack.isOf(payload.stack().getItem())) {
                     awaitingStack = ItemStack.EMPTY;
                     awaitingStackTicks = 0;
-                    if (context.client().player != null) {
-                        context.client().player.sendMessage(
+                    if (client.player != null) {
+                        client.player.sendMessage(
                                 Text.translatable("message.takeitout.item_not_found", payload.stack().getName()),
                                 true
                         );
@@ -104,8 +105,9 @@ public class TakeitoutClient implements ClientModInitializer {
                 }
             });
         });
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerItemsPayload.ID, (payload, context) -> {
-            context.client().execute(() -> {
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WORLD_CONTAINER_ITEMS_CHANNEL, (client, handler, buf, responseSender) -> {
+            Takeitout.WorldContainerItemsPayload payload = Takeitout.WorldContainerItemsPayload.read(buf);
+            client.execute(() -> {
                 WORLD_CONTAINER_ITEMS.clear();
                 WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
                 WORLD_CONTAINER_ITEMS.addAll(payload.items());
@@ -117,17 +119,19 @@ public class TakeitoutClient implements ClientModInitializer {
                 }
             });
         });
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.ServerConfigSyncPayload.ID, (payload, context) ->
-                context.client().execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit())
-        );
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SERVER_CONFIG_SYNC_CHANNEL, (client, handler, buf, responseSender) -> {
+            Takeitout.ServerConfigSyncPayload payload = Takeitout.ServerConfigSyncPayload.read(buf);
+            client.execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit());
+        });
 
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SharedGroupsListPayload.ID, (payload, context) ->
-                context.client().execute(() -> {
-                    SharedGroupsClient.SHARED_GROUPS.clear();
-                    SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
-                    SharedGroupsClient.serverSupportsSharedGroups = true;
-                })
-        );
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SHARED_GROUPS_LIST_CHANNEL, (client, handler, buf, responseSender) -> {
+            Takeitout.SharedGroupsListPayload payload = Takeitout.SharedGroupsListPayload.read(buf);
+            client.execute(() -> {
+                SharedGroupsClient.SHARED_GROUPS.clear();
+                SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
+                SharedGroupsClient.serverSupportsSharedGroups = true;
+            });
+        });
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.world != lastSourceWorld) {
@@ -216,7 +220,7 @@ public class TakeitoutClient implements ClientModInitializer {
             return;
         }
 
-        ClientPlayNetworking.send(new Takeitout.DumpInventoryPayload(dumps));
+        ClientPlayNetworking.send(Takeitout.DUMP_INVENTORY_CHANNEL, new Takeitout.DumpInventoryPayload(dumps).toBuf());
     }
 
     public static void setContainerSourceOutlineColor(int color) {

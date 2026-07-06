@@ -512,13 +512,13 @@ public class WorldContainerSources {
 
         LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}, fromUi={}", required, sources.size(), singleItemMode, fromUi);
         TakeitoutClient.awaitingStack = required.copyWithCount(1);
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
+        ClientPlayNetworking.send(Takeitout.GET_WORLD_CONTAINER_STACK_CHANNEL, new Takeitout.GetWorldContainerStackPayload(
                 sources,
                 required.copyWithCount(1),
                 singleItemMode,
                 fromUi,
                 WorldContainerDumps.getDumpReferencesSnapshot()
-        ));
+        ).toBuf());
         return true;
     }
 
@@ -744,7 +744,7 @@ public class WorldContainerSources {
                 String addressOrName = serverInfo.address != null && !serverInfo.address.isBlank()
                         ? serverInfo.address
                         : serverInfo.name;
-                String type = serverInfo.isRealm() ? "realm" : serverInfo.isLocal() ? "local" : "server";
+                String type = serverInfo.isLocal() ? "local" : "server";
                 worldKey = type + ":" + addressOrName;
             } else {
                 worldKey = "multiplayer:unknown";

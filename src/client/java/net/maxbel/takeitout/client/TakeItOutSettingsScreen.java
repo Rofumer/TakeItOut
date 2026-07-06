@@ -9,10 +9,11 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
+import net.minecraft.inventory.Inventories;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.text.Text;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.hit.BlockHitResult;
@@ -164,9 +165,9 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
         int maxScroll = Math.max(0, getContentHeight() - getListHeight());
-        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (verticalAmount * 18)));
+        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) (amount * 18)));
         return true;
     }
 
@@ -353,18 +354,9 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private static List<ItemStack> copyShulkerContents(ItemStack shulker) {
         DefaultedList<ItemStack> stacks = DefaultedList.ofSize(27, ItemStack.EMPTY);
-        ContainerComponent container = shulker.get(DataComponentTypes.CONTAINER);
-        if (container == null) {
-            return stacks;
-        }
-
-        int i = 0;
-        for (ItemStack stack : container.stream().toList()) {
-            if (i >= stacks.size()) {
-                break;
-            }
-            stacks.set(i, stack == null ? ItemStack.EMPTY : stack);
-            i++;
+        NbtCompound blockEntityTag = BlockItem.getBlockEntityNbt(shulker);
+        if (blockEntityTag != null && blockEntityTag.contains("Items", NbtElement.LIST_TYPE)) {
+            Inventories.readNbt(blockEntityTag, stacks);
         }
         return stacks;
     }
@@ -794,7 +786,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         int shareBtnX = rowX + rowWidth - 76;
                         if (mouseX >= shareBtnX && mouseX < shareBtnX + 72) {
                             List<Takeitout.SharedGroupDimension> data = WorldContainerSources.getGroupDataForPublishing();
-                            ClientPlayNetworking.send(new Takeitout.PublishGroupPayload(group, data));
+                            ClientPlayNetworking.send(Takeitout.PUBLISH_GROUP_CHANNEL, new Takeitout.PublishGroupPayload(group, data).toBuf());
                             return true;
                         }
                     }
@@ -845,7 +837,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         return true;
                     }
                     if (isOwn && mouseX >= removeBtnX && mouseX < removeBtnX + 60) {
-                        ClientPlayNetworking.send(new Takeitout.UnpublishGroupPayload(shared.id()));
+                        ClientPlayNetworking.send(Takeitout.UNPUBLISH_GROUP_CHANNEL, new Takeitout.UnpublishGroupPayload(shared.id()).toBuf());
                         return true;
                     }
                 }
@@ -1026,7 +1018,7 @@ public class TakeItOutSettingsScreen extends Screen {
         } else {
             sources = WorldContainerSources.getLinkedSourceReferencesSnapshot();
         }
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerItemsPayload(sources));
+        ClientPlayNetworking.send(Takeitout.GET_WORLD_CONTAINER_ITEMS_CHANNEL, new Takeitout.GetWorldContainerItemsPayload(sources).toBuf());
     }
 
     private List<WorldContainerSources.SourceEntry> getVisibleContainerSources() {

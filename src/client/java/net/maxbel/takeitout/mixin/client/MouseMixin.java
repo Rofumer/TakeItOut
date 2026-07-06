@@ -9,6 +9,7 @@ import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
 //import me.aleksilassila.litematica.printer.SchematicBlockState;
+import net.maxbel.takeitout.client.PendingPlacementState;
 import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.MinecraftClient;
@@ -35,12 +36,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class MouseMixin {
 
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/mouse");
-    @Unique private static BlockPos pendingPlacementPos = null;
-    @Unique private static Item pendingPlacementExpectedItem = null;
-    @Unique private static int pendingPlacementTicks = 0;
-    @Unique private static boolean pendingPlacementNeedsUseRetry = false;
-    @Unique private static boolean pendingPlacementUseRetried = false;
-    @Unique private static final int PLACEMENT_VERIFY_TIMEOUT_TICKS = 8;
 
     @Shadow @Final private MinecraftClient client;
 
@@ -162,69 +157,11 @@ public class MouseMixin {
                 selectedSlot
         );
 
-        pendingPlacementPos = schematicHit.getBlockPos().toImmutable();
-        pendingPlacementExpectedItem = wanted.getItem();
-        pendingPlacementTicks = 0;
-        pendingPlacementNeedsUseRetry = !afterPickInHand.isOf(wanted.getItem());
-        pendingPlacementUseRetried = false;
-    }
-
-    @Inject(method = "tick", at = @At("TAIL"))
-    private void verifyPlacement(CallbackInfo ci) {
-        if (pendingPlacementPos == null || pendingPlacementExpectedItem == null || client == null || client.world == null) {
-            return;
-        }
-
-        pendingPlacementTicks++;
-
-        if (pendingPlacementNeedsUseRetry && !pendingPlacementUseRetried && client.player != null && client.currentScreen == null) {
-            ItemStack handNow = client.player.getStackInHand(Hand.MAIN_HAND);
-            if (handNow.isOf(pendingPlacementExpectedItem)) {
-                LOGGER.debug(
-                        "PKM retry use after delayed pick-block: pos={}, expected={}, handNow={}, ticksWaited={}",
-                        pendingPlacementPos,
-                        pendingPlacementExpectedItem,
-                        handNow,
-                        pendingPlacementTicks
-                );
-                ((MinecraftClientAccessor) (Object) client).takeitout$invokeDoItemUse();
-                pendingPlacementUseRetried = true;
-                pendingPlacementNeedsUseRetry = false;
-            }
-        }
-
-        ItemStack nowAtPos = new ItemStack(client.world.getBlockState(pendingPlacementPos).getBlock().asItem());
-        boolean placed = nowAtPos.isOf(pendingPlacementExpectedItem);
-        if (placed) {
-            LOGGER.debug(
-                    "PKM placement SUCCESS: pos={}, expected={}, actual={}, ticksWaited={}",
-                    pendingPlacementPos,
-                    pendingPlacementExpectedItem,
-                    nowAtPos,
-                    pendingPlacementTicks
-            );
-            pendingPlacementPos = null;
-            pendingPlacementExpectedItem = null;
-            pendingPlacementTicks = 0;
-            pendingPlacementNeedsUseRetry = false;
-            pendingPlacementUseRetried = false;
-            return;
-        }
-
-        if (pendingPlacementTicks >= PLACEMENT_VERIFY_TIMEOUT_TICKS) {
-            LOGGER.warn(
-                    "PKM placement FAIL/TIMEOUT: pos={}, expected={}, actual={}, ticksWaited={}",
-                    pendingPlacementPos,
-                    pendingPlacementExpectedItem,
-                    nowAtPos,
-                    pendingPlacementTicks
-            );
-            pendingPlacementPos = null;
-            pendingPlacementExpectedItem = null;
-            pendingPlacementTicks = 0;
-            pendingPlacementNeedsUseRetry = false;
-            pendingPlacementUseRetried = false;
-        }
+        PendingPlacementState.pos = schematicHit.getBlockPos().toImmutable();
+        PendingPlacementState.expectedItem = wanted.getItem();
+        PendingPlacementState.ticks = 0;
+        PendingPlacementState.needsUseRetry = !afterPickInHand.isOf(wanted.getItem());
+        PendingPlacementState.useRetried = false;
     }
 
 

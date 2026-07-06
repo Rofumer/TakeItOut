@@ -47,7 +47,7 @@ public final class WorldContainerMaterialListCache {
         }
 
         refreshPending = true;
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerItemsPayload(sources));
+        ClientPlayNetworking.send(Takeitout.GET_WORLD_CONTAINER_ITEMS_CHANNEL, new Takeitout.GetWorldContainerItemsPayload(sources).toBuf());
     }
 
     public static void handleItemsPayload(Takeitout.WorldContainerItemsPayload payload) {

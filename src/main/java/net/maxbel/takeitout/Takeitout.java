@@ -7,7 +7,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.BarrelBlock;
@@ -17,14 +17,12 @@ import net.minecraft.block.ChestBlock;
 import net.minecraft.block.EnderChestBlock;
 import net.minecraft.block.ShulkerBoxBlock;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
+import net.minecraft.inventory.Inventories;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.*;
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -62,36 +60,48 @@ public class Takeitout implements ModInitializer {
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
     private static boolean allowAllItemsTake = true;
 
-    public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPayload {
-        public static final CustomPayload.Id<GetShulkerStackPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "getstack"));
+    public static final Identifier GET_SHULKER_STACK_CHANNEL = new Identifier("takeitout", "getstack");
+    public static final Identifier GET_WORLD_CONTAINER_STACK_CHANNEL = new Identifier("takeitout", "get_world_container_stack");
+    public static final Identifier WORLD_CONTAINER_STACK_RESPONSE_CHANNEL = new Identifier("takeitout", "world_container_stack_response");
+    public static final Identifier GET_WORLD_CONTAINER_ITEMS_CHANNEL = new Identifier("takeitout", "get_world_container_items");
+    public static final Identifier WORLD_CONTAINER_ITEMS_CHANNEL = new Identifier("takeitout", "world_container_items");
+    public static final Identifier DUMP_INVENTORY_CHANNEL = new Identifier("takeitout", "dump_inventory");
+    public static final Identifier SERVER_CONFIG_SYNC_CHANNEL = new Identifier("takeitout", "server_config_sync");
+    public static final Identifier PUBLISH_GROUP_CHANNEL = new Identifier("takeitout", "publish_group");
+    public static final Identifier UNPUBLISH_GROUP_CHANNEL = new Identifier("takeitout", "unpublish_group");
+    public static final Identifier SHARED_GROUPS_LIST_CHANNEL = new Identifier("takeitout", "shared_groups_list");
 
-        public static final PacketCodec<RegistryByteBuf, GetShulkerStackPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.INTEGER,
-                        GetShulkerStackPayload::slot,
-                        PacketCodecs.INTEGER,
-                        GetShulkerStackPayload::shulker,
-                        PacketCodecs.BOOL,
-                        GetShulkerStackPayload::singleItemMode,
-                        GetShulkerStackPayload::new
-                );
+    public interface Payload {
+        void write(PacketByteBuf buf);
 
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        default PacketByteBuf toBuf() {
+            PacketByteBuf buf = PacketByteBufs.create();
+            write(buf);
+            return buf;
+        }
+    }
+
+    public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeVarInt(slot);
+            buf.writeVarInt(shulker);
+            buf.writeBoolean(singleItemMode);
+        }
+
+        public static GetShulkerStackPayload read(PacketByteBuf buf) {
+            return new GetShulkerStackPayload(buf.readVarInt(), buf.readVarInt(), buf.readBoolean());
         }
     }
 
     public record WorldContainerSource(String dimension, long position) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerSource> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
-                        WorldContainerSource::dimension,
-                        PacketCodecs.VAR_LONG,
-                        WorldContainerSource::position,
-                        WorldContainerSource::new
-                );
+        public void write(PacketByteBuf buf) {
+            buf.writeString(dimension);
+            buf.writeVarLong(position);
+        }
+
+        public static WorldContainerSource read(PacketByteBuf buf) {
+            return new WorldContainerSource(buf.readString(), buf.readVarLong());
+        }
     }
 
     private enum LinkedContainerExchangeMode {
@@ -119,234 +129,179 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps) implements CustomPayload {
-        public static final CustomPayload.Id<GetWorldContainerStackPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_stack"));
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeCollection(sources, (b, v) -> v.write(b));
+            buf.writeItemStack(stack);
+            buf.writeBoolean(singleItemMode);
+            buf.writeBoolean(fromUi);
+            buf.writeCollection(dumps, (b, v) -> v.write(b));
+        }
 
-        public static final PacketCodec<RegistryByteBuf, GetWorldContainerStackPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
-                        GetWorldContainerStackPayload::sources,
-                        ItemStack.PACKET_CODEC,
-                        GetWorldContainerStackPayload::stack,
-                        PacketCodecs.BOOL,
-                        GetWorldContainerStackPayload::singleItemMode,
-                        PacketCodecs.BOOL,
-                        GetWorldContainerStackPayload::fromUi,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
-                        GetWorldContainerStackPayload::dumps,
-                        GetWorldContainerStackPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static GetWorldContainerStackPayload read(PacketByteBuf buf) {
+            List<WorldContainerSource> sources = buf.readList(WorldContainerSource::read);
+            ItemStack stack = buf.readItemStack();
+            boolean singleItemMode = buf.readBoolean();
+            boolean fromUi = buf.readBoolean();
+            List<WorldContainerSource> dumps = buf.readList(WorldContainerSource::read);
+            return new GetWorldContainerStackPayload(sources, stack, singleItemMode, fromUi, dumps);
         }
     }
 
-    public record WorldContainerStackResponsePayload(ItemStack stack, boolean success) implements CustomPayload {
-        public static final CustomPayload.Id<WorldContainerStackResponsePayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "world_container_stack_response"));
+    public record WorldContainerStackResponsePayload(ItemStack stack, boolean success) {
+        public void write(PacketByteBuf buf) {
+            buf.writeItemStack(stack);
+            buf.writeBoolean(success);
+        }
 
-        public static final PacketCodec<RegistryByteBuf, WorldContainerStackResponsePayload> CODEC =
-                PacketCodec.tuple(
-                        ItemStack.PACKET_CODEC,
-                        WorldContainerStackResponsePayload::stack,
-                        PacketCodecs.BOOL,
-                        WorldContainerStackResponsePayload::success,
-                        WorldContainerStackResponsePayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static WorldContainerStackResponsePayload read(PacketByteBuf buf) {
+            return new WorldContainerStackResponsePayload(buf.readItemStack(), buf.readBoolean());
         }
     }
 
     public record WorldContainerItemCount(ItemStack stack, int count) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerItemCount> CODEC =
-                PacketCodec.tuple(
-                        ItemStack.PACKET_CODEC,
-                        WorldContainerItemCount::stack,
-                        PacketCodecs.INTEGER,
-                        WorldContainerItemCount::count,
-                        WorldContainerItemCount::new
-                );
+        public void write(PacketByteBuf buf) {
+            buf.writeItemStack(stack);
+            buf.writeVarInt(count);
+        }
+
+        public static WorldContainerItemCount read(PacketByteBuf buf) {
+            return new WorldContainerItemCount(buf.readItemStack(), buf.readVarInt());
+        }
     }
 
     public record WorldContainerContents(WorldContainerSource source, List<WorldContainerItemCount> items) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerContents> CODEC =
-                PacketCodec.tuple(
-                        WorldContainerSource.CODEC,
-                        WorldContainerContents::source,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
-                        WorldContainerContents::items,
-                        WorldContainerContents::new
-                );
+        public void write(PacketByteBuf buf) {
+            source.write(buf);
+            buf.writeCollection(items, (b, v) -> v.write(b));
+        }
+
+        public static WorldContainerContents read(PacketByteBuf buf) {
+            WorldContainerSource source = WorldContainerSource.read(buf);
+            List<WorldContainerItemCount> items = buf.readList(WorldContainerItemCount::read);
+            return new WorldContainerContents(source, items);
+        }
     }
 
-    public record GetWorldContainerItemsPayload(List<WorldContainerSource> sources) implements CustomPayload {
-        public static final CustomPayload.Id<GetWorldContainerItemsPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_items"));
+    public record GetWorldContainerItemsPayload(List<WorldContainerSource> sources) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeCollection(sources, (b, v) -> v.write(b));
+        }
 
-        public static final PacketCodec<RegistryByteBuf, GetWorldContainerItemsPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
-                        GetWorldContainerItemsPayload::sources,
-                        GetWorldContainerItemsPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static GetWorldContainerItemsPayload read(PacketByteBuf buf) {
+            return new GetWorldContainerItemsPayload(buf.readList(WorldContainerSource::read));
         }
     }
 
     public record WorldContainerItemsPayload(
             List<WorldContainerItemCount> items,
             List<WorldContainerContents> containers
-    ) implements CustomPayload {
-        public static final CustomPayload.Id<WorldContainerItemsPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "world_container_items"));
+    ) {
+        public void write(PacketByteBuf buf) {
+            buf.writeCollection(items, (b, v) -> v.write(b));
+            buf.writeCollection(containers, (b, v) -> v.write(b));
+        }
 
-        public static final PacketCodec<RegistryByteBuf, WorldContainerItemsPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
-                        WorldContainerItemsPayload::items,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerContents.CODEC),
-                        WorldContainerItemsPayload::containers,
-                        WorldContainerItemsPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static WorldContainerItemsPayload read(PacketByteBuf buf) {
+            List<WorldContainerItemCount> items = buf.readList(WorldContainerItemCount::read);
+            List<WorldContainerContents> containers = buf.readList(WorldContainerContents::read);
+            return new WorldContainerItemsPayload(items, containers);
         }
     }
 
-    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements CustomPayload {
-        public static final CustomPayload.Id<DumpInventoryPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "dump_inventory"));
+    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeCollection(dumps, (b, v) -> v.write(b));
+        }
 
-        public static final PacketCodec<RegistryByteBuf, DumpInventoryPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
-                        DumpInventoryPayload::dumps,
-                        DumpInventoryPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static DumpInventoryPayload read(PacketByteBuf buf) {
+            return new DumpInventoryPayload(buf.readList(WorldContainerSource::read));
         }
     }
 
-    public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPayload {
-        public static final CustomPayload.Id<ServerConfigSyncPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "server_config_sync"));
+    public record ServerConfigSyncPayload(int linkedContainerScanLimit) {
+        public void write(PacketByteBuf buf) {
+            buf.writeVarInt(linkedContainerScanLimit);
+        }
 
-        public static final PacketCodec<RegistryByteBuf, ServerConfigSyncPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.VAR_INT,
-                        ServerConfigSyncPayload::linkedContainerScanLimit,
-                        ServerConfigSyncPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static ServerConfigSyncPayload read(PacketByteBuf buf) {
+            return new ServerConfigSyncPayload(buf.readVarInt());
         }
     }
 
     public record SharedSourceEntry(long position, boolean linked) {
-        public static final PacketCodec<RegistryByteBuf, SharedSourceEntry> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.VAR_LONG,
-                        SharedSourceEntry::position,
-                        PacketCodecs.BOOL,
-                        SharedSourceEntry::linked,
-                        SharedSourceEntry::new
-                );
+        public void write(PacketByteBuf buf) {
+            buf.writeVarLong(position);
+            buf.writeBoolean(linked);
+        }
+
+        public static SharedSourceEntry read(PacketByteBuf buf) {
+            return new SharedSourceEntry(buf.readVarLong(), buf.readBoolean());
+        }
     }
 
     public record SharedGroupDimension(String dimension, List<SharedSourceEntry> sources) {
-        public static final PacketCodec<RegistryByteBuf, SharedGroupDimension> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
-                        SharedGroupDimension::dimension,
-                        PacketCodecs.collection(ArrayList::new, SharedSourceEntry.CODEC),
-                        SharedGroupDimension::sources,
-                        SharedGroupDimension::new
-                );
+        public void write(PacketByteBuf buf) {
+            buf.writeString(dimension);
+            buf.writeCollection(sources, (b, v) -> v.write(b));
+        }
+
+        public static SharedGroupDimension read(PacketByteBuf buf) {
+            String dimension = buf.readString();
+            List<SharedSourceEntry> sources = buf.readList(SharedSourceEntry::read);
+            return new SharedGroupDimension(dimension, sources);
+        }
     }
 
     public record SharedGroupEntry(String id, String name, String authorName, String authorId, List<SharedGroupDimension> dimensions) {
-        public static final PacketCodec<RegistryByteBuf, SharedGroupEntry> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
-                        SharedGroupEntry::id,
-                        PacketCodecs.STRING,
-                        SharedGroupEntry::name,
-                        PacketCodecs.STRING,
-                        SharedGroupEntry::authorName,
-                        PacketCodecs.STRING,
-                        SharedGroupEntry::authorId,
-                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
-                        SharedGroupEntry::dimensions,
-                        SharedGroupEntry::new
-                );
-    }
+        public void write(PacketByteBuf buf) {
+            buf.writeString(id);
+            buf.writeString(name);
+            buf.writeString(authorName);
+            buf.writeString(authorId);
+            buf.writeCollection(dimensions, (b, v) -> v.write(b));
+        }
 
-    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements CustomPayload {
-        public static final CustomPayload.Id<PublishGroupPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "publish_group"));
-
-        public static final PacketCodec<RegistryByteBuf, PublishGroupPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
-                        PublishGroupPayload::name,
-                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
-                        PublishGroupPayload::dimensions,
-                        PublishGroupPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static SharedGroupEntry read(PacketByteBuf buf) {
+            String id = buf.readString();
+            String name = buf.readString();
+            String authorName = buf.readString();
+            String authorId = buf.readString();
+            List<SharedGroupDimension> dimensions = buf.readList(SharedGroupDimension::read);
+            return new SharedGroupEntry(id, name, authorName, authorId, dimensions);
         }
     }
 
-    public record UnpublishGroupPayload(String groupId) implements CustomPayload {
-        public static final CustomPayload.Id<UnpublishGroupPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "unpublish_group"));
+    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeString(name);
+            buf.writeCollection(dimensions, (b, v) -> v.write(b));
+        }
 
-        public static final PacketCodec<RegistryByteBuf, UnpublishGroupPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
-                        UnpublishGroupPayload::groupId,
-                        UnpublishGroupPayload::new
-                );
-
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+        public static PublishGroupPayload read(PacketByteBuf buf) {
+            String name = buf.readString();
+            List<SharedGroupDimension> dimensions = buf.readList(SharedGroupDimension::read);
+            return new PublishGroupPayload(name, dimensions);
         }
     }
 
-    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) implements CustomPayload {
-        public static final CustomPayload.Id<SharedGroupsListPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "shared_groups_list"));
+    public record UnpublishGroupPayload(String groupId) implements Payload {
+        public void write(PacketByteBuf buf) {
+            buf.writeString(groupId);
+        }
 
-        public static final PacketCodec<RegistryByteBuf, SharedGroupsListPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, SharedGroupEntry.CODEC),
-                        SharedGroupsListPayload::groups,
-                        SharedGroupsListPayload::new
-                );
+        public static UnpublishGroupPayload read(PacketByteBuf buf) {
+            return new UnpublishGroupPayload(buf.readString());
+        }
+    }
 
-        @Override
-        public Id<? extends CustomPayload> getId() {
-            return ID;
+    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) {
+        public void write(PacketByteBuf buf) {
+            buf.writeCollection(groups, (b, v) -> v.write(b));
+        }
+
+        public static SharedGroupsListPayload read(PacketByteBuf buf) {
+            return new SharedGroupsListPayload(buf.readList(SharedGroupEntry::read));
         }
     }
 
@@ -354,40 +309,50 @@ public class Takeitout implements ModInitializer {
     public void onInitialize() {
         loadServerConfig();
 
-        PayloadTypeRegistry.playC2S().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(PublishGroupPayload.ID, PublishGroupPayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC);
-
-        ServerPlayNetworking.registerGlobalReceiver(GetShulkerStackPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handleGetShulkerStack(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(GET_SHULKER_STACK_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            GetShulkerStackPayload payload = GetShulkerStackPayload.read(buf);
+            server.execute(() -> handleGetShulkerStack(player, payload));
         });
-        ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerStackPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handleGetWorldContainerStack(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(GET_WORLD_CONTAINER_STACK_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            GetWorldContainerStackPayload payload = GetWorldContainerStackPayload.read(buf);
+            server.execute(() -> handleGetWorldContainerStack(player, payload));
         });
-        ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handleGetWorldContainerItems(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(GET_WORLD_CONTAINER_ITEMS_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            GetWorldContainerItemsPayload payload = GetWorldContainerItemsPayload.read(buf);
+            server.execute(() -> handleGetWorldContainerItems(player, payload));
         });
-        ServerPlayNetworking.registerGlobalReceiver(DumpInventoryPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handleDumpInventoryPayload(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(DUMP_INVENTORY_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            DumpInventoryPayload payload = DumpInventoryPayload.read(buf);
+            server.execute(() -> handleDumpInventoryPayload(player, payload));
         });
-        ServerPlayNetworking.registerGlobalReceiver(PublishGroupPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handlePublishGroupPayload(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(PUBLISH_GROUP_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            PublishGroupPayload payload = PublishGroupPayload.read(buf);
+            server.execute(() -> handlePublishGroupPayload(player, payload));
         });
-        ServerPlayNetworking.registerGlobalReceiver(UnpublishGroupPayload.ID, (payload, context) -> {
-            context.server().execute(() -> handleUnpublishGroupPayload(context.player(), payload));
+        ServerPlayNetworking.registerGlobalReceiver(UNPUBLISH_GROUP_CHANNEL, (server, player, handler, buf, responseSender) -> {
+            UnpublishGroupPayload payload = UnpublishGroupPayload.read(buf);
+            server.execute(() -> handleUnpublishGroupPayload(player, payload));
         });
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit));
-            sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
+            PacketByteBuf configBuf = PacketByteBufs.create();
+            new ServerConfigSyncPayload(linkedContainerScanLimit).write(configBuf);
+            sender.sendPacket(SERVER_CONFIG_SYNC_CHANNEL, configBuf);
+
+            PacketByteBuf groupsBuf = PacketByteBufs.create();
+            new SharedGroupsListPayload(loadSharedGroups()).write(groupsBuf);
+            sender.sendPacket(SHARED_GROUPS_LIST_CHANNEL, groupsBuf);
         });
+    }
+
+    private static void sendToPlayer(ServerPlayerEntity player, Identifier channel, PayloadWriter writer) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        writer.write(buf);
+        ServerPlayNetworking.send(player, channel, buf);
+    }
+
+    private interface PayloadWriter {
+        void write(PacketByteBuf buf);
     }
 
     private static void handlePublishGroupPayload(ServerPlayerEntity player, PublishGroupPayload payload) {
@@ -535,7 +500,7 @@ public class Takeitout implements ModInitializer {
         }
         SharedGroupsListPayload packet = new SharedGroupsListPayload(groups);
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            ServerPlayNetworking.send(p, packet);
+            sendToPlayer(p, SHARED_GROUPS_LIST_CHANNEL, packet::write);
         }
     }
 
@@ -720,7 +685,7 @@ public class Takeitout implements ModInitializer {
 
         if (payload.fromUi() && !allowAllItemsTake) {
             player.sendMessage(Text.literal("TakeItOut: taking items via All Items tab is disabled on this server"), false);
-            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+            sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false)::write);
             return;
         }
 
@@ -744,7 +709,7 @@ public class Takeitout implements ModInitializer {
 
             int slot = getSlotWithStack(inventory, requested);
             if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true)::write);
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
                         player.getName().getString(),
@@ -805,7 +770,7 @@ public class Takeitout implements ModInitializer {
             }
 
             if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true)::write);
                 LOGGER.debug(
                         "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
                         player.getName().getString(),
@@ -818,7 +783,7 @@ public class Takeitout implements ModInitializer {
             }
         }
 
-        ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+        sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false)::write);
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
@@ -834,7 +799,7 @@ public class Takeitout implements ModInitializer {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
         if (payload.sources() == null) {
-            ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
+            sendToPlayer(player, WORLD_CONTAINER_ITEMS_CHANNEL, new WorldContainerItemsPayload(items, containers)::write);
             return;
         }
 
@@ -866,7 +831,7 @@ public class Takeitout implements ModInitializer {
             containers.add(new WorldContainerContents(source, containerItems));
         }
 
-        ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
+        sendToPlayer(player, WORLD_CONTAINER_ITEMS_CHANNEL, new WorldContainerItemsPayload(items, containers)::write);
     }
 
     private static void handleDumpInventoryPayload(ServerPlayerEntity player, DumpInventoryPayload payload) {
@@ -907,7 +872,7 @@ public class Takeitout implements ModInitializer {
 
         for (int i = 0; i < items.size(); i++) {
             WorldContainerItemCount existing = items.get(i);
-            if (ItemStack.areItemsAndComponentsEqual(existing.stack(), keyStack)) {
+            if (ItemStack.canCombine(existing.stack(), keyStack)) {
                 items.set(i, new WorldContainerItemCount(existing.stack(), existing.count() + stack.getCount()));
                 return;
             }
@@ -950,7 +915,7 @@ public class Takeitout implements ModInitializer {
             return true;
         }
 
-        if (ItemStack.areItemsAndComponentsEqual(currentMainHand, extracted)
+        if (ItemStack.canCombine(currentMainHand, extracted)
                 && currentMainHand.getCount() < currentMainHand.getMaxCount()) {
             int canAdd = Math.min(currentMainHand.getMaxCount() - currentMainHand.getCount(), extracted.getCount());
             ItemStack actualRemaining = stackInContainer.copy();
@@ -965,7 +930,7 @@ public class Takeitout implements ModInitializer {
 
         for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
             ItemStack invStack = player.getInventory().getStack(i);
-            if (ItemStack.areItemsAndComponentsEqual(invStack, extracted)
+            if (ItemStack.canCombine(invStack, extracted)
                     && invStack.getCount() < invStack.getMaxCount()) {
                 int canAdd = Math.min(invStack.getMaxCount() - invStack.getCount(), extracted.getCount());
                 ItemStack actualRemaining = stackInContainer.copy();
@@ -1082,7 +1047,7 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, remaining)) {
+            if (!ItemStack.canCombine(existing, remaining)) {
                 continue;
             }
 
@@ -1125,11 +1090,11 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, toInsert)) {
+            if (!ItemStack.canCombine(existing, toInsert)) {
                 continue;
             }
 
-            int max = Math.min(existing.getMaxCount(), inventory.getMaxCount(existing));
+            int max = Math.min(existing.getMaxCount(), inventory.getMaxCountPerStack());
             remaining -= Math.max(0, max - existing.getCount());
         }
 
@@ -1143,7 +1108,7 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
-            remaining -= Math.min(toInsert.getMaxCount(), inventory.getMaxCount(toInsert));
+            remaining -= Math.min(toInsert.getMaxCount(), inventory.getMaxCountPerStack());
         }
 
         return remaining <= 0;
@@ -1158,11 +1123,11 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, remaining)) {
+            if (!ItemStack.canCombine(existing, remaining)) {
                 continue;
             }
 
-            int max = Math.min(existing.getMaxCount(), inventory.getMaxCount(existing));
+            int max = Math.min(existing.getMaxCount(), inventory.getMaxCountPerStack());
             int canMove = Math.min(max - existing.getCount(), remaining.getCount());
             if (canMove <= 0) {
                 continue;
@@ -1182,7 +1147,7 @@ public class Takeitout implements ModInitializer {
                 continue;
             }
 
-            int move = Math.min(remaining.getCount(), Math.min(remaining.getMaxCount(), inventory.getMaxCount(remaining)));
+            int move = Math.min(remaining.getCount(), Math.min(remaining.getMaxCount(), inventory.getMaxCountPerStack()));
             ItemStack moved = remaining.copy();
             moved.setCount(move);
             inventory.setStack(i, moved);
@@ -1195,7 +1160,7 @@ public class Takeitout implements ModInitializer {
     private static int getSlotWithStack(Inventory inventory, ItemStack stackReference) {
         for (int i = 0; i < inventory.size(); ++i) {
             ItemStack stack = inventory.getStack(i);
-            if (stack != null && !stack.isEmpty() && ItemStack.areItemsAndComponentsEqual(stack, stackReference)) {
+            if (stack != null && !stack.isEmpty() && ItemStack.canCombine(stack, stackReference)) {
                 return i;
             }
         }
@@ -1414,26 +1379,25 @@ public class Takeitout implements ModInitializer {
 
     private static List<ItemStack> copyContainerContents(ItemStack shulkerStack) {
         DefaultedList<ItemStack> stacks = DefaultedList.ofSize(27, ItemStack.EMPTY);
-        ContainerComponent container = shulkerStack.get(DataComponentTypes.CONTAINER);
+        NbtCompound blockEntityTag = BlockItem.getBlockEntityNbt(shulkerStack);
 
-        if (container == null) {
-            return stacks;
-        }
-
-        int i = 0;
-        for (ItemStack stack : container.stream().toList()) {
-            if (i >= stacks.size()) {
-                break;
-            }
-            stacks.set(i, stack == null ? ItemStack.EMPTY : stack.copy());
-            i++;
+        if (blockEntityTag != null && blockEntityTag.contains("Items", NbtElement.LIST_TYPE)) {
+            Inventories.readNbt(blockEntityTag, stacks);
         }
 
         return stacks;
     }
 
     private static void setShulkerContents(ItemStack shulkerStack, List<ItemStack> itemStacks) {
-        shulkerStack.set(DataComponentTypes.CONTAINER, ContainerComponent.fromStacks(itemStacks));
+        NbtCompound blockEntityTag = BlockItem.getBlockEntityNbt(shulkerStack);
+        if (blockEntityTag == null) {
+            blockEntityTag = new NbtCompound();
+        }
+
+        Inventories.writeNbt(blockEntityTag, DefaultedList.copyOf(ItemStack.EMPTY, itemStacks.toArray(new ItemStack[0])));
+        blockEntityTag.putString("id", "minecraft:shulker_box");
+
+        shulkerStack.getOrCreateNbt().put("BlockEntityTag", blockEntityTag);
     }
 
     private static boolean isShulkerItem(ItemStack item) {
