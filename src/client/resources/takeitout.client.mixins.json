@@ -21,7 +21,6 @@
     "defaultRequire": 1
   },
   "mixins": [
-    "PrinterMixin",
-    "NewPrinterMixin"
+    "PrinterMixin"
   ]
 }

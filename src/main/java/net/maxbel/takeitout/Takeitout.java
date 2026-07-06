@@ -72,7 +72,7 @@ public class Takeitout implements ModInitializer {
                         GetShulkerStackPayload::slot,
                         PacketCodecs.INTEGER,
                         GetShulkerStackPayload::shulker,
-                        PacketCodecs.BOOLEAN,
+                        PacketCodecs.BOOL,
                         GetShulkerStackPayload::singleItemMode,
                         GetShulkerStackPayload::new
                 );
@@ -88,7 +88,7 @@ public class Takeitout implements ModInitializer {
                 PacketCodec.tuple(
                         PacketCodecs.STRING,
                         WorldContainerSource::dimension,
-                        PacketCodecs.LONG,
+                        PacketCodecs.VAR_LONG,
                         WorldContainerSource::position,
                         WorldContainerSource::new
                 );
@@ -129,9 +129,9 @@ public class Takeitout implements ModInitializer {
                         GetWorldContainerStackPayload::sources,
                         ItemStack.PACKET_CODEC,
                         GetWorldContainerStackPayload::stack,
-                        PacketCodecs.BOOLEAN,
+                        PacketCodecs.BOOL,
                         GetWorldContainerStackPayload::singleItemMode,
-                        PacketCodecs.BOOLEAN,
+                        PacketCodecs.BOOL,
                         GetWorldContainerStackPayload::fromUi,
                         PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
                         GetWorldContainerStackPayload::dumps,
@@ -152,7 +152,7 @@ public class Takeitout implements ModInitializer {
                 PacketCodec.tuple(
                         ItemStack.PACKET_CODEC,
                         WorldContainerStackResponsePayload::stack,
-                        PacketCodecs.BOOLEAN,
+                        PacketCodecs.BOOL,
                         WorldContainerStackResponsePayload::success,
                         WorldContainerStackResponsePayload::new
                 );
@@ -261,9 +261,9 @@ public class Takeitout implements ModInitializer {
     public record SharedSourceEntry(long position, boolean linked) {
         public static final PacketCodec<RegistryByteBuf, SharedSourceEntry> CODEC =
                 PacketCodec.tuple(
-                        PacketCodecs.LONG,
+                        PacketCodecs.VAR_LONG,
                         SharedSourceEntry::position,
-                        PacketCodecs.BOOLEAN,
+                        PacketCodecs.BOOL,
                         SharedSourceEntry::linked,
                         SharedSourceEntry::new
                 );

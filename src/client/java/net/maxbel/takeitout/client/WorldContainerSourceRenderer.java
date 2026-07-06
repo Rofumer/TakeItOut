@@ -7,7 +7,7 @@ import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.VertexRendering;
+import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
@@ -54,10 +54,9 @@ public class WorldContainerSourceRenderer {
                 continue;
             }
 
-            VertexRendering.drawOutline(
+            drawOutline(
                     context.matrixStack(),
                     vertexConsumer,
-                    OUTLINE_SHAPE,
                     source.getX() - cameraPos.x,
                     source.getY() - cameraPos.y,
                     source.getZ() - cameraPos.z,
@@ -71,15 +70,42 @@ public class WorldContainerSourceRenderer {
                 continue;
             }
 
-            VertexRendering.drawOutline(
+            drawOutline(
                     context.matrixStack(),
                     vertexConsumer,
-                    OUTLINE_SHAPE,
                     dump.getX() - cameraPos.x,
                     dump.getY() - cameraPos.y,
                     dump.getZ() - cameraPos.z,
                     dumpColor
             );
         }
+    }
+
+    private static void drawOutline(
+            net.minecraft.client.util.math.MatrixStack matrixStack,
+            VertexConsumer vertexConsumer,
+            double x,
+            double y,
+            double z,
+            int argbColor
+    ) {
+        float alpha = ((argbColor >> 24) & 0xFF) / 255.0F;
+        float red = ((argbColor >> 16) & 0xFF) / 255.0F;
+        float green = ((argbColor >> 8) & 0xFF) / 255.0F;
+        float blue = (argbColor & 0xFF) / 255.0F;
+
+        WorldRenderer.drawShapeOutline(
+                matrixStack,
+                vertexConsumer,
+                OUTLINE_SHAPE,
+                x,
+                y,
+                z,
+                red,
+                green,
+                blue,
+                alpha,
+                false
+        );
     }
 }
