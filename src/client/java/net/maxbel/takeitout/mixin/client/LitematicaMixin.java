@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
-import static fi.dy.masa.litematica.util.WorldUtils.getValidBlockRange;
 import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShulker;
 import static net.maxbel.takeitout.client.TakeitoutClient.TAKE_SINGLE_ITEM_MODE;
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
@@ -201,7 +200,7 @@ public class LitematicaMixin {
                     value = "INVOKE",
                     target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
             ),
-            remap = false
+            remap = true
     )
     private static MinecraftClient checkItemAndTick(MinecraftClient client) {
         return client;
@@ -212,7 +211,7 @@ public class LitematicaMixin {
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
 
-        final int range = (int) getValidBlockRange(mc);
+        final int range = (int) mc.player.getBlockInteractionRange();
         BlockHitResult hit = RayTraceUtils.traceToSchematicWorld(mc.player, range, true, true);
 
         if (hit == null || hit.getType() != HitResult.Type.BLOCK) {

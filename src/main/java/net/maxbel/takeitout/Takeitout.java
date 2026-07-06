@@ -1270,7 +1270,7 @@ public class Takeitout implements ModInitializer {
 
         Identifier dimensionId;
         try {
-            dimensionId = Identifier.of(source.dimension());
+            dimensionId = new Identifier(source.dimension());
         } catch (Exception ignored) {
             return null;
         }
@@ -1336,7 +1336,7 @@ public class Takeitout implements ModInitializer {
                 }
 
                 try {
-                    Identifier.of(dimension);
+                    new Identifier(dimension);
                     ALLOWED_EXCHANGE_DIMENSIONS.add(dimension);
                 } catch (Exception e) {
                     LOGGER.warn("Ignoring invalid TakeItOut exchange dimension in server config: {}", dimension);

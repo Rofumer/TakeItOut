@@ -4,10 +4,9 @@
   "package": "net.maxbel.takeitout.mixin.client",
   "plugin": "net.maxbel.takeitout.compat.TakeItOutMixinPlugin",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "takeitout.refmap.json",
+  "refmap": "client-takeitout.refmap.json",
   "client": [
     "LitematicaMixin",
-    "LitematicaContainerFillerMixin",
     "MaterialListUtilsMixin",
     "GuiMaterialListMixin",
     "TweakerooMixin",

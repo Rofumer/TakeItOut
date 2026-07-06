@@ -205,10 +205,6 @@ public final class TakeItOutHotkeys {
     }
 
     private static ConfigHotkey hotkey(String name, String defaultKey, String displayName, String comment) {
-        ConfigHotkey hotkey = new ConfigHotkey(name, defaultKey, KeybindSettings.DEFAULT);
-        hotkey.setPrettyName(displayName);
-        hotkey.setTranslatedName(displayName);
-        hotkey.setComment(comment);
-        return hotkey;
+        return new ConfigHotkey(name, defaultKey, KeybindSettings.DEFAULT, comment);
     }
 }
