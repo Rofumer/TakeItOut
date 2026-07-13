@@ -1,6 +1,6 @@
 package net.maxbel.takeitout.client;
 
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -737,7 +737,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         int shareBtnX = rowX + rowWidth - 76;
                         if (mouseX >= shareBtnX && mouseX < shareBtnX + 72) {
                             List<Takeitout.SharedGroupDimension> data = WorldContainerSources.getGroupDataForPublishing();
-                            ClientPlayNetworking.send(new Takeitout.PublishGroupPayload(group, data));
+                            TakeitoutClient.sendToServer(new Takeitout.PublishGroupPayload(group, data));
                             return true;
                         }
                     }
@@ -788,7 +788,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         return true;
                     }
                     if (isOwn && mouseX >= removeBtnX && mouseX < removeBtnX + 60) {
-                        ClientPlayNetworking.send(new Takeitout.UnpublishGroupPayload(shared.id()));
+                        TakeitoutClient.sendToServer(new Takeitout.UnpublishGroupPayload(shared.id()));
                         return true;
                     }
                 }
@@ -938,7 +938,7 @@ public class TakeItOutSettingsScreen extends Screen {
             sources = WorldContainerSources.getLinkedSourceReferencesSnapshot();
         }
 
-        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+        TakeitoutClient.sendToServer(
                 new Takeitout.GetWorldContainerItemsPayload(sources)
         );
     }

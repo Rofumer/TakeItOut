@@ -5,6 +5,8 @@ import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.client.SchematicBlockState;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.client.Minecraft;
@@ -19,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
 @Mixin(MouseHandler.class)
 public class MouseMixin {
 
