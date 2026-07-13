@@ -33,7 +33,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "forgematica"))
 @Mixin(Mouse.class)
 public class MouseMixin {
 

@@ -115,7 +115,7 @@ public class TakeitoutClient {
         for (Takeitout.WorldContainerContents container : payload.containers()) {
             WORLD_CONTAINER_ITEMS_BY_SOURCE.put(WorldContainerSources.sourceKey(container.source()), new ArrayList<>(container.items()));
         }
-        if (ModList.get().isLoaded("litematica")) {
+        if (ModList.get().isLoaded("forgematica")) {
             WorldContainerMaterialListCache.handleItemsPayload(payload);
         }
     }
@@ -261,7 +261,7 @@ public class TakeitoutClient {
 
         if (AUTOTAKEOUT && awaitingStack.isEmpty()) {
 
-            if (!ModList.get().isLoaded("litematica")) {
+            if (!ModList.get().isLoaded("forgematica")) {
                 return false;
             }
 

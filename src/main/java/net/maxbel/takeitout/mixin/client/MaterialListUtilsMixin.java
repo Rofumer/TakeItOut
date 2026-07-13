@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
-@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "forgematica"))
 @Mixin(value = MaterialListUtils.class, remap = false)
 public class MaterialListUtilsMixin {
     @Inject(method = "getMaterialList", at = @At("RETURN"), remap = false)

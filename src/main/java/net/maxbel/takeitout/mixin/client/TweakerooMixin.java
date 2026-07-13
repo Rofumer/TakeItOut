@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import static net.maxbel.takeitout.client.TakeitoutClient.AUTOTAKEOUT;
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 
-@Restriction(require = @Condition(type = Condition.Type.MOD, value = "tweakeroo"))
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "tweakerge"))
 @Mixin(InventoryUtils.class)
 public class TweakerooMixin {
 

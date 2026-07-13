@@ -42,7 +42,7 @@ import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
-@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "forgematica"))
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
