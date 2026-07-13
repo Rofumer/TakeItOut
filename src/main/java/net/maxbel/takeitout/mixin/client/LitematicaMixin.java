@@ -7,30 +7,32 @@ import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.malilib.util.InventoryUtils;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.client.WorldContainerSources;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.FenceBlock;
-import net.minecraft.block.MushroomBlock;
-import net.minecraft.block.RedstoneWireBlock;
-import net.minecraft.block.WallBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.state.property.Property;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.Container;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.FenceBlock;
+import net.minecraft.world.level.block.MushroomBlock;
+import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.WallBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Set;
 
@@ -41,6 +43,7 @@ import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
@@ -56,11 +59,11 @@ public class LitematicaMixin {
     @Unique private static BlockState lastEasyPlaceTargetState = null;
 
     /**
-     * Перехват Easy Place: если в руке не тот предмет — инициируем pick block и ждём.
-     * Делается на HEAD, чтобы не зависеть от внутренних вызовов Litematica (они часто меняются между версиями).
+     * Intercept Easy Place: if the wrong item is in hand, kick off a pick-block request and wait.
+     * Done on HEAD so we don't depend on Litematica's internals (which change often between versions).
      */
     @Inject(method = "doEasyPlaceAction", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void interceptMissingItem(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
+    private static void interceptMissingItem(Minecraft mc, CallbackInfoReturnable<InteractionResult> cir) {
         if (mc == null || mc.player == null) {
             lastEasyPlaceTargetPos = null;
             lastEasyPlaceTargetState = null;
@@ -81,11 +84,11 @@ public class LitematicaMixin {
             return;
         }
 
-        lastEasyPlaceTargetPos = result.getBlockPos().toImmutable();
+        lastEasyPlaceTargetPos = result.getBlockPos().immutable();
         lastEasyPlaceTargetState = schematic.getBlockState(lastEasyPlaceTargetPos);
 
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(lastEasyPlaceTargetState);
-        ItemStack inHand = mc.player.getMainHandStack();
+        ItemStack inHand = mc.player.getMainHandItem();
 
         if (waitingForShulkerResponse) {
             if (WorldContainerSources.consumeFailedResponse(waitingShulkerStack)) {
@@ -98,7 +101,7 @@ public class LitematicaMixin {
                 waitingShulkerStack = ItemStack.EMPTY;
                 waitingShulkerRequestTsMs = 0L;
             } else
-            if (!waitingShulkerStack.isEmpty() && inHand.isOf(waitingShulkerStack.getItem())) {
+            if (!waitingShulkerStack.isEmpty() && inHand.is(waitingShulkerStack.getItem())) {
                 LOGGER.debug(
                         "EasyPlace shulker wait resolved: expected={}, inHand={}",
                         waitingShulkerStack,
@@ -110,7 +113,7 @@ public class LitematicaMixin {
             } else {
                 long elapsedMs = System.currentTimeMillis() - waitingShulkerRequestTsMs;
                 if (elapsedMs < 3500L) {
-                    cir.setReturnValue(ActionResult.FAIL);
+                    cir.setReturnValue(InteractionResult.FAIL);
                     cir.cancel();
                     return;
                 }
@@ -127,31 +130,31 @@ public class LitematicaMixin {
             }
         }
 
-        if (inHand.isOf(required.getItem())) {
+        if (inHand.is(required.getItem())) {
             return;
         }
 
-        if (mc.world != null && !mc.world.getBlockState(lastEasyPlaceTargetPos).isReplaceable()) {
+        if (mc.level != null && !mc.level.getBlockState(lastEasyPlaceTargetPos).canBeReplaced()) {
             return;
         }
 
         WorldUtils.doSchematicWorldPickBlock(true, mc);
 
-        if (!mc.player.getMainHandStack().isOf(required.getItem())) {
-            cir.setReturnValue(ActionResult.FAIL);
+        if (!mc.player.getMainHandItem().is(required.getItem())) {
+            cir.setReturnValue(InteractionResult.FAIL);
             cir.cancel();
         }
     }
 
     @Inject(method = "doEasyPlaceAction", at = @At("RETURN"), remap = false)
-    private static void logEasyPlaceResult(MinecraftClient mc, CallbackInfoReturnable<ActionResult> cir) {
-        if (mc == null || mc.world == null || lastEasyPlaceTargetPos == null || lastEasyPlaceTargetState == null) {
+    private static void logEasyPlaceResult(Minecraft mc, CallbackInfoReturnable<InteractionResult> cir) {
+        if (mc == null || mc.level == null || lastEasyPlaceTargetPos == null || lastEasyPlaceTargetState == null) {
             return;
         }
 
-        BlockState worldState = mc.world.getBlockState(lastEasyPlaceTargetPos);
+        BlockState worldState = mc.level.getBlockState(lastEasyPlaceTargetPos);
         boolean stateMatches = arePlacementEquivalent(worldState, lastEasyPlaceTargetState);
-        boolean actionSucceeded = cir.getReturnValue() != ActionResult.FAIL;
+        boolean actionSucceeded = cir.getReturnValue() != InteractionResult.FAIL;
 
         if (stateMatches) {
             LOGGER.debug(
@@ -199,16 +202,16 @@ public class LitematicaMixin {
             method = "easyPlaceOnUseTick",
             at = @At(
                     value = "INVOKE",
-                    target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/MinecraftClient;)Lnet/minecraft/util/ActionResult;"
+                    target = "Lfi/dy/masa/litematica/util/WorldUtils;doEasyPlaceAction(Lnet/minecraft/client/Minecraft;)Lnet/minecraft/world/InteractionResult;"
             ),
             remap = false
     )
-    private static MinecraftClient checkItemAndTick(MinecraftClient client) {
+    private static Minecraft checkItemAndTick(Minecraft client) {
         return client;
     }
 
     @Inject(method = "doSchematicWorldPickBlock", at = @At("HEAD"), cancellable = true, remap = false)
-    private static void doSchematicWorldPickBlockHook(boolean closest, MinecraftClient mc,
+    private static void doSchematicWorldPickBlockHook(boolean closest, Minecraft mc,
                                                       CallbackInfoReturnable<Boolean> cir) {
         if (mc == null || mc.player == null) return;
 
@@ -226,7 +229,7 @@ public class LitematicaMixin {
         BlockState state = world.getBlockState(pos);
         ItemStack required = MaterialCache.getInstance().getRequiredBuildItemForState(state, world, pos);
         int selectedSlot = mc.player.getInventory().getSelectedSlot();
-        ItemStack handBefore = mc.player.getMainHandStack();
+        ItemStack handBefore = mc.player.getMainHandItem();
         boolean easyPlaceMode = Configs.Generic.EASY_PLACE_MODE.getBooleanValue();
 
         if (!easyPlaceMode && waitingForShulkerResponse) {
@@ -241,7 +244,7 @@ public class LitematicaMixin {
                         "PickBlock shulker response dropped (target changed): expected={}, newRequired={}, inHand={}",
                         waitingShulkerStack,
                         required,
-                        mc.player.getMainHandStack()
+                        mc.player.getMainHandItem()
                 );
                 waitingForShulkerResponse = false;
                 waitingShulkerStack = ItemStack.EMPTY;
@@ -254,30 +257,30 @@ public class LitematicaMixin {
                 LOGGER.debug(
                         "PickBlock world-container response failed: expected={}, inHand={}",
                         waitingShulkerStack,
-                        mc.player.getMainHandStack()
+                        mc.player.getMainHandItem()
                 );
                 waitingForShulkerResponse = false;
                 waitingShulkerStack = ItemStack.EMPTY;
                 waitingShulkerRequestTsMs = 0L;
             } else
-            if (mc.player.getMainHandStack().isOf(waitingShulkerStack.getItem())) {
+            if (mc.player.getMainHandItem().is(waitingShulkerStack.getItem())) {
                 LOGGER.debug(
                         "PickBlock shulker response received: expected={}, inHand={}, handSlot={}",
                         waitingShulkerStack,
-                        mc.player.getMainHandStack(),
+                        mc.player.getMainHandItem(),
                         mc.player.getInventory().getSelectedSlot()
                 );
                 waitingForShulkerResponse = false;
                 waitingShulkerStack = ItemStack.EMPTY;
                 waitingShulkerRequestTsMs = 0L;
             } else {
-                int inventorySlot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, waitingShulkerStack, true);
+                int inventorySlot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, waitingShulkerStack, true);
                 if (inventorySlot != -1) {
                     LOGGER.debug(
                             "PickBlock shulker response received in inventory: expected={}, sourceSlot={}, handBefore={}, handSlot={}",
                             waitingShulkerStack,
                             inventorySlot,
-                            mc.player.getMainHandStack(),
+                            mc.player.getMainHandItem(),
                             mc.player.getInventory().getSelectedSlot()
                     );
                     InventoryUtils.swapItemToMainHand(waitingShulkerStack, mc);
@@ -290,7 +293,7 @@ public class LitematicaMixin {
                         LOGGER.debug(
                                 "PickBlock waiting shulker response: expected={}, inHand={}, elapsedMs={}",
                                 waitingShulkerStack,
-                                mc.player.getMainHandStack(),
+                                mc.player.getMainHandItem(),
                                 elapsedMs
                         );
                         cir.setReturnValue(true);
@@ -301,7 +304,7 @@ public class LitematicaMixin {
                     LOGGER.debug(
                             "PickBlock shulker response timeout: expected={}, inHand={}, elapsedMs={}, retrying",
                             waitingShulkerStack,
-                            mc.player.getMainHandStack(),
+                            mc.player.getMainHandItem(),
                             elapsedMs
                     );
                     waitingForShulkerResponse = false;
@@ -319,9 +322,9 @@ public class LitematicaMixin {
                 selectedSlot
         );
 
-        // 2) наша логика: если нет в руке — попробуем из инвентаря/шалкера
-        if (!mc.player.getMainHandStack().isOf(required.getItem())) {
-            if (!awaitingStack.isEmpty() && awaitingStack.isOf(required.getItem())) {
+        // if not in hand — try inventory/shulker
+        if (!mc.player.getMainHandItem().is(required.getItem())) {
+            if (!awaitingStack.isEmpty() && awaitingStack.is(required.getItem())) {
                 LOGGER.debug(
                         "PickBlock duplicate request skipped: required={}, awaiting={}, handSlot={}",
                         required,
@@ -333,12 +336,12 @@ public class LitematicaMixin {
                 return;
             }
 
-            int slot = InventoryUtils.findSlotWithItem(mc.player.playerScreenHandler, required, true);
+            int slot = InventoryUtils.findSlotWithItem(mc.player.containerMenu, required, true);
 
             if (slot == -1) {
                 int shulkerSlot = getShulkerWithStack(mc.player.getInventory(), required);
                 if (shulkerSlot != -1) {
-                    Inventory shInv = (Inventory) getInventoryFromShulker(mc.player.getInventory().getStack(shulkerSlot));
+                    Container shInv = getInventoryFromShulker(mc.player.getInventory().getItem(shulkerSlot));
                     int inner = getSlotWithStack(shInv, required);
                     if (inner != -1) {
                         LOGGER.debug(
@@ -349,7 +352,7 @@ public class LitematicaMixin {
                                 selectedSlot
                         );
                         awaitingStack = required.copyWithCount(1);
-                        ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
+                        TakeitoutClient.sendToServer(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
                         if (easyPlaceMode) {
                             waitingForShulkerResponse = true;
                             waitingShulkerStack = required.copyWithCount(1);
@@ -387,14 +390,14 @@ public class LitematicaMixin {
             }
         }
 
-        // 3) дальше выполняем pickblock лайтематики как и раньше
+        // finally, run Litematica's own pick-block as before
         fi.dy.masa.litematica.util.InventoryUtils.schematicWorldPickBlock(required, pos, world, mc);
 
         LOGGER.debug(
                 "PickBlock done: pos={}, required={}, handAfter={}, handSlot={}",
                 pos,
                 required,
-                mc.player.getMainHandStack(),
+                mc.player.getMainHandItem(),
                 mc.player.getInventory().getSelectedSlot()
         );
 
@@ -414,7 +417,7 @@ public class LitematicaMixin {
                 && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
                 || (targetState.getBlock() instanceof MushroomBlock
                 && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name))
-                || (targetState.getBlock() instanceof RedstoneWireBlock
+                || (targetState.getBlock() instanceof RedStoneWireBlock
                 && REDSTONE_WIRE_IGNORED_PROPERTIES.contains(name));
     }
 
@@ -424,7 +427,7 @@ public class LitematicaMixin {
             return true;
         }
 
-        if (!worldState.isOf(targetState.getBlock())) {
+        if (!worldState.is(targetState.getBlock())) {
             return false;
         }
 
@@ -433,11 +436,11 @@ public class LitematicaMixin {
                 continue;
             }
 
-            if (!worldState.contains(property)) {
+            if (!worldState.hasProperty(property)) {
                 return false;
             }
 
-            if (!worldState.get(property).equals(targetState.get(property))) {
+            if (!worldState.getValue(property).equals(targetState.getValue(property))) {
                 return false;
             }
         }

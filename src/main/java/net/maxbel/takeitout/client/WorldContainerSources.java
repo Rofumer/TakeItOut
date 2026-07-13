@@ -5,8 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.loader.api.FabricLoader;
+import net.maxbel.takeitout.client.TakeitoutClient;
+import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.Block;
@@ -33,7 +33,7 @@ import java.util.Objects;
 public class WorldContainerSources {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/world-sources");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path SOURCES_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-world-sources.json");
+    private static final Path SOURCES_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-world-sources.json");
     private static final long FAILURE_RETRY_DELAY_MS = 1500L;
     private static final String CONTEXTS_KEY = "contexts";
     private static final String ACTIVE_GROUP_KEY = "activeGroup";
@@ -665,6 +665,26 @@ public class WorldContainerSources {
 
     public static String sourceKey(SourceEntry source) {
         return source.dimension() + "|" + source.pos().asLong();
+    }
+
+    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode) {
+        return requestStack(client, required, singleItemMode, false);
+    }
+
+    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode, boolean fromUi) {
+        if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) return false;
+        List<Takeitout.WorldContainerSource> sources = getLinkedSourceReferencesSnapshot();
+        if (sources.isEmpty()) {
+            LOGGER.warn("World container request skipped: required={}, reason=no_sources", required);
+            return false;
+        }
+        if (isCoolingDownAfterFailure(required)) return false;
+        LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}", required, sources.size(), singleItemMode);
+        TakeitoutClient.awaitingStack = required.copyWithCount(1);
+        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerStackPayload(
+                sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
+        ));
+        return true;
     }
 
     public static void recordResponse(ItemStack stack, boolean success) {

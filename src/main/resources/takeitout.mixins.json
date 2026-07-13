@@ -1,9 +1,18 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "net.maxbel.takeitout.mixin",
-  "compatibilityLevel": "JAVA_21",
-  "mixins": [
+  "package": "net.maxbel.takeitout.mixin.client",
+  "plugin": "net.maxbel.takeitout.compat.TakeItOutMixinPlugin",
+  "compatibilityLevel": "JAVA_22",
+  "client": [
+    "LitematicaMixin",
+    "MaterialListUtilsMixin",
+    "GuiMaterialListMixin",
+    "PickBlockMixin",
+    "TweakerooMixin",
+    "MixinClientPlayerEntity",
+    "UpdatedSlot",
+    "MouseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

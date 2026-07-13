@@ -1,11 +1,11 @@
 package net.maxbel.takeitout.mixin.client;
 
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-@Mixin(MinecraftClient.class)
+@Mixin(Minecraft.class)
 public interface MinecraftClientAccessor {
-    @Invoker("doItemUse")
+    @Invoker("startUseItem")
     void takeitout$invokeDoItemUse();
 }

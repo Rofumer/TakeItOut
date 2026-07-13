@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ServerInfo;
@@ -27,7 +27,7 @@ import java.util.Objects;
 public final class WorldContainerDumps {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/world-dumps");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path DUMPS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-dump-containers.json");
+    private static final Path DUMPS_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-dump-containers.json");
     private static final String CONTEXTS_KEY = "contexts";
     private static final String ACTIVE_GROUP_KEY = "activeGroup";
     private static final String GROUPS_KEY = "groups";

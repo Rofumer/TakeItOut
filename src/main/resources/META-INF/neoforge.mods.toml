@@ -1,0 +1,52 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "All-Rights-Reserved"
+
+[[mods]]
+modId = "takeitout"
+version = "${version}"
+displayName = "TakeItOut"
+displayURL = "https://www.curseforge.com/minecraft/mc-mods/takeitout"
+logoFile = "icon.png"
+authors = "Max Bel"
+description = '''
+This utility picks a block from a shulker
+'''
+
+[[mixins]]
+config = "takeitout.mixins.json"
+
+[[dependencies.takeitout]]
+modId = "neoforge"
+type = "required"
+versionRange = "[1,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.takeitout]]
+modId = "minecraft"
+type = "required"
+versionRange = "[${minecraft_version},)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.takeitout]]
+modId = "mafglib"
+type = "required"
+versionRange = "[*,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.takeitout]]
+modId = "forgematica"
+type = "required"
+versionRange = "[*,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.takeitout]]
+modId = "tweakeroo"
+type = "optional"
+versionRange = "[*,)"
+ordering = "NONE"
+side = "CLIENT"

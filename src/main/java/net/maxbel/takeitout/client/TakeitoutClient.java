@@ -10,27 +10,28 @@ import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.loader.api.FabricLoader;
+import fi.dy.masa.malilib.config.ConfigManager;
+import fi.dy.masa.malilib.event.InputEventHandler;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.entity.player.PlayerAbilities;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.client.world.ClientWorld;
-//import fi.dy.masa.litematica.util.WorldUtils;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.hit.BlockHitResult;
-//import fi.dy.masa.litematica.world.SchematicWorldHandler;
-//import fi.dy.masa.litematica.world.WorldSchematic;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Abilities;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
@@ -41,11 +42,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TakeitoutClient implements ClientModInitializer {
+public class TakeitoutClient {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path SETTINGS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-client.json");
-    private static final Identifier CATEGORY_ID = Identifier.of("takeitout", "takeitout");
-    private static final KeyBinding.Category CATEGORY = KeyBinding.Category.create(CATEGORY_ID);
+    private static final Path SETTINGS_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-client.json");
     public static final int DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF22C55E;
 
     private static KeyBinding openSettingsKeyBinding;
@@ -65,9 +64,7 @@ public class TakeitoutClient implements ClientModInitializer {
 
     // сама категория
 
-    @Override
-    public void onInitializeClient() {
-
+    public static void init(IEventBus modEventBus) {
         AUTOTAKEOUT = false;
         TAKE_SINGLE_ITEM_MODE = false;
         RENDER_CONTAINER_SOURCES = true;
@@ -82,84 +79,109 @@ public class TakeitoutClient implements ClientModInitializer {
         TakeItOutHotkeys.initCallbacks();
         ConfigManager.getInstance().registerConfigHandler("takeitout", TakeItOutConfigHandler.INSTANCE);
         InputEventHandler.getKeybindManager().registerKeybindProvider(TakeItOutInputHandler.getInstance());
-        openSettingsKeyBinding = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+
+        modEventBus.addListener(TakeitoutClient::registerKeyMappings);
+
+        WorldContainerSourceRenderer.register();
+
+        NeoForge.EVENT_BUS.addListener(TakeitoutClient::onClientTick);
+    }
+
+    private static void registerKeyMappings(RegisterKeyMappingsEvent event) {
+        KeyMapping.Category category = KeyMapping.Category.register(
+                Identifier.fromNamespaceAndPath("takeitout", "takeitout")
+        );
+
+        openSettingsKeyBinding = new KeyMapping(
                 "key.takeitout.open_settings",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN,
-                CATEGORY
-        ));
-        WorldContainerSourceRenderer.register();
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerStackResponsePayload.ID, (payload, context) -> {
-            context.client().execute(() -> {
-                WorldContainerSources.recordResponse(payload.stack(), payload.success());
-                if (!payload.success()
-                        && !awaitingStack.isEmpty()
-                        && awaitingStack.isOf(payload.stack().getItem())) {
-                    awaitingStack = ItemStack.EMPTY;
-                    awaitingStackTicks = 0;
-                    if (context.client().player != null) {
-                        context.client().player.sendMessage(
-                                Text.translatable("message.takeitout.item_not_found", payload.stack().getName()),
-                                true
-                        );
-                    }
-                }
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerItemsPayload.ID, (payload, context) -> {
-            context.client().execute(() -> {
-                WORLD_CONTAINER_ITEMS.clear();
-                WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
-                WORLD_CONTAINER_ITEMS.addAll(payload.items());
-                for (Takeitout.WorldContainerContents container : payload.containers()) {
-                    WORLD_CONTAINER_ITEMS_BY_SOURCE.put(WorldContainerSources.sourceKey(container.source()), new ArrayList<>(container.items()));
-                }
-                if (FabricLoader.getInstance().isModLoaded("litematica")) {
-                    WorldContainerMaterialListCache.handleItemsPayload(payload);
-                }
-            });
-        });
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.ServerConfigSyncPayload.ID, (payload, context) ->
-                context.client().execute(() -> SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit())
+                category
         );
 
-        ClientPlayNetworking.registerGlobalReceiver(Takeitout.SharedGroupsListPayload.ID, (payload, context) ->
-                context.client().execute(() -> {
-                    SharedGroupsClient.SHARED_GROUPS.clear();
-                    SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
-                    SharedGroupsClient.serverSupportsSharedGroups = true;
-                })
-        );
+        event.register(openSettingsKeyBinding);
+    }
 
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.world != lastSourceWorld) {
-                WorldContainerSources.updateContext(client);
-                WorldContainerDumps.updateContext(client);
-                lastSourceWorld = client.world;
-                TakeItOutHotkeys.clearBoxSelection();
-                if (client.world == null) {
-                    SharedGroupsClient.clear();
-                }
+    public static void handleWorldContainerStackResponse(Takeitout.WorldContainerStackResponsePayload payload) {
+        Minecraft mc = Minecraft.getInstance();
+        WorldContainerSources.recordResponse(payload.stack(), payload.success());
+        if (!payload.success()
+                && !awaitingStack.isEmpty()
+                && awaitingStack.is(payload.stack().getItem())) {
+            awaitingStack = ItemStack.EMPTY;
+            awaitingStackTicks = 0;
+            if (mc.player != null) {
+                mc.player.sendOverlayMessage(
+                        Component.translatable("message.takeitout.item_not_found", payload.stack().getDisplayName())
+                );
             }
+        }
+    }
 
-            if (client.player != null && !awaitingStack.isEmpty()) {
-                if (getSlotWithItem(client.player, awaitingStack.getItem()) != -1) {
-                    awaitingStack = ItemStack.EMPTY;
-                    awaitingStackTicks = 0;
-                } else if (++awaitingStackTicks > 70) {
-                    awaitingStack = ItemStack.EMPTY;
-                    awaitingStackTicks = 0;
-                }
-            } else {
+    public static void handleWorldContainerItems(Takeitout.WorldContainerItemsPayload payload) {
+        WORLD_CONTAINER_ITEMS.clear();
+        WORLD_CONTAINER_ITEMS_BY_SOURCE.clear();
+        WORLD_CONTAINER_ITEMS.addAll(payload.items());
+        for (Takeitout.WorldContainerContents container : payload.containers()) {
+            WORLD_CONTAINER_ITEMS_BY_SOURCE.put(
+                    WorldContainerSources.sourceKey(container.source()),
+                    new ArrayList<>(container.items())
+            );
+        }
+        if (ModList.get().isLoaded("litematica")) {
+            WorldContainerMaterialListCache.handleItemsPayload(payload);
+        }
+    }
+
+    public static void handleServerConfigSync(Takeitout.ServerConfigSyncPayload payload) {
+        SERVER_SCAN_LIMIT = payload.linkedContainerScanLimit();
+    }
+
+    public static void handleSharedGroupsList(Takeitout.SharedGroupsListPayload payload) {
+        SharedGroupsClient.SHARED_GROUPS.clear();
+        SharedGroupsClient.SHARED_GROUPS.addAll(payload.groups());
+        SharedGroupsClient.serverSupportsSharedGroups = true;
+    }
+
+    private static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft client = Minecraft.getInstance();
+
+        if (client.level != lastSourceWorld) {
+            WorldContainerSources.updateContext(client);
+            WorldContainerDumps.updateContext(client);
+            lastSourceWorld = client.level;
+            awaitingStack = ItemStack.EMPTY;
+            awaitingStackTicks = 0;
+            TakeItOutHotkeys.clearBoxSelection();
+            if (client.level == null) {
+                SharedGroupsClient.clear();
+            }
+        }
+
+        if (client.player != null && !awaitingStack.isEmpty()) {
+            if (getSlotWithItem(client.player, awaitingStack.getItem()) != -1) {
+                awaitingStack = ItemStack.EMPTY;
+                awaitingStackTicks = 0;
+            } else if (++awaitingStackTicks > 70) {
+                awaitingStack = ItemStack.EMPTY;
                 awaitingStackTicks = 0;
             }
+        } else {
+            awaitingStackTicks = 0;
+        }
 
-            while (openSettingsKeyBinding.wasPressed()) {
-                if (client.currentScreen == null) {
-                    client.setScreen(new TakeItOutSettingsScreen(null));
-                }
+        while (openSettingsKeyBinding.consumeClick()) {
+            if (client.screen == null) {
+                client.setScreen(new TakeItOutSettingsScreen(null));
             }
-        });
+        }
+    }
+
+    public static void sendToServer(CustomPacketPayload payload) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.getConnection() != null) {
+            mc.getConnection().send(new ServerboundCustomPayloadPacket(payload));
+        }
     }
 
     public static void toggleAutoTakeout(MinecraftClient client) {
@@ -218,7 +240,7 @@ public class TakeitoutClient implements ClientModInitializer {
             return;
         }
 
-        ClientPlayNetworking.send(new Takeitout.DumpInventoryPayload(dumps));
+        sendToServer(new Takeitout.DumpInventoryPayload(dumps));
     }
 
     public static void setContainerSourceOutlineColor(int color) {
@@ -250,12 +272,43 @@ public class TakeitoutClient implements ClientModInitializer {
 
     public static boolean onGameTick() {
 
-        if (AUTOTAKEOUT && awaitingStack.isEmpty()) {
+        if (!ModList.get().isLoaded("litematica")) {
+            return false;
+        }
 
-            try {
-                Class.forName("fi.dy.masa.litematica.world.SchematicWorldHandler");
-            } catch (ClassNotFoundException e) {
-                return false;
+        WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
+        if (worldSchematic == null) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return false;
+        }
+
+        Abilities abilities = mc.player.getAbilities();
+        if (!abilities.mayBuild) {
+            return false;
+        }
+
+        BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
+        if (result == null) {
+            return false;
+        }
+
+        SchematicBlockState state = new SchematicBlockState(
+                mc.player.level(),
+                worldSchematic,
+                result.getBlockPos()
+        );
+
+        if (state.targetState != null
+                && !state.targetState.isAir()
+                && (state.currentState == null || state.currentState.canBeReplaced())
+                && !state.targetState.equals(state.currentState)) {
+            if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
+                WorldUtils.doSchematicWorldPickBlock(true, mc);
+                return true;
             }
 
             try {
