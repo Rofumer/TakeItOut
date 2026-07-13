@@ -1,6 +1,5 @@
 package net.maxbel.takeitout.mixin.client;
 
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.minecraft.block.Block;
@@ -53,7 +52,7 @@ public abstract class PickBlockMixin {
                     stack
             );
             if (inner != -1) {
-                ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE).toBuf());
+                TakeitoutClient.sendToServer(new Takeitout.GetShulkerStackPayload(inner, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
             }
         } else {
             WorldContainerSources.requestStack(MinecraftClient.getInstance(), stack, TakeitoutClient.TAKE_SINGLE_ITEM_MODE);

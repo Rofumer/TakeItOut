@@ -3,6 +3,8 @@ package net.maxbel.takeitout.mixin.client;
 import fi.dy.masa.litematica.materials.MaterialListEntry;
 import fi.dy.masa.litematica.materials.MaterialListUtils;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.client.WorldContainerMaterialListCache;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -15,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
 @Mixin(value = MaterialListUtils.class, remap = false)
 public class MaterialListUtilsMixin {
     @Inject(method = "getMaterialList", at = @At("RETURN"), remap = false)

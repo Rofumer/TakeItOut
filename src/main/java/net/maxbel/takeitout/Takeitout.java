@@ -5,11 +5,15 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.network.simple.SimpleChannel;
 import net.minecraft.block.BarrelBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -44,11 +48,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-public class Takeitout implements ModInitializer {
+public class Takeitout {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/server");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
-    private static final Path SHARED_GROUPS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-shared-groups.json");
+    private static final Path SERVER_CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-server.json");
+    private static final Path SHARED_GROUPS_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-shared-groups.json");
     private static final int MAX_GROUPS_PER_PLAYER = 10;
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
@@ -60,25 +64,16 @@ public class Takeitout implements ModInitializer {
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
     private static boolean allowAllItemsTake = true;
 
-    public static final Identifier GET_SHULKER_STACK_CHANNEL = new Identifier("takeitout", "getstack");
-    public static final Identifier GET_WORLD_CONTAINER_STACK_CHANNEL = new Identifier("takeitout", "get_world_container_stack");
-    public static final Identifier WORLD_CONTAINER_STACK_RESPONSE_CHANNEL = new Identifier("takeitout", "world_container_stack_response");
-    public static final Identifier GET_WORLD_CONTAINER_ITEMS_CHANNEL = new Identifier("takeitout", "get_world_container_items");
-    public static final Identifier WORLD_CONTAINER_ITEMS_CHANNEL = new Identifier("takeitout", "world_container_items");
-    public static final Identifier DUMP_INVENTORY_CHANNEL = new Identifier("takeitout", "dump_inventory");
-    public static final Identifier SERVER_CONFIG_SYNC_CHANNEL = new Identifier("takeitout", "server_config_sync");
-    public static final Identifier PUBLISH_GROUP_CHANNEL = new Identifier("takeitout", "publish_group");
-    public static final Identifier UNPUBLISH_GROUP_CHANNEL = new Identifier("takeitout", "unpublish_group");
-    public static final Identifier SHARED_GROUPS_LIST_CHANNEL = new Identifier("takeitout", "shared_groups_list");
+    private static final String PROTOCOL_VERSION = "1";
+    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
+            new Identifier("takeitout", "main"),
+            () -> PROTOCOL_VERSION,
+            PROTOCOL_VERSION::equals,
+            PROTOCOL_VERSION::equals
+    );
 
     public interface Payload {
         void write(PacketByteBuf buf);
-
-        default PacketByteBuf toBuf() {
-            PacketByteBuf buf = PacketByteBufs.create();
-            write(buf);
-            return buf;
-        }
     }
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements Payload {
@@ -305,54 +300,111 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    @Override
-    public void onInitialize() {
+    @Mod("takeitout")
+    public static class TakeItOutForge {
+        public TakeItOutForge() {
+            net.minecraftforge.eventbus.api.IEventBus modEventBus =
+                    net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus();
+            modEventBus.addListener(Takeitout::commonSetup);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(Takeitout.class);
+
+            net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(
+                    net.minecraftforge.api.distmarker.Dist.CLIENT,
+                    () -> () -> net.maxbel.takeitout.client.TakeitoutClient.init(modEventBus)
+            );
+        }
+    }
+
+    private static void commonSetup(FMLCommonSetupEvent event) {
         loadServerConfig();
-
-        ServerPlayNetworking.registerGlobalReceiver(GET_SHULKER_STACK_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            GetShulkerStackPayload payload = GetShulkerStackPayload.read(buf);
-            server.execute(() -> handleGetShulkerStack(player, payload));
-        });
-        ServerPlayNetworking.registerGlobalReceiver(GET_WORLD_CONTAINER_STACK_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            GetWorldContainerStackPayload payload = GetWorldContainerStackPayload.read(buf);
-            server.execute(() -> handleGetWorldContainerStack(player, payload));
-        });
-        ServerPlayNetworking.registerGlobalReceiver(GET_WORLD_CONTAINER_ITEMS_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            GetWorldContainerItemsPayload payload = GetWorldContainerItemsPayload.read(buf);
-            server.execute(() -> handleGetWorldContainerItems(player, payload));
-        });
-        ServerPlayNetworking.registerGlobalReceiver(DUMP_INVENTORY_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            DumpInventoryPayload payload = DumpInventoryPayload.read(buf);
-            server.execute(() -> handleDumpInventoryPayload(player, payload));
-        });
-        ServerPlayNetworking.registerGlobalReceiver(PUBLISH_GROUP_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            PublishGroupPayload payload = PublishGroupPayload.read(buf);
-            server.execute(() -> handlePublishGroupPayload(player, payload));
-        });
-        ServerPlayNetworking.registerGlobalReceiver(UNPUBLISH_GROUP_CHANNEL, (server, player, handler, buf, responseSender) -> {
-            UnpublishGroupPayload payload = UnpublishGroupPayload.read(buf);
-            server.execute(() -> handleUnpublishGroupPayload(player, payload));
-        });
-
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            PacketByteBuf configBuf = PacketByteBufs.create();
-            new ServerConfigSyncPayload(linkedContainerScanLimit).write(configBuf);
-            sender.sendPacket(SERVER_CONFIG_SYNC_CHANNEL, configBuf);
-
-            PacketByteBuf groupsBuf = PacketByteBufs.create();
-            new SharedGroupsListPayload(loadSharedGroups()).write(groupsBuf);
-            sender.sendPacket(SHARED_GROUPS_LIST_CHANNEL, groupsBuf);
-        });
+        registerNetworking();
     }
 
-    private static void sendToPlayer(ServerPlayerEntity player, Identifier channel, PayloadWriter writer) {
-        PacketByteBuf buf = PacketByteBufs.create();
-        writer.write(buf);
-        ServerPlayNetworking.send(player, channel, buf);
+    private static void registerNetworking() {
+        int id = 0;
+        CHANNEL.registerMessage(id++, GetShulkerStackPayload.class,
+                GetShulkerStackPayload::write, GetShulkerStackPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handleGetShulkerStack((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, GetWorldContainerStackPayload.class,
+                GetWorldContainerStackPayload::write, GetWorldContainerStackPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handleGetWorldContainerStack((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, GetWorldContainerItemsPayload.class,
+                GetWorldContainerItemsPayload::write, GetWorldContainerItemsPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handleGetWorldContainerItems((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, DumpInventoryPayload.class,
+                DumpInventoryPayload::write, DumpInventoryPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handleDumpInventoryPayload((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, PublishGroupPayload.class,
+                PublishGroupPayload::write, PublishGroupPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handlePublishGroupPayload((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, UnpublishGroupPayload.class,
+                UnpublishGroupPayload::write, UnpublishGroupPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> handleUnpublishGroupPayload((ServerPlayerEntity) ctx.getSender(), payload));
+                    ctx.setPacketHandled(true);
+                });
+
+        CHANNEL.registerMessage(id++, WorldContainerStackResponsePayload.class,
+                WorldContainerStackResponsePayload::write, WorldContainerStackResponsePayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleWorldContainerStackResponse(payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, WorldContainerItemsPayload.class,
+                WorldContainerItemsPayload::write, WorldContainerItemsPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleWorldContainerItems(payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, ServerConfigSyncPayload.class,
+                ServerConfigSyncPayload::write, ServerConfigSyncPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleServerConfigSync(payload));
+                    ctx.setPacketHandled(true);
+                });
+        CHANNEL.registerMessage(id++, SharedGroupsListPayload.class,
+                SharedGroupsListPayload::write, SharedGroupsListPayload::read,
+                (payload, ctxSupplier) -> {
+                    NetworkEvent.Context ctx = ctxSupplier.get();
+                    ctx.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleSharedGroupsList(payload));
+                    ctx.setPacketHandled(true);
+                });
     }
 
-    private interface PayloadWriter {
-        void write(PacketByteBuf buf);
+    @SubscribeEvent
+    public static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayerEntity player) {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ServerConfigSyncPayload(linkedContainerScanLimit));
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new SharedGroupsListPayload(loadSharedGroups()));
+        }
+    }
+
+    private static void sendToPlayer(ServerPlayerEntity player, Object payload) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
     }
 
     private static void handlePublishGroupPayload(ServerPlayerEntity player, PublishGroupPayload payload) {
@@ -500,7 +552,7 @@ public class Takeitout implements ModInitializer {
         }
         SharedGroupsListPayload packet = new SharedGroupsListPayload(groups);
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-            sendToPlayer(p, SHARED_GROUPS_LIST_CHANNEL, packet::write);
+            sendToPlayer(p, packet);
         }
     }
 
@@ -685,7 +737,7 @@ public class Takeitout implements ModInitializer {
 
         if (payload.fromUi() && !allowAllItemsTake) {
             player.sendMessage(Text.literal("TakeItOut: taking items via All Items tab is disabled on this server"), false);
-            sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false)::write);
+            sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
             return;
         }
 
@@ -709,7 +761,7 @@ public class Takeitout implements ModInitializer {
 
             int slot = getSlotWithStack(inventory, requested);
             if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
-                sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true)::write);
+                sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
                         player.getName().getString(),
@@ -770,7 +822,7 @@ public class Takeitout implements ModInitializer {
             }
 
             if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
-                sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true)::write);
+                sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
                         player.getName().getString(),
@@ -783,7 +835,7 @@ public class Takeitout implements ModInitializer {
             }
         }
 
-        sendToPlayer(player, WORLD_CONTAINER_STACK_RESPONSE_CHANNEL, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false)::write);
+        sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
@@ -799,7 +851,7 @@ public class Takeitout implements ModInitializer {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
         if (payload.sources() == null) {
-            sendToPlayer(player, WORLD_CONTAINER_ITEMS_CHANNEL, new WorldContainerItemsPayload(items, containers)::write);
+            sendToPlayer(player, new WorldContainerItemsPayload(items, containers));
             return;
         }
 
@@ -831,7 +883,7 @@ public class Takeitout implements ModInitializer {
             containers.add(new WorldContainerContents(source, containerItems));
         }
 
-        sendToPlayer(player, WORLD_CONTAINER_ITEMS_CHANNEL, new WorldContainerItemsPayload(items, containers)::write);
+        sendToPlayer(player, new WorldContainerItemsPayload(items, containers));
     }
 
     private static void handleDumpInventoryPayload(ServerPlayerEntity player, DumpInventoryPayload payload) {

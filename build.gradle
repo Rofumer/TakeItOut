@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'dev.architectury.loom' version '1.6-SNAPSHOT'
     id 'maven-publish'
 }
 
@@ -11,93 +11,52 @@ base {
 }
 
 loom {
-    splitEnvironmentSourceSets()
-
     mixin {
         defaultRefmapName = "takeitout.refmap.json"
     }
 
-    mods {
-        "takeitout" {
-            sourceSet sourceSets.main
-            sourceSet sourceSets.client
-        }
+    forge {
+        mixinConfigs = [
+                "takeitout.mixins.json"
+        ]
     }
 }
 
 repositories {
-    // Add repositories to retrieve artifacts from in here.
-    // You should only use this when depending on other mods because
-    // Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html
-    // for more information about repositories.
     mavenCentral()
-    maven { url = "https://maven.meteordev.org/releases" }
-    maven { url = "https://maven.meteordev.org/snapshots" }
-    maven { url 'https://jitpack.io' }
-    maven {
-        url = "https://www.cursemaven.com"
-    }
-
-    maven {
-        name = "Terraformers"
-        url = "https://maven.terraformersmc.com/"
-    }
+    maven { url = "https://api.modrinth.com/maven" }
     maven { url = "https://maven.fallenbreath.me/releases" }
-
 }
 
 dependencies {
-    // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    forge "net.minecraftforge:forge:${project.forge_version}"
 
-    modImplementation files('libs/litematica-printer-1.20.1-3.2.1.jar')
-    modImplementation files('libs/litematica-fabric-1.20.1-0.15.4.jar')
-    modImplementation files('libs/malilib-fabric-1.20.1-0.16.3.jar')
-    modImplementation files('libs/tweakeroo-fabric-1.20.1-0.17.1.jar')
+    modImplementation "maven.modrinth:forgematica:${project.forgematica_version}"
+    modImplementation "maven.modrinth:mafglib:${project.mafglib_version}"
+    modImplementation "maven.modrinth:tweakerge:${project.tweakerge_version}"
+    modImplementation "maven.modrinth:forgematicaprinter:${project.forgematicaprinter_version}"
 
-    ///modImplementation files('libs/litematica-printer-1.21.7-3.2.1-sakura.7.jar')
-    ///modImplementation files('libs/malilib-fabric-1.21.7-0.25.1.jar')
-    ///modImplementation files('libs/litematica-fabric-1.21.7-0.23.1.jar')
-
-    ///modImplementation files('libs/litematica-printer-1.21.6-3.2.1-sakura.6.jar')
-    ///modImplementation files('libs/malilib-fabric-1.21.6-0.25.0.jar')
-    ///modImplementation files('libs/litematica-fabric-1.21.6-0.23.0.jar')
-    modImplementation("com.terraformersmc:modmenu:${project.modmenu_version}")
-
-    ////modImplementation  "curse.maven:litematica-308892:5523424"
-    //modImplementation 'com.github.sakura-ryoko:litematica:1.21-sakura.23'
-    //modImplementation 'com.github.sakura-ryoko:litematica:1.21.4'
-    ///////modImplementation "curse.maven:litematica-${project.litematica_projectid}:${project.litematica_fileid}"
-    //compileOnly("curse.maven:litematica-308892:5523424")
-
-    // Fabric API. This is technically optional, but you probably want it anyway.
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    modImplementation "me.fallenbreath:conditional-mixin-fabric:${project.conditional_mixin_version}"
-    include "me.fallenbreath:conditional-mixin-fabric:${project.conditional_mixin_version}"
+    modImplementation "me.fallenbreath:conditional-mixin-forge:${project.conditional_mixin_version}"
+    include "me.fallenbreath:conditional-mixin-forge:${project.conditional_mixin_version}"
 }
 
 processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_version", project.minecraft_version
-    inputs.property "loader_version", project.loader_version
+    inputs.property "forge_version", project.forge_version
     filteringCharset "UTF-8"
 
-    filesMatching("fabric.mod.json") {
+    filesMatching("META-INF/mods.toml") {
         expand "version": project.version,
                 "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version
+                "forge_version": project.forge_version
     }
 }
 
 def targetJavaVersion = 17
 tasks.withType(JavaCompile).configureEach {
-    // ensure that the encoding is set to UTF-8, no matter what the system default is
-    // this fixes some edge cases with special characters not displaying correctly
-    // see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-    // If Javadoc is generated, this must be specified in that task too.
     it.options.encoding = "UTF-8"
     if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
         it.options.release.set(targetJavaVersion)
@@ -109,9 +68,6 @@ java {
     if (JavaVersion.current() < javaVersion) {
         toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
     }
-    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-    // if it is present.
-    // If you remove this line, sources will not be generated.
     withSourcesJar()
 }
 
@@ -121,7 +77,6 @@ jar {
     }
 }
 
-// configure the maven publication
 publishing {
     publications {
         create("mavenJava", MavenPublication) {
@@ -130,11 +85,6 @@ publishing {
         }
     }
 
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
     repositories {
-        // Add repositories to publish to here.
-        // Notice: This block does NOT have the same function as the block in the top level.
-        // The repositories here will be used for publishing your artifact, not for
-        // retrieving dependencies.
     }
 }

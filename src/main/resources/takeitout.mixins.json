@@ -1,11 +1,26 @@
 {
   "required": true,
   "minVersion": "0.8",
-  "package": "net.maxbel.takeitout.mixin",
+  "package": "net.maxbel.takeitout.mixin.client",
+  "plugin": "net.maxbel.takeitout.compat.TakeItOutMixinPlugin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": [
+  "refmap": "takeitout.refmap.json",
+  "client": [
+    "LitematicaMixin",
+    "MaterialListUtilsMixin",
+    "GuiMaterialListMixin",
+    "TweakerooMixin",
+    "MinecraftClientAccessor",
+    "MixinClientPlayerEntity",
+    "MouseMixin",
+    "PlacementVerifyMixin",
+    "PickBlockMixin",
+    "UpdatedSlot"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "mixins": [
+    "PrinterMixin"
+  ]
 }

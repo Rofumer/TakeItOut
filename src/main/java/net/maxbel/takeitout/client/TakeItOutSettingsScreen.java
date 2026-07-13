@@ -1,6 +1,5 @@
 package net.maxbel.takeitout.client;
 
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.block.Block;
 import net.minecraft.block.ShulkerBoxBlock;
@@ -786,7 +785,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         int shareBtnX = rowX + rowWidth - 76;
                         if (mouseX >= shareBtnX && mouseX < shareBtnX + 72) {
                             List<Takeitout.SharedGroupDimension> data = WorldContainerSources.getGroupDataForPublishing();
-                            ClientPlayNetworking.send(Takeitout.PUBLISH_GROUP_CHANNEL, new Takeitout.PublishGroupPayload(group, data).toBuf());
+                            TakeitoutClient.sendToServer(new Takeitout.PublishGroupPayload(group, data));
                             return true;
                         }
                     }
@@ -837,7 +836,7 @@ public class TakeItOutSettingsScreen extends Screen {
                         return true;
                     }
                     if (isOwn && mouseX >= removeBtnX && mouseX < removeBtnX + 60) {
-                        ClientPlayNetworking.send(Takeitout.UNPUBLISH_GROUP_CHANNEL, new Takeitout.UnpublishGroupPayload(shared.id()).toBuf());
+                        TakeitoutClient.sendToServer(new Takeitout.UnpublishGroupPayload(shared.id()));
                         return true;
                     }
                 }
@@ -1018,7 +1017,7 @@ public class TakeItOutSettingsScreen extends Screen {
         } else {
             sources = WorldContainerSources.getLinkedSourceReferencesSnapshot();
         }
-        ClientPlayNetworking.send(Takeitout.GET_WORLD_CONTAINER_ITEMS_CHANNEL, new Takeitout.GetWorldContainerItemsPayload(sources).toBuf());
+        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerItemsPayload(sources));
     }
 
     private List<WorldContainerSources.SourceEntry> getVisibleContainerSources() {

@@ -1,0 +1,28 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "All-Rights-Reserved"
+issueTrackerURL = "https://legacy.curseforge.com/minecraft/mc-mods/takeitout/issues"
+
+[[mods]]
+modId = "takeitout"
+version = "${version}"
+displayName = "TakeItOut"
+displayURL = "https://www.curseforge.com/minecraft/mc-mods/takeitout"
+logoFile = "assets/takeitout/icon.png"
+credits = "Max Bel"
+authors = "Max Bel"
+description = '''This utility picks a block from a shulker'''
+
+[[dependencies.takeitout]]
+    modId = "forge"
+    mandatory = true
+    versionRange = "[${forge_version},)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.takeitout]]
+    modId = "minecraft"
+    mandatory = true
+    versionRange = "[${minecraft_version},)"
+    ordering = "NONE"
+    side = "BOTH"

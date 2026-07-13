@@ -7,7 +7,6 @@ import fi.dy.masa.litematica.materials.MaterialListEntry;
 import fi.dy.masa.litematica.materials.MaterialListUtils;
 import fi.dy.masa.malilib.util.ItemType;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
@@ -47,7 +46,7 @@ public final class WorldContainerMaterialListCache {
         }
 
         refreshPending = true;
-        ClientPlayNetworking.send(Takeitout.GET_WORLD_CONTAINER_ITEMS_CHANNEL, new Takeitout.GetWorldContainerItemsPayload(sources).toBuf());
+        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerItemsPayload(sources));
     }
 
     public static void handleItemsPayload(Takeitout.WorldContainerItemsPayload payload) {

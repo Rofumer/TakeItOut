@@ -1,7 +1,5 @@
 package net.maxbel.takeitout.client;
 
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.RenderLayer;
@@ -12,6 +10,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.common.MinecraftForge;
 
 public class WorldContainerSourceRenderer {
     private static final float OUTLINE_ALPHA = 1.0F;
@@ -27,10 +27,14 @@ public class WorldContainerSourceRenderer {
     );
 
     public static void register() {
-        WorldRenderEvents.END.register(WorldContainerSourceRenderer::render);
+        MinecraftForge.EVENT_BUS.addListener(WorldContainerSourceRenderer::render);
     }
 
-    private static void render(WorldRenderContext context) {
+    private static void render(RenderLevelStageEvent event) {
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES) {
+            return;
+        }
+
         MinecraftClient client = MinecraftClient.getInstance();
         if (!TakeitoutClient.RENDER_CONTAINER_SOURCES || client.world == null) {
             return;
@@ -42,10 +46,7 @@ public class WorldContainerSourceRenderer {
         }
 
         Vec3d cameraPos = camera.getPos();
-        VertexConsumerProvider consumers = context.consumers();
-        if (consumers == null) {
-            return;
-        }
+        VertexConsumerProvider.Immediate consumers = client.getBufferBuilders().getEntityVertexConsumers();
 
         VertexConsumer vertexConsumer = consumers.getBuffer(RenderLayer.getLines());
 
@@ -55,7 +56,7 @@ public class WorldContainerSourceRenderer {
             }
 
             drawOutline(
-                    context.matrixStack(),
+                    event.getPoseStack(),
                     vertexConsumer,
                     source.getX() - cameraPos.x,
                     source.getY() - cameraPos.y,
@@ -71,7 +72,7 @@ public class WorldContainerSourceRenderer {
             }
 
             drawOutline(
-                    context.matrixStack(),
+                    event.getPoseStack(),
                     vertexConsumer,
                     dump.getX() - cameraPos.x,
                     dump.getY() - cameraPos.y,
@@ -79,6 +80,8 @@ public class WorldContainerSourceRenderer {
                     dumpColor
             );
         }
+
+        consumers.draw(RenderLayer.getLines());
     }
 
     private static void drawOutline(

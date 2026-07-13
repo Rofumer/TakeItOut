@@ -7,8 +7,10 @@ import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.malilib.util.InventoryUtils;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.FenceBlock;
@@ -40,6 +42,7 @@ import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
     @Unique private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/pickblock");
@@ -348,7 +351,7 @@ public class LitematicaMixin {
                                 selectedSlot
                         );
                         awaitingStack = required.copyWithCount(1);
-                        ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE).toBuf());
+                        TakeitoutClient.sendToServer(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TAKE_SINGLE_ITEM_MODE));
                         if (easyPlaceMode) {
                             waitingForShulkerResponse = true;
                             waitingShulkerStack = required.copyWithCount(1);

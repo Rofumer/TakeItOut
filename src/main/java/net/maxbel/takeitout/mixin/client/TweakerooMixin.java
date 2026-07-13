@@ -1,7 +1,8 @@
 package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.tweakeroo.util.InventoryUtils;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.ItemStackInventory;
 import net.maxbel.takeitout.client.TakeitoutClient;
@@ -20,6 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import static net.maxbel.takeitout.client.TakeitoutClient.AUTOTAKEOUT;
 import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "tweakeroo"))
 @Mixin(InventoryUtils.class)
 public class TweakerooMixin {
 
@@ -62,7 +64,7 @@ public class TweakerooMixin {
                 );
                 if (slot != -1) {
                     awaitingStack = stackReference.copyWithCount(1);
-                    ClientPlayNetworking.send(Takeitout.GET_SHULKER_STACK_CHANNEL, new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE).toBuf());
+                    TakeitoutClient.sendToServer(new Takeitout.GetShulkerStackPayload(slot, shulker, TakeitoutClient.TAKE_SINGLE_ITEM_MODE));
                     return;
                 }
             }
