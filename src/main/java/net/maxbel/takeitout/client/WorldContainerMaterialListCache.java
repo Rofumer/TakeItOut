@@ -24,7 +24,7 @@ public final class WorldContainerMaterialListCache {
     }
 
     public static void requestRefresh(Minecraft client) {
-        if (client == null || client.player == null || client.world == null) {
+        if (client == null || client.player == null || client.level == null) {
             return;
         }
         if (refreshPending) {
@@ -102,7 +102,7 @@ public final class WorldContainerMaterialListCache {
         materialList.refreshPreFilteredList();
         materialList.recreateFilteredList();
 
-        if (client.currentScreen instanceof GuiMaterialList gui) {
+        if (client.screen instanceof GuiMaterialList gui) {
             gui.initGui();
         }
     }

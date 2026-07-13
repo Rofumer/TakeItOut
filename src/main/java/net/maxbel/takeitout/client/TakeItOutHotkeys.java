@@ -81,7 +81,7 @@ public final class TakeItOutHotkeys {
     public static void initCallbacks() {
         OPEN_CONFIG_GUI.getKeybind().setCallback((KeyAction action, fi.dy.masa.malilib.hotkeys.IKeybind key) -> {
             Minecraft client = Minecraft.getInstance();
-            if (client.currentScreen == null) {
+            if (client.screen == null) {
                 client.setScreen(new TakeItOutSettingsScreen(null));
             }
             return true;
@@ -103,13 +103,13 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.currentScreen != null || client.player == null || client.world == null) {
+            if (client.screen != null || client.player == null || client.level == null) {
                 return false;
             }
 
-            if (client.crosshairTarget instanceof BlockHitResult hit
+            if (client.hitResult instanceof BlockHitResult hit
                     && hit.getType() == HitResult.Type.BLOCK
-                    && WorldContainerSources.isSupportedContainer(client.world, hit.getBlockPos())) {
+                    && WorldContainerSources.isSupportedContainer(client.level, hit.getBlockPos())) {
                 return WorldContainerSources.toggle(client, hit.getBlockPos());
             }
 
@@ -128,13 +128,13 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.currentScreen != null || client.player == null || client.world == null) {
+            if (client.screen != null || client.player == null || client.level == null) {
                 return false;
             }
 
-            if (client.crosshairTarget instanceof BlockHitResult hit
+            if (client.hitResult instanceof BlockHitResult hit
                     && hit.getType() == HitResult.Type.BLOCK
-                    && WorldContainerSources.isSupportedContainer(client.world, hit.getBlockPos())) {
+                    && WorldContainerSources.isSupportedContainer(client.level, hit.getBlockPos())) {
                 return WorldContainerDumps.toggle(client, hit.getBlockPos());
             }
 
@@ -148,7 +148,7 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.currentScreen != null || client.player == null) {
+            if (client.screen != null || client.player == null) {
                 return false;
             }
 
@@ -162,11 +162,11 @@ public final class TakeItOutHotkeys {
             }
 
             Minecraft client = Minecraft.getInstance();
-            if (client.currentScreen != null || client.player == null || client.world == null) {
+            if (client.screen != null || client.player == null || client.level == null) {
                 return false;
             }
 
-            if (!(client.crosshairTarget instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+            if (!(client.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
                 client.player.displayClientMessage(Component.literal("Box select: look at a block"), true);
                 return false;
             }
@@ -191,7 +191,7 @@ public final class TakeItOutHotkeys {
                 WorldContainerSources.switchGroup(client, groupName);
             }
 
-            if (WorldContainerSources.areAllLinked(client.world, corner1, pos)) {
+            if (WorldContainerSources.areAllLinked(client.level, corner1, pos)) {
                 WorldContainerSources.unlinkAll(client, corner1, pos);
             } else {
                 WorldContainerSources.linkAll(client, corner1, pos);

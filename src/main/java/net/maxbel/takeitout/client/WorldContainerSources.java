@@ -469,7 +469,7 @@ public class WorldContainerSources {
             for (Takeitout.SharedGroupDimension dim : dimensions) {
                 JsonArray sources = new JsonArray();
                 for (Takeitout.SharedSourceEntry src : dim.sources()) {
-                    BlockPos pos = BlockPos.fromLong(src.position());
+                    BlockPos pos = BlockPos.of(src.position());
                     JsonObject srcObj = new JsonObject();
                     srcObj.addProperty("x", pos.getX());
                     srcObj.addProperty("y", pos.getY());
@@ -729,22 +729,22 @@ public class WorldContainerSources {
             return null;
         }
 
-        String dimension = client.level.getRegistryKey().getValue().toString();
+        String dimension = client.level.dimension().identifier().toString();
         String worldKey = "unknown";
 
-        if (client.isInSingleplayer()) {
-            if (client.getServer() != null && client.getServer().getSaveProperties() != null) {
-                worldKey = "singleplayer:" + client.getServer().getSaveProperties().getLevelName();
+        if (client.hasSingleplayerServer()) {
+            if (client.getSingleplayerServer() != null && client.getSingleplayerServer().getWorldData() != null) {
+                worldKey = "singleplayer:" + client.getSingleplayerServer().getWorldData().getLevelName();
             } else {
                 worldKey = "singleplayer";
             }
         } else {
-            ServerData serverInfo = client.getCurrentServerEntry();
+            ServerData serverInfo = client.getCurrentServer();
             if (serverInfo != null) {
-                String addressOrName = serverInfo.address != null && !serverInfo.address.isBlank()
-                        ? serverInfo.address
+                String addressOrName = serverInfo.ip != null && !serverInfo.ip.isBlank()
+                        ? serverInfo.ip
                         : serverInfo.name;
-                String type = serverInfo.isRealm() ? "realm" : serverInfo.isLocal() ? "local" : "server";
+                String type = serverInfo.isRealm() ? "realm" : serverInfo.isLan() ? "local" : "server";
                 worldKey = type + ":" + addressOrName;
             } else {
                 worldKey = "multiplayer:unknown";

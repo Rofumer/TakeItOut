@@ -366,13 +366,13 @@ public class Takeitout {
         PayloadRegistrar registrar = event.registrar("1");
 
         registrar.playToServer(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC, (payload, context) ->
-                context.enqueueWork(() -> handleGetShulkerStackPayload((ServerPlayer) context.player(), payload))
+                context.enqueueWork(() -> handleGetShulkerStack((ServerPlayer) context.player(), payload))
         );
         registrar.playToServer(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC, (payload, context) ->
-                context.enqueueWork(() -> handleGetWorldContainerStackPayload((ServerPlayer) context.player(), payload))
+                context.enqueueWork(() -> handleGetWorldContainerStack((ServerPlayer) context.player(), payload))
         );
         registrar.playToServer(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC, (payload, context) ->
-                context.enqueueWork(() -> handleGetWorldContainerItemsPayload((ServerPlayer) context.player(), payload))
+                context.enqueueWork(() -> handleGetWorldContainerItems((ServerPlayer) context.player(), payload))
         );
         registrar.playToServer(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC, (payload, context) ->
                 context.enqueueWork(() -> handleDumpInventoryPayload((ServerPlayer) context.player(), payload))
@@ -1431,8 +1431,8 @@ public class Takeitout {
     }
 
     private static List<ItemStack> copyContainerContents(ItemStack shulkerStack) {
-        DefaultedList<ItemStack> stacks = DefaultedList.ofSize(27, ItemStack.EMPTY);
-        ContainerComponent container = shulkerStack.get(DataComponentTypes.CONTAINER);
+        NonNullList<ItemStack> stacks = NonNullList.withSize(27, ItemStack.EMPTY);
+        ItemContainerContents container = shulkerStack.get(DataComponents.CONTAINER);
 
         if (container == null) {
             return stacks;
@@ -1451,7 +1451,7 @@ public class Takeitout {
     }
 
     private static void setShulkerContents(ItemStack shulkerStack, List<ItemStack> itemStacks) {
-        shulkerStack.set(DataComponentTypes.CONTAINER, ContainerComponent.fromStacks(itemStacks));
+        shulkerStack.set(DataComponents.CONTAINER, ItemContainerContents.fromItems(itemStacks));
     }
 
     private static boolean isShulkerItem(ItemStack item) {
@@ -1488,11 +1488,11 @@ public class Takeitout {
     private static void syncPlayerInventory(ServerPlayer player) {
         player.getInventory().setChanged();
         player.containerMenu.broadcastChanges();
-        player.currentScreenHandler.sendContentUpdates();
+        player.containerMenu.broadcastChanges();
     }
 
     private static void syncWorldContainer(ServerPlayer player, Container inventory) {
         inventory.setChanged();
-        player.currentScreenHandler.sendContentUpdates();
+        player.containerMenu.broadcastChanges();
     }
 }

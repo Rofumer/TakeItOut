@@ -746,11 +746,11 @@ public class TakeItOutSettingsScreen extends Screen {
                 groupInputMode = null;
                 groupInputTarget = null;
                 groupNameField.setVisible(false);
-                groupNameField.setText("");
+                groupNameField.setValue("");
             } else {
                 groupInputMode = "create";
                 groupInputTarget = null;
-                groupNameField.setText("");
+                groupNameField.setValue("");
                 groupNameField.setVisible(true);
                 setFocused(groupNameField);
             }
@@ -763,7 +763,7 @@ public class TakeItOutSettingsScreen extends Screen {
             int confirmBtnX = listLeft + 8 + 244;
             int confirmBtnY = listTop + 8;
             if (mouseX >= confirmBtnX && mouseX < confirmBtnX + 80 && mouseY >= confirmBtnY && mouseY < confirmBtnY + 14) {
-                String name = groupNameField.getText().trim();
+                String name = groupNameField.getValue().trim();
                 if (!name.isBlank()) {
                     if ("rename".equals(groupInputMode) && groupInputTarget != null) {
                         WorldContainerSources.renameGroup(groupInputTarget, name);
@@ -774,7 +774,7 @@ public class TakeItOutSettingsScreen extends Screen {
                 groupInputMode = null;
                 groupInputTarget = null;
                 groupNameField.setVisible(false);
-                groupNameField.setText("");
+                groupNameField.setValue("");
                 return true;
             }
             y += CONTAINER_ROW_HEIGHT;
@@ -810,7 +810,7 @@ public class TakeItOutSettingsScreen extends Screen {
                     if (mouseX >= renameBtnX && mouseX < renameBtnX + 58) {
                         groupInputMode = "rename";
                         groupInputTarget = group;
-                        groupNameField.setText(group);
+                        groupNameField.setValue(group);
                         groupNameField.setVisible(true);
                         setFocused(groupNameField);
                         scrollOffset = 0;
@@ -984,9 +984,9 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private void focusTargetedContainer() {
         Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.world == null || !(client.crosshairTarget instanceof BlockHitResult hit)
+        if (client.player == null || client.level == null || !(client.hitResult instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK
-                || !WorldContainerSources.isSupportedContainer(client.world, hit.getBlockPos())) {
+                || !WorldContainerSources.isSupportedContainer(client.level, hit.getBlockPos())) {
             if (client.player != null) {
                 client.player.displayClientMessage(Component.literal("Look at a chest, barrel or shulker box"), true);
             }
@@ -1008,7 +1008,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private void requestItems() {
         Minecraft client = Minecraft.getInstance();
-        if (client.player == null || client.world == null) {
+        if (client.player == null || client.level == null) {
             return;
         }
 
@@ -1166,21 +1166,21 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private ItemStack getContainerIcon(WorldContainerSources.SourceEntry source) {
-        if (this.minecraft == null || this.minecraft.world == null) {
+        if (this.minecraft == null || this.minecraft.level == null) {
             return ItemStack.EMPTY;
         }
 
-        String currentDimension = this.minecraft.world.getRegistryKey().getValue().toString();
+        String currentDimension = this.minecraft.level.dimension().identifier().toString();
         if (!source.dimension().equals(currentDimension)) {
             return ItemStack.EMPTY;
         }
 
-        Block block = this.minecraft.world.getBlockState(source.pos()).getBlock();
-        return block.asItem().getDefaultStack();
+        Block block = this.minecraft.level.getBlockState(source.pos()).getBlock();
+        return block.asItem().getDefaultInstance();
     }
 
     private String trim(String value, int width) {
-        return this.font.trimToWidth(value, width);
+        return this.font.plainSubstrByWidth(value, width);
     }
 
     private void drawSmallButton(GuiGraphics context, int x, int y, int width, int height, String label, boolean hovered) {
