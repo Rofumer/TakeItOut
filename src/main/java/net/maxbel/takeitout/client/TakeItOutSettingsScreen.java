@@ -5,7 +5,7 @@ import net.maxbel.takeitout.Takeitout;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Click;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.components.Button;
@@ -168,7 +168,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    public boolean mouseClicked(MouseButtonEvent click, boolean doubled) {
         if (click.button() == 0) {
             int listLeft = getActiveListLeft();
             int listWidth = getActiveListWidth();
@@ -211,7 +211,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+    public boolean mouseDragged(MouseButtonEvent click, double deltaX, double deltaY) {
         if (scrollbarDragging) {
             int listTop = LIST_TOP;
             int listBottom = this.height - LIST_BOTTOM_MARGIN;
@@ -231,7 +231,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
+    public boolean mouseReleased(MouseButtonEvent click) {
         if (scrollbarDragging && click.button() == 0) {
             scrollbarDragging = false;
             return true;
@@ -280,7 +280,7 @@ public class TakeItOutSettingsScreen extends Screen {
             if (isShulkerStack(hoveredItem.stack())) {
                 renderShulkerContentsTooltip(context, hoveredItem.stack(), mouseX, mouseY);
             } else {
-                context.renderTooltip(this.font, List.of(
+                context.setComponentTooltipForNextFrame(this.font, List.of(
                         Component.translatable("tooltip.takeitout.take_stack"),
                         Component.translatable("tooltip.takeitout.take_single")
                 ), mouseX, mouseY);
