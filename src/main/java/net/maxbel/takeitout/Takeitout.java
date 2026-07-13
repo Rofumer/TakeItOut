@@ -5,11 +5,14 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.NonNullList;
@@ -50,11 +53,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-public class Takeitout implements ModInitializer {
+public class Takeitout {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/server");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path SERVER_CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-server.json");
-    private static final Path SHARED_GROUPS_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-shared-groups.json");
+    private static final Path SERVER_CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-server.json");
+    private static final Path SHARED_GROUPS_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-shared-groups.json");
     private static final int MAX_GROUPS_PER_PLAYER = 10;
     private static final String LINKED_CONTAINER_EXCHANGE_MODE_KEY = "linked_container_exchange_mode";
     private static final String ALLOWED_EXCHANGE_DIMENSIONS_KEY = "allowed_exchange_dimensions";
@@ -353,44 +356,56 @@ public class Takeitout implements ModInitializer {
         }
     }
 
-    @Override
-    public void onInitialize() {
+    public static void init(IEventBus modEventBus) {
         loadServerConfig();
+        modEventBus.addListener(Takeitout::registerPayloads);
+        NeoForge.EVENT_BUS.addListener(Takeitout::onPlayerJoin);
+    }
 
-        PayloadTypeRegistry.serverboundPlay().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(PublishGroupPayload.ID, PublishGroupPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC);
+    private static void registerPayloads(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar("1");
 
-        ServerPlayNetworking.registerGlobalReceiver(GetShulkerStackPayload.ID, (payload, context) ->
-                context.server().execute(() -> handleGetShulkerStackPayload(context.player(), payload))
+        registrar.playToServer(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handleGetShulkerStackPayload((ServerPlayer) context.player(), payload))
         );
-        ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerStackPayload.ID, (payload, context) ->
-                context.server().execute(() -> handleGetWorldContainerStackPayload(context.player(), payload))
+        registrar.playToServer(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handleGetWorldContainerStackPayload((ServerPlayer) context.player(), payload))
         );
-        ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) ->
-                context.server().execute(() -> handleGetWorldContainerItemsPayload(context.player(), payload))
+        registrar.playToServer(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handleGetWorldContainerItemsPayload((ServerPlayer) context.player(), payload))
         );
-        ServerPlayNetworking.registerGlobalReceiver(DumpInventoryPayload.ID, (payload, context) ->
-                context.server().execute(() -> handleDumpInventoryPayload(context.player(), payload))
+        registrar.playToServer(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handleDumpInventoryPayload((ServerPlayer) context.player(), payload))
         );
-        ServerPlayNetworking.registerGlobalReceiver(PublishGroupPayload.ID, (payload, context) ->
-                context.server().execute(() -> handlePublishGroupPayload(context.player(), payload))
+        registrar.playToServer(PublishGroupPayload.ID, PublishGroupPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handlePublishGroupPayload((ServerPlayer) context.player(), payload))
         );
-        ServerPlayNetworking.registerGlobalReceiver(UnpublishGroupPayload.ID, (payload, context) ->
-                context.server().execute(() -> handleUnpublishGroupPayload(context.player(), payload))
+        registrar.playToServer(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC, (payload, context) ->
+                context.enqueueWork(() -> handleUnpublishGroupPayload((ServerPlayer) context.player(), payload))
         );
 
-        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit));
-            sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
-        });
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient()) {
+            registrar.playToClient(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC, (payload, context) ->
+                    context.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleWorldContainerStackResponse(payload)));
+            registrar.playToClient(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC, (payload, context) ->
+                    context.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleWorldContainerItems(payload)));
+            registrar.playToClient(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC, (payload, context) ->
+                    context.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleServerConfigSync(payload)));
+            registrar.playToClient(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC, (payload, context) ->
+                    context.enqueueWork(() -> net.maxbel.takeitout.client.TakeitoutClient.handleSharedGroupsList(payload)));
+        } else {
+            registrar.playToClient(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC, (payload, context) -> {});
+            registrar.playToClient(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC, (payload, context) -> {});
+            registrar.playToClient(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC, (payload, context) -> {});
+            registrar.playToClient(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC, (payload, context) -> {});
+        }
+    }
+
+    private static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            PacketDistributor.sendToPlayer(player, new ServerConfigSyncPayload(linkedContainerScanLimit));
+            PacketDistributor.sendToPlayer(player, new SharedGroupsListPayload(loadSharedGroups()));
+        }
     }
 
     private static void handlePublishGroupPayload(ServerPlayer player, PublishGroupPayload payload) {
@@ -509,7 +524,7 @@ public class Takeitout implements ModInitializer {
     private static void broadcastSharedGroups(net.minecraft.server.MinecraftServer server, List<SharedGroupEntry> groups) {
         SharedGroupsListPayload packet = new SharedGroupsListPayload(groups);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            ServerPlayNetworking.send(p, packet);
+            PacketDistributor.sendToPlayer(p, packet);
         }
     }
 
@@ -607,7 +622,7 @@ public class Takeitout implements ModInitializer {
 
         if (payload.fromUi() && !allowAllItemsTake) {
             player.sendSystemMessage(Component.literal("TakeItOut: taking items via All Items tab is disabled on this server"));
-            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+            PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
             return;
         }
 
@@ -631,7 +646,7 @@ public class Takeitout implements ModInitializer {
 
             int slot = getSlotWithStack(inventory, requested);
             if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
                         player.getName().getString(),
@@ -688,7 +703,7 @@ public class Takeitout implements ModInitializer {
             }
 
             if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
                         player.getName().getString(),
@@ -701,7 +716,7 @@ public class Takeitout implements ModInitializer {
             }
         }
 
-        ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+        PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
@@ -718,7 +733,7 @@ public class Takeitout implements ModInitializer {
         List<WorldContainerContents> containers = new ArrayList<>();
 
         if (payload.sources() == null) {
-            ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
+            PacketDistributor.sendToPlayer(player, new WorldContainerItemsPayload(items, containers));
             return;
         }
 
@@ -751,7 +766,7 @@ public class Takeitout implements ModInitializer {
             containers.add(new WorldContainerContents(source, containerItems));
         }
 
-        ServerPlayNetworking.send(player, new WorldContainerItemsPayload(items, containers));
+        PacketDistributor.sendToPlayer(player, new WorldContainerItemsPayload(items, containers));
     }
 
     private static void handleDumpInventoryPayload(ServerPlayer player, DumpInventoryPayload payload) {
