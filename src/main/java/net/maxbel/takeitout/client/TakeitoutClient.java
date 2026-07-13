@@ -111,8 +111,9 @@ public class TakeitoutClient {
             awaitingStack = ItemStack.EMPTY;
             awaitingStackTicks = 0;
             if (mc.player != null) {
-                mc.player.sendOverlayMessage(
-                        Component.translatable("message.takeitout.item_not_found", payload.stack().getDisplayName())
+                mc.player.displayClientMessage(
+                        Component.translatable("message.takeitout.item_not_found", payload.stack().getDisplayName()),
+                        true
                 );
             }
         }
@@ -190,8 +191,9 @@ public class TakeitoutClient {
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendSystemMessage(
-                    Component.translatable(AUTOTAKEOUT ? "message.takeitout.on" : "message.takeitout.off")
+            client.player.displayClientMessage(
+                    Component.translatable(AUTOTAKEOUT ? "message.takeitout.on" : "message.takeitout.off"),
+                    false
             );
         }
     }
@@ -201,12 +203,13 @@ public class TakeitoutClient {
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendSystemMessage(
+            client.player.displayClientMessage(
                     Component.translatable(
                             TAKE_SINGLE_ITEM_MODE
                                     ? "message.takeitout.single_item_mode.on"
                                     : "message.takeitout.single_item_mode.off"
-                    )
+                    ),
+                    false
             );
         }
     }
@@ -216,12 +219,13 @@ public class TakeitoutClient {
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendSystemMessage(
+            client.player.displayClientMessage(
                     Component.translatable(
                             RENDER_CONTAINER_SOURCES
                                     ? "message.takeitout.container_source_render.on"
                                     : "message.takeitout.container_source_render.off"
-                    )
+                    ),
+                    false
             );
         }
     }
@@ -308,37 +312,6 @@ public class TakeitoutClient {
                 return true;
             }
 
-            try {
-                Class.forName("me.aleksilassila.litematica.printer.Printer");
-                return false;
-            } catch (ClassNotFoundException e) {
-                //return false;
-            }
-
-            //System.out.println("CommonMixin");
-
-            WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
-            if (worldSchematic == null) return false;
-            Minecraft mc = Minecraft.getInstance();
-            Abilities abilities = mc.player.getAbilities();
-            if (!abilities.mayBuild)
-                return false;
-            BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
-            if (result != null) {
-                if (result.getBlockPos() != null) {
-                    SchematicBlockState state = new SchematicBlockState(mc.player.level(), worldSchematic, result.getBlockPos());
-                    if (state.currentState != null && state.targetState.equals(state.currentState)) {
-                        return false;
-                    }
-                    if (!state.targetState.isAir()
-                            && (state.currentState == null || state.currentState.canBeReplaced())) {
-                        if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
-                            WorldUtils.doSchematicWorldPickBlock(true, mc);
-                            return true;
-                        }
-                    }
-                }
-            }
             return false;
         }
         return false;

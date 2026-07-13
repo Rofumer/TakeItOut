@@ -77,7 +77,7 @@ public class TakeItOutSettingsScreen extends Screen {
             searchField.setVisible(true);
             groupNameField.setVisible(false);
             requestItems();
-        }).position(left, tabY).size(tabWidth, 20).build());
+        }).bounds(left, tabY, tabWidth, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Containers"), button -> {
             activeTab = Tab.CONTAINERS;
@@ -86,7 +86,7 @@ public class TakeItOutSettingsScreen extends Screen {
             searchField.setVisible(false);
             groupNameField.setVisible(false);
             requestItems();
-        }).position(left + tabWidth + 4, tabY).size(tabWidth, 20).build());
+        }).bounds(left + tabWidth + 4, tabY, tabWidth, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Groups"), button -> {
             activeTab = Tab.GROUPS;
@@ -95,21 +95,19 @@ public class TakeItOutSettingsScreen extends Screen {
             groupInputMode = null;
             searchField.setVisible(false);
             groupNameField.setVisible(false);
-        }).position(left + (tabWidth + 4) * 2, tabY).size(tabWidth, 20).build());
+        }).bounds(left + (tabWidth + 4) * 2, tabY, tabWidth, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Settings"), button ->
                 this.minecraft.setScreen(TakeItOutKeybindsScreen.create(this))
-        ).position(left + (tabWidth + 4) * 3, tabY).size(tabWidth, 20).build());
+        ).bounds(left + (tabWidth + 4) * 3, tabY, tabWidth, 20).build());
 
         int auxLeft = left + (tabWidth + 4) * 4;
         addRenderableWidget(Button.builder(Component.literal("Refresh"), button -> requestItems())
-                .position(auxLeft, tabY)
-                .size(72, 20)
+                .bounds(auxLeft, tabY, 72, 20)
                 .build());
 
         addRenderableWidget(Button.builder(Component.literal("Look At"), button -> focusTargetedContainer())
-                .position(auxLeft + 76, tabY)
-                .size(72, 20)
+                .bounds(auxLeft + 76, tabY, 72, 20)
                 .build());
 
         addRenderableWidget(Button.builder(getSortButtonText(), button -> {
@@ -117,20 +115,18 @@ public class TakeItOutSettingsScreen extends Screen {
                     button.setMessage(getSortButtonText());
                     scrollOffset = 0;
                 })
-                .position(auxLeft + 152, tabY)
-                .size(96, 20)
+                .bounds(auxLeft + 152, tabY, 96, 20)
                 .build());
 
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.minecraft.setScreen(parent))
-                .position(this.width / 2 - 100, this.height - 28)
-                .size(200, 20)
+                .bounds(this.width / 2 - 100, this.height - 28, 200, 20)
                 .build());
 
         int listLeft = this.width / 2 - 155;
         searchField = new EditBox(this.font, listLeft, 50, 310, 14, Component.literal("Search"));
         searchField.setMaxLength(64);
-        searchField.setPlaceholder(Component.literal("Search..."));
-        searchField.setChangedListener(text -> {
+        searchField.setHint(Component.literal("Search..."));
+        searchField.setResponder(text -> {
             searchQuery = text;
             scrollOffset = 0;
         });
@@ -140,7 +136,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int groupsListLeft = this.width / 2 - 215;
         groupNameField = new EditBox(this.font, groupsListLeft + 8, LIST_TOP + 8, 240, 14, Component.literal("Group name"));
         groupNameField.setMaxLength(32);
-        groupNameField.setPlaceholder(Component.literal("Group name..."));
+        groupNameField.setHint(Component.literal("Group name..."));
         groupNameField.setVisible(false);
         addRenderableWidget(groupNameField);
 
@@ -295,7 +291,7 @@ public class TakeItOutSettingsScreen extends Screen {
     private void renderItemRow(GuiGraphics context, Takeitout.WorldContainerItemCount item, int x, int y, int mouseX, int mouseY) {
         ItemStack stack = item.stack();
         String count = "x" + item.count();
-        int countX = x + 294 - this.font.getWidth(count);
+        int countX = x + 294 - this.font.width(count);
 
         boolean hovered = mouseX >= x - 8 && mouseX < x + 302 && mouseY >= y && mouseY < y + 22;
         if (hovered) {
@@ -303,13 +299,13 @@ public class TakeItOutSettingsScreen extends Screen {
         }
 
         context.renderItem(stack, x, y + 3);
-        context.drawString(this.font, stack.getName(), x + 24, y + 8, 0xFFFFFFFF);
+        context.drawString(this.font, stack.getHoverName(), x + 24, y + 8, 0xFFFFFFFF);
         context.drawString(this.font, count, countX, y + 8, 0xFFA7F3D0);
 
         if (isShulkerStack(stack)) {
             String summary = shulkerContentSummary(stack);
             if (!summary.isEmpty()) {
-                int nameEnd = x + 24 + this.font.getWidth(stack.getName()) + 4;
+                int nameEnd = x + 24 + this.font.width(stack.getHoverName()) + 4;
                 int maxWidth = countX - nameEnd - 4;
                 if (maxWidth > 0) {
                     context.drawString(this.font, trim(summary, maxWidth), nameEnd, y + 8, 0xFF888888);
@@ -327,7 +323,7 @@ public class TakeItOutSettingsScreen extends Screen {
         Map<String, Integer> counts = new LinkedHashMap<>();
         for (ItemStack inner : stacks) {
             if (!inner.isEmpty()) {
-                counts.merge(inner.getName().getString(), inner.getCount(), Integer::sum);
+                counts.merge(inner.getHoverName().getString(), inner.getCount(), Integer::sum);
             }
         }
         if (counts.isEmpty()) {
@@ -375,7 +371,7 @@ public class TakeItOutSettingsScreen extends Screen {
         Map<String, ItemStack> byName = new LinkedHashMap<>();
         for (ItemStack s : raw) {
             if (!s.isEmpty()) {
-                byName.merge(s.getName().getString(), s, (a, b) -> {
+                byName.merge(s.getHoverName().getString(), s, (a, b) -> {
                     ItemStack merged = a.copy();
                     merged.setCount(a.getCount() + b.getCount());
                     return merged;
@@ -387,14 +383,14 @@ public class TakeItOutSettingsScreen extends Screen {
         String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
         String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
         int rows = Math.min(entries.size(), 10);
-        int width = Math.max(this.font.getWidth(line1), this.font.getWidth(line2)) + 12;
+        int width = Math.max(this.font.width(line1), this.font.width(line2)) + 12;
         for (int i = 0; i < rows; i++) {
             ItemStack s = entries.get(i);
             String cnt = "x" + s.getCount();
-            width = Math.max(width, 28 + this.font.getWidth(s.getName()) + this.font.getWidth(cnt) + 20);
+            width = Math.max(width, 28 + this.font.width(s.getHoverName()) + this.font.width(cnt) + 20);
         }
         if (entries.size() > rows) {
-            width = Math.max(width, this.font.getWidth("+" + (entries.size() - rows) + " more") + 12);
+            width = Math.max(width, this.font.width("+" + (entries.size() - rows) + " more") + 12);
         }
 
         int height = 18 + Math.max(1, rows) * 20 + (entries.size() > rows ? 10 : 0) + 28;
@@ -413,8 +409,8 @@ public class TakeItOutSettingsScreen extends Screen {
                 ItemStack s = entries.get(i);
                 String cnt = "x" + s.getCount();
                 context.renderItem(s, x + 6, rowY);
-                context.drawString(this.font, trim(s.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
-                context.drawString(this.font, cnt, x + width - this.font.getWidth(cnt) - 6, rowY + 5, 0xFFA7F3D0);
+                context.drawString(this.font, trim(s.getHoverName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
+                context.drawString(this.font, cnt, x + width - this.font.width(cnt) - 6, rowY + 5, 0xFFA7F3D0);
                 rowY += 20;
             }
             if (entries.size() > rows) {
@@ -573,7 +569,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int width = 180;
         for (int i = 0; i < rows; i++) {
             Takeitout.WorldContainerItemCount item = items.get(i);
-            width = Math.max(width, 28 + this.font.getWidth(item.stack().getName()) + this.font.getWidth(" x" + item.count()) + 12);
+            width = Math.max(width, 28 + this.font.width(item.stack().getHoverName()) + this.font.width(" x" + item.count()) + 12);
         }
 
         int height = 18 + Math.max(1, rows) * 20 + (items.size() > rows ? 10 : 0);
@@ -594,9 +590,9 @@ public class TakeItOutSettingsScreen extends Screen {
             Takeitout.WorldContainerItemCount item = items.get(i);
             ItemStack stack = item.stack();
             context.renderItem(stack, x + 6, rowY);
-            context.drawString(this.font, trim(stack.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
+            context.drawString(this.font, trim(stack.getHoverName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
             String count = "x" + item.count();
-            context.drawString(this.font, count, x + width - this.font.getWidth(count) - 6, rowY + 5, 0xFFA7F3D0);
+            context.drawString(this.font, count, x + width - this.font.width(count) - 6, rowY + 5, 0xFFA7F3D0);
             rowY += 20;
         }
 
@@ -1123,12 +1119,12 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private static boolean itemMatchesQuery(ItemStack stack, String q) {
-        if (stack.getName().getString().toLowerCase().contains(q)) {
+        if (stack.getHoverName().getString().toLowerCase().contains(q)) {
             return true;
         }
         if (isShulkerStack(stack)) {
             for (ItemStack inner : copyShulkerContents(stack)) {
-                if (!inner.isEmpty() && inner.getName().getString().toLowerCase().contains(q)) {
+                if (!inner.isEmpty() && inner.getHoverName().getString().toLowerCase().contains(q)) {
                     return true;
                 }
             }
@@ -1150,7 +1146,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
     private Comparator<Takeitout.WorldContainerItemCount> getItemComparator() {
         Comparator<Takeitout.WorldContainerItemCount> byName = Comparator.comparing(
-                item -> item.stack().getName().getString(),
+                item -> item.stack().getHoverName().getString(),
                 String.CASE_INSENSITIVE_ORDER
         );
 

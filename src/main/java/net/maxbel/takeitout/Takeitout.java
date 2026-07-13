@@ -692,7 +692,7 @@ public class Takeitout {
         // 4. Если и это не удалось — ищем заменяемый слот в инвентаре
         //    Только если весь слот из шалкера забирается полностью
         if (remainingInShulker.isEmpty()) {
-            for (int i = Math.min(36, player.getInventory().size()) - 1; i >= 0; --i) {
+            for (int i = Math.min(36, player.getInventory().getContainerSize()) - 1; i >= 0; --i) {
                 ItemStack item = player.getInventory().getItem(i);
 
                 if (!canReplaceInventoryItem(item)) {
@@ -753,7 +753,7 @@ public class Takeitout {
             }
             checked++;
 
-            BlockPos pos = BlockPos.fromLong(source.position());
+            BlockPos pos = BlockPos.of(source.position());
             Container inventory = getWorldContainerInventory(player, source);
             if (inventory == null) {
                 invalidSourceCount++;
@@ -799,8 +799,8 @@ public class Takeitout {
                     continue;
                 }
 
-                BlockPos pos = BlockPos.fromLong(source.position());
-                for (int i = 0; i < inventory.size(); i++) {
+                BlockPos pos = BlockPos.of(source.position());
+                for (int i = 0; i < inventory.getContainerSize(); i++) {
                     ItemStack stack = inventory.getItem(i);
                     if (stack == null || stack.isEmpty() || !isShulkerItem(stack)) {
                         continue;
@@ -871,7 +871,7 @@ public class Takeitout {
                 continue;
             }
 
-            for (int slot = 0; slot < inventory.size(); slot++) {
+            for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
                 ItemStack stack = inventory.getItem(slot);
                 if (stack == null || stack.isEmpty()) {
                     continue;
@@ -892,7 +892,7 @@ public class Takeitout {
             return;
         }
 
-        for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
+        for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()); i++) {
             ItemStack stack = player.getInventory().getItem(i);
             if (!canReplaceInventoryItem(stack)) {
                 continue;
@@ -942,7 +942,7 @@ public class Takeitout {
             boolean singleItemMode,
             List<WorldContainerSource> dumps
     ) {
-        if (slot < 0 || slot >= inventory.size()) {
+        if (slot < 0 || slot >= inventory.getContainerSize()) {
             return false;
         }
 
@@ -969,8 +969,8 @@ public class Takeitout {
         }
 
         if (ItemStack.isSameItemSameComponents(currentMainHand, extracted)
-                && currentMainHand.getCount() < currentMainHand.getMaxCount()) {
-            int canAdd = Math.min(currentMainHand.getMaxCount() - currentMainHand.getCount(), extracted.getCount());
+                && currentMainHand.getCount() < currentMainHand.getMaxStackSize()) {
+            int canAdd = Math.min(currentMainHand.getMaxStackSize() - currentMainHand.getCount(), extracted.getCount());
             ItemStack actualRemaining = stackInContainer.copy();
             actualRemaining.shrink(canAdd);
             inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
@@ -981,11 +981,11 @@ public class Takeitout {
             return true;
         }
 
-        for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
+        for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()); i++) {
             ItemStack invStack = player.getInventory().getItem(i);
             if (ItemStack.isSameItemSameComponents(invStack, extracted)
-                    && invStack.getCount() < invStack.getMaxCount()) {
-                int canAdd = Math.min(invStack.getMaxCount() - invStack.getCount(), extracted.getCount());
+                    && invStack.getCount() < invStack.getMaxStackSize()) {
+                int canAdd = Math.min(invStack.getMaxStackSize() - invStack.getCount(), extracted.getCount());
                 ItemStack actualRemaining = stackInContainer.copy();
                 actualRemaining.shrink(canAdd);
                 inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
@@ -1040,7 +1040,7 @@ public class Takeitout {
         inventory.setItem(slot, stackInContainer);
 
         if (remainingInContainer.isEmpty()) {
-            for (int i = Math.min(36, player.getInventory().size()) - 1; i >= 0; --i) {
+            for (int i = Math.min(36, player.getInventory().getContainerSize()) - 1; i >= 0; --i) {
                 ItemStack item = player.getInventory().getItem(i);
                 if (!canReplaceInventoryItem(item)) {
                     continue;
@@ -1065,7 +1065,7 @@ public class Takeitout {
                     return true;
                 }
 
-                if (!inventory.isValid(slot, item)) {
+                if (!inventory.canPlaceItem(slot, item)) {
                     continue;
                 }
 
@@ -1104,7 +1104,7 @@ public class Takeitout {
                 continue;
             }
 
-            int max = existing.getMaxCount();
+            int max = existing.getMaxStackSize();
             int canMove = Math.min(max - existing.getCount(), remaining.getCount());
 
             if (canMove <= 0) {
@@ -1123,7 +1123,7 @@ public class Takeitout {
                 continue;
             }
 
-            int move = Math.min(remaining.getCount(), remaining.getMaxCount());
+            int move = Math.min(remaining.getCount(), remaining.getMaxStackSize());
             ItemStack moved = remaining.copy();
             moved.setCount(move);
 
@@ -1137,7 +1137,7 @@ public class Takeitout {
     private static boolean canInsertIntoInventory(Container inventory, ItemStack toInsert) {
         int remaining = toInsert.getCount();
 
-        for (int i = 0; i < inventory.size() && remaining > 0; i++) {
+        for (int i = 0; i < inventory.getContainerSize() && remaining > 0; i++) {
             ItemStack existing = inventory.getItem(i);
             if (existing == null || existing.isEmpty()) {
                 continue;
@@ -1147,21 +1147,21 @@ public class Takeitout {
                 continue;
             }
 
-            int max = Math.min(existing.getMaxCount(), inventory.getMaxCount(existing));
+            int max = Math.min(existing.getMaxStackSize(), inventory.getMaxStackSize(existing));
             remaining -= Math.max(0, max - existing.getCount());
         }
 
-        for (int i = 0; i < inventory.size() && remaining > 0; i++) {
+        for (int i = 0; i < inventory.getContainerSize() && remaining > 0; i++) {
             ItemStack existing = inventory.getItem(i);
             if (existing != null && !existing.isEmpty()) {
                 continue;
             }
 
-            if (!inventory.isValid(i, toInsert)) {
+            if (!inventory.canPlaceItem(i, toInsert)) {
                 continue;
             }
 
-            remaining -= Math.min(toInsert.getMaxCount(), inventory.getMaxCount(toInsert));
+            remaining -= Math.min(toInsert.getMaxStackSize(), inventory.getMaxStackSize(toInsert));
         }
 
         return remaining <= 0;
@@ -1170,7 +1170,7 @@ public class Takeitout {
     private static ItemStack insertIntoInventory(Container inventory, ItemStack toInsert) {
         ItemStack remaining = toInsert.copy();
 
-        for (int i = 0; i < inventory.size() && !remaining.isEmpty(); i++) {
+        for (int i = 0; i < inventory.getContainerSize() && !remaining.isEmpty(); i++) {
             ItemStack existing = inventory.getItem(i);
             if (existing == null || existing.isEmpty()) {
                 continue;
@@ -1180,7 +1180,7 @@ public class Takeitout {
                 continue;
             }
 
-            int max = Math.min(existing.getMaxCount(), inventory.getMaxCount(existing));
+            int max = Math.min(existing.getMaxStackSize(), inventory.getMaxStackSize(existing));
             int canMove = Math.min(max - existing.getCount(), remaining.getCount());
             if (canMove <= 0) {
                 continue;
@@ -1190,17 +1190,17 @@ public class Takeitout {
             remaining.shrink(canMove);
         }
 
-        for (int i = 0; i < inventory.size() && !remaining.isEmpty(); i++) {
+        for (int i = 0; i < inventory.getContainerSize() && !remaining.isEmpty(); i++) {
             ItemStack existing = inventory.getItem(i);
             if (existing != null && !existing.isEmpty()) {
                 continue;
             }
 
-            if (!inventory.isValid(i, remaining)) {
+            if (!inventory.canPlaceItem(i, remaining)) {
                 continue;
             }
 
-            int move = Math.min(remaining.getCount(), Math.min(remaining.getMaxCount(), inventory.getMaxCount(remaining)));
+            int move = Math.min(remaining.getCount(), Math.min(remaining.getMaxStackSize(), inventory.getMaxStackSize(remaining)));
             ItemStack moved = remaining.copy();
             moved.setCount(move);
             inventory.setItem(i, moved);
@@ -1211,7 +1211,7 @@ public class Takeitout {
     }
 
     private static int getSlotWithStack(Container inventory, ItemStack stackReference) {
-        for (int i = 0; i < inventory.size(); ++i) {
+        for (int i = 0; i < inventory.getContainerSize(); ++i) {
             ItemStack stack = inventory.getItem(i);
             if (stack != null && !stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, stackReference)) {
                 return i;
@@ -1226,13 +1226,13 @@ public class Takeitout {
             return null;
         }
 
-        BlockPos pos = BlockPos.fromLong(source.position());
+        BlockPos pos = BlockPos.of(source.position());
         BlockState state = world.getBlockState(pos);
         Block block = state.getBlock();
         Container inventory = null;
 
         if (block instanceof ChestBlock chestBlock) {
-            inventory = ChestBlock.getInventory(chestBlock, state, world, pos, true);
+            inventory = ChestBlock.getContainer(chestBlock, state, world, pos, true);
         } else if (block instanceof ShulkerBoxBlock || block instanceof BarrelBlock) {
             BlockEntity blockEntity = world.getBlockEntity(pos);
             if (blockEntity instanceof Container blockInventory) {
@@ -1252,14 +1252,14 @@ public class Takeitout {
             return null;
         }
 
-        String playerDimension = player.level().dimension().location().toString();
+        String playerDimension = player.level().dimension().identifier().toString();
         if (linkedContainerExchangeMode == LinkedContainerExchangeMode.DISABLED) {
             LOGGER.warn(
                     "World container source blocked by server config: player={}, reason=disabled, playerDimension={}, sourceDimension={}, pos={}",
                     player.getName().getString(),
                     playerDimension,
                     source.dimension(),
-                    BlockPos.fromLong(source.position())
+                    BlockPos.of(source.position())
             );
             return null;
         }
@@ -1270,7 +1270,7 @@ public class Takeitout {
                     player.getName().getString(),
                     playerDimension,
                     source.dimension(),
-                    BlockPos.fromLong(source.position())
+                    BlockPos.of(source.position())
             );
             return null;
         }
@@ -1281,7 +1281,7 @@ public class Takeitout {
                     player.getName().getString(),
                     playerDimension,
                     source.dimension(),
-                    BlockPos.fromLong(source.position())
+                    BlockPos.of(source.position())
             );
             return null;
         }
@@ -1354,7 +1354,7 @@ public class Takeitout {
                 }
 
                 try {
-                    Identifier.of(dimension);
+                    Identifier.parse(dimension);
                     ALLOWED_EXCHANGE_DIMENSIONS.add(dimension);
                 } catch (Exception e) {
                     LOGGER.warn("Ignoring invalid TakeItOut exchange dimension in server config: {}", dimension);
@@ -1427,7 +1427,7 @@ public class Takeitout {
     }
 
     private static boolean isValidInventorySlot(ServerPlayer player, int slot) {
-        return slot >= 0 && slot < player.getInventory().size();
+        return slot >= 0 && slot < player.getInventory().getContainerSize();
     }
 
     private static List<ItemStack> copyContainerContents(ItemStack shulkerStack) {
@@ -1486,13 +1486,13 @@ public class Takeitout {
     }
 
     private static void syncPlayerInventory(ServerPlayer player) {
-        player.getInventory().markDirty();
-        player.containerMenu.sendContentUpdates();
+        player.getInventory().setChanged();
+        player.containerMenu.broadcastChanges();
         player.currentScreenHandler.sendContentUpdates();
     }
 
     private static void syncWorldContainer(ServerPlayer player, Container inventory) {
-        inventory.markDirty();
+        inventory.setChanged();
         player.currentScreenHandler.sendContentUpdates();
     }
 }

@@ -667,26 +667,6 @@ public class WorldContainerSources {
         return source.dimension() + "|" + source.pos().asLong();
     }
 
-    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode) {
-        return requestStack(client, required, singleItemMode, false);
-    }
-
-    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode, boolean fromUi) {
-        if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) return false;
-        List<Takeitout.WorldContainerSource> sources = getLinkedSourceReferencesSnapshot();
-        if (sources.isEmpty()) {
-            LOGGER.warn("World container request skipped: required={}, reason=no_sources", required);
-            return false;
-        }
-        if (isCoolingDownAfterFailure(required)) return false;
-        LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}", required, sources.size(), singleItemMode);
-        TakeitoutClient.awaitingStack = required.copyWithCount(1);
-        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerStackPayload(
-                sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
-        ));
-        return true;
-    }
-
     public static void recordResponse(ItemStack stack, boolean success) {
         if (stack == null || stack.isEmpty()) {
             return;
