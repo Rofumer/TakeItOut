@@ -1,5 +1,5 @@
 plugins {
-    id 'dev.architectury.loom-no-remap' version "1.17-SNAPSHOT"
+    id 'dev.architectury.loom' version "1.17-SNAPSHOT"
     id 'maven-publish'
 }
 
@@ -25,11 +25,12 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
     neoForge "net.neoforged:neoforge:${project.neoforge_version}"
 
-    implementation "maven.modrinth:mafglib:${project.mafglib_version}"
-    implementation "maven.modrinth:forgematica:${project.forgematica_version}"
-    implementation "maven.modrinth:tweakerge:${project.tweakerge_version}"
+    modImplementation "maven.modrinth:mafglib:${project.mafglib_version}"
+    modImplementation "maven.modrinth:forgematica:${project.forgematica_version}"
+    modImplementation "maven.modrinth:tweakerge:${project.tweakerge_version}"
 
     compileOnly "me.fallenbreath:conditional-mixin-neoforge:0.6.4"
 }

@@ -9,8 +9,8 @@ import fi.dy.masa.malilib.util.ItemType;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.ItemStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
@@ -23,7 +23,7 @@ public final class WorldContainerMaterialListCache {
     private WorldContainerMaterialListCache() {
     }
 
-    public static void requestRefresh(MinecraftClient client) {
+    public static void requestRefresh(Minecraft client) {
         if (client == null || client.player == null || client.world == null) {
             return;
         }
@@ -67,7 +67,7 @@ public final class WorldContainerMaterialListCache {
             LINKED_CONTAINER_COUNTS.addTo(new ItemType(stack.copyWithCount(1), true, false), item.count());
         }
 
-        refreshCurrentMaterialList(MinecraftClient.getInstance());
+        refreshCurrentMaterialList(Minecraft.getInstance());
     }
 
     public static void addAvailableCounts(List<MaterialListEntry> entries) {
@@ -88,7 +88,7 @@ public final class WorldContainerMaterialListCache {
         }
     }
 
-    private static void refreshCurrentMaterialList(MinecraftClient client) {
+    private static void refreshCurrentMaterialList(Minecraft client) {
         if (client == null || client.player == null) {
             return;
         }

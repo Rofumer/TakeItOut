@@ -8,16 +8,16 @@ import com.google.gson.JsonObject;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.block.BarrelBlock;
-import net.minecraft.block.Block;
-import net.minecraft.block.ChestBlock;
-import net.minecraft.block.ShulkerBoxBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.BarrelBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,15 +46,15 @@ public class WorldContainerSources {
     private static String currentWorldKey;
     private static String currentGroupName = DEFAULT_GROUP;
 
-    public static boolean toggle(MinecraftClient client, BlockPos pos) {
-        if (client == null || client.player == null || client.world == null || pos == null) {
+    public static boolean toggle(Minecraft client, BlockPos pos) {
+        if (client == null || client.player == null || client.level == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        BlockPos immutable = pos.toImmutable();
-        if (!isSupportedContainer(client.world, immutable)) {
+        BlockPos immutable = pos.immutable();
+        if (!isSupportedContainer(client.level, immutable)) {
             return false;
         }
 
@@ -62,8 +62,8 @@ public class WorldContainerSources {
         SOURCES.put(immutable, linked);
 
         int linkedCount = linkedSourceCountSnapshot();
-        client.player.sendMessage(
-                Text.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
+        client.player.displayClientMessage(
+                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
                 true
         );
         LOGGER.info("World container source {}: pos={}, linked={}, totalLinked={}", linked ? "linked" : "unlinked", immutable, linked, linkedCount);
@@ -71,26 +71,26 @@ public class WorldContainerSources {
         return true;
     }
 
-    public static boolean remove(MinecraftClient client, BlockPos pos) {
+    public static boolean remove(Minecraft client, BlockPos pos) {
         return setLinked(client, pos, false);
     }
 
-    public static boolean setLinked(MinecraftClient client, BlockPos pos, boolean linked) {
+    public static boolean setLinked(Minecraft client, BlockPos pos, boolean linked) {
         if (client == null || client.player == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        BlockPos immutable = pos.toImmutable();
+        BlockPos immutable = pos.immutable();
         if (!SOURCES.containsKey(immutable) && !linked) {
             return false;
         }
 
         SOURCES.put(immutable, linked);
         int linkedCount = linkedSourceCountSnapshot();
-        client.player.sendMessage(
-                Text.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
+        client.player.displayClientMessage(
+                Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
                 true
         );
         LOGGER.info("World container source {}: pos={}, totalLinked={}", linked ? "linked" : "unlinked", immutable, linkedCount);
@@ -98,7 +98,7 @@ public class WorldContainerSources {
         return true;
     }
 
-    public static boolean setLinked(MinecraftClient client, SourceEntry source, boolean linked) {
+    public static boolean setLinked(Minecraft client, SourceEntry source, boolean linked) {
         if (source == null) {
             return false;
         }
@@ -115,8 +115,8 @@ public class WorldContainerSources {
         boolean changed = updateStoredSource(source, linked, false);
         if (changed) {
             int linkedCount = linkedSourceCountSnapshot();
-            client.player.sendMessage(
-                    Text.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
+            client.player.displayClientMessage(
+                    Component.literal("TakeItOut source " + (linked ? "linked" : "unlinked") + " (" + linkedCount + ")" + scanLimitWarningSuffix(linked, linkedCount)),
                     true
             );
             LOGGER.info("World container source {}: dimension={}, pos={}, totalLinked={}", linked ? "linked" : "unlinked", source.dimension(), source.pos(), linkedCount);
@@ -125,8 +125,8 @@ public class WorldContainerSources {
         return changed;
     }
 
-    public static int linkAll(MinecraftClient client, BlockPos corner1, BlockPos corner2) {
-        if (client == null || client.player == null || client.world == null) return 0;
+    public static int linkAll(Minecraft client, BlockPos corner1, BlockPos corner2) {
+        if (client == null || client.player == null || client.level == null) return 0;
         updateContext(client);
 
         int minX = Math.min(corner1.getX(), corner2.getX());
@@ -141,7 +141,7 @@ public class WorldContainerSources {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     BlockPos pos = new BlockPos(x, y, z);
-                    if (isSupportedContainer(client.world, pos)) {
+                    if (isSupportedContainer(client.level, pos)) {
                         SOURCES.put(pos, true);
                         count++;
                     }
@@ -154,17 +154,17 @@ public class WorldContainerSources {
             int scanLimit = TakeitoutClient.SERVER_SCAN_LIMIT;
             String suffix = scanLimit > 0 && linkedCount > scanLimit
                     ? " §eWarning: linked (" + linkedCount + ") exceeds scan limit (" + scanLimit + ")" : "";
-            client.player.sendMessage(Text.literal("Box select: " + count + " linked (" + linkedCount + " total)" + suffix), true);
+            client.player.displayClientMessage(Component.literal("Box select: " + count + " linked (" + linkedCount + " total)" + suffix), true);
             LOGGER.info("Box select linked {} containers in [{},{},{}]-[{},{},{}], totalLinked={}", count, minX, minY, minZ, maxX, maxY, maxZ, linkedCount);
             saveCurrentContext();
         } else {
-            client.player.sendMessage(Text.literal("Box select: no containers found"), true);
+            client.player.displayClientMessage(Component.literal("Box select: no containers found"), true);
         }
         return count;
     }
 
-    public static int unlinkAll(MinecraftClient client, BlockPos corner1, BlockPos corner2) {
-        if (client == null || client.player == null || client.world == null) return 0;
+    public static int unlinkAll(Minecraft client, BlockPos corner1, BlockPos corner2) {
+        if (client == null || client.player == null || client.level == null) return 0;
         updateContext(client);
 
         int minX = Math.min(corner1.getX(), corner2.getX());
@@ -179,7 +179,7 @@ public class WorldContainerSources {
             for (int y = minY; y <= maxY; y++) {
                 for (int z = minZ; z <= maxZ; z++) {
                     BlockPos pos = new BlockPos(x, y, z);
-                    if (isSupportedContainer(client.world, pos) && SOURCES.getOrDefault(pos, false)) {
+                    if (isSupportedContainer(client.level, pos) && SOURCES.getOrDefault(pos, false)) {
                         SOURCES.put(pos, false);
                         count++;
                     }
@@ -189,16 +189,16 @@ public class WorldContainerSources {
 
         if (count > 0) {
             int linkedCount = linkedSourceCountSnapshot();
-            client.player.sendMessage(Text.literal("Box select: " + count + " unlinked (" + linkedCount + " total)"), true);
+            client.player.displayClientMessage(Component.literal("Box select: " + count + " unlinked (" + linkedCount + " total)"), true);
             LOGGER.info("Box select unlinked {} containers in [{},{},{}]-[{},{},{}], totalLinked={}", count, minX, minY, minZ, maxX, maxY, maxZ, linkedCount);
             saveCurrentContext();
         } else {
-            client.player.sendMessage(Text.literal("Box select: no linked containers found"), true);
+            client.player.displayClientMessage(Component.literal("Box select: no linked containers found"), true);
         }
         return count;
     }
 
-    public static boolean areAllLinked(World world, BlockPos corner1, BlockPos corner2) {
+    public static boolean areAllLinked(Level world, BlockPos corner1, BlockPos corner2) {
         int minX = Math.min(corner1.getX(), corner2.getX());
         int minY = Math.min(corner1.getY(), corner2.getY());
         int minZ = Math.min(corner1.getZ(), corner2.getZ());
@@ -221,16 +221,16 @@ public class WorldContainerSources {
         return foundAny;
     }
 
-    public static boolean delete(MinecraftClient client, BlockPos pos) {
+    public static boolean delete(Minecraft client, BlockPos pos) {
         if (client == null || client.player == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        boolean deleted = SOURCES.remove(pos.toImmutable()) != null;
+        boolean deleted = SOURCES.remove(pos.immutable()) != null;
         if (deleted) {
-            client.player.sendMessage(Text.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"), true);
+            client.player.displayClientMessage(Component.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"), true);
             LOGGER.info("World container source deleted: pos={}, totalLinked={}", pos, linkedSourceCountSnapshot());
             saveCurrentContext();
         }
@@ -238,7 +238,7 @@ public class WorldContainerSources {
         return deleted;
     }
 
-    public static boolean delete(MinecraftClient client, SourceEntry source) {
+    public static boolean delete(Minecraft client, SourceEntry source) {
         if (source == null) {
             return false;
         }
@@ -254,14 +254,14 @@ public class WorldContainerSources {
         updateContext(client);
         boolean deleted = updateStoredSource(source, false, true);
         if (deleted) {
-            client.player.sendMessage(Text.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"), true);
+            client.player.displayClientMessage(Component.literal("TakeItOut source deleted (" + linkedSourceCountSnapshot() + ")"), true);
             LOGGER.info("World container source deleted: dimension={}, pos={}, totalLinked={}", source.dimension(), source.pos(), linkedSourceCountSnapshot());
         }
 
         return deleted;
     }
 
-    public static boolean deleteAll(MinecraftClient client) {
+    public static boolean deleteAll(Minecraft client) {
         if (client == null || client.player == null || currentWorldKey == null) {
             return false;
         }
@@ -285,7 +285,7 @@ public class WorldContainerSources {
             LOGGER.warn("Failed to delete all world container sources", e);
         }
 
-        client.player.sendMessage(Text.literal("TakeItOut: all sources deleted"), true);
+        client.player.displayClientMessage(Component.literal("TakeItOut: all sources deleted"), true);
         LOGGER.info("All world container sources deleted: world={}, group={}", currentWorldKey, currentGroupName);
         return true;
     }
@@ -393,7 +393,7 @@ public class WorldContainerSources {
         }
     }
 
-    public static void switchGroup(MinecraftClient client, String name) {
+    public static void switchGroup(Minecraft client, String name) {
         if (currentWorldKey == null || name == null || Objects.equals(name, currentGroupName)) {
             return;
         }
@@ -491,12 +491,12 @@ public class WorldContainerSources {
 
     // --- Queries ---
 
-    public static boolean requestStack(MinecraftClient client, ItemStack required, boolean singleItemMode) {
+    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode) {
         return requestStack(client, required, singleItemMode, false);
     }
 
-    public static boolean requestStack(MinecraftClient client, ItemStack required, boolean singleItemMode, boolean fromUi) {
-        if (client == null || client.player == null || client.world == null || required == null || required.isEmpty()) {
+    public static boolean requestStack(Minecraft client, ItemStack required, boolean singleItemMode, boolean fromUi) {
+        if (client == null || client.player == null || client.level == null || required == null || required.isEmpty()) {
             return false;
         }
 
@@ -512,7 +512,7 @@ public class WorldContainerSources {
 
         LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}, fromUi={}", required, sources.size(), singleItemMode, fromUi);
         TakeitoutClient.awaitingStack = required.copyWithCount(1);
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
+        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerStackPayload(
                 sources,
                 required.copyWithCount(1),
                 singleItemMode,
@@ -531,7 +531,7 @@ public class WorldContainerSources {
         lastFailureTsMs = 0L;
     }
 
-    public static void updateContext(MinecraftClient client) {
+    public static void updateContext(Minecraft client) {
         String nextContextKey = getContextKey(client);
         String nextWorldKey = nextContextKey != null ? extractWorldKey(nextContextKey) : null;
         if (Objects.equals(currentContextKey, nextContextKey)) {
@@ -613,7 +613,7 @@ public class WorldContainerSources {
     }
 
     public static boolean isLinked(BlockPos pos) {
-        return pos != null && SOURCES.getOrDefault(pos.toImmutable(), false);
+        return pos != null && SOURCES.getOrDefault(pos.immutable(), false);
     }
 
     public static String getCurrentContextLabel() {
@@ -693,7 +693,7 @@ public class WorldContainerSources {
         }
 
         if (success) {
-            if (lastFailedStack.isOf(stack.getItem())) {
+            if (lastFailedStack.is(stack.getItem())) {
                 lastFailedStack = ItemStack.EMPTY;
                 lastFailureTsMs = 0L;
             }
@@ -709,7 +709,7 @@ public class WorldContainerSources {
             return false;
         }
 
-        if (!lastFailedStack.isOf(stack.getItem())) {
+        if (!lastFailedStack.is(stack.getItem())) {
             return false;
         }
 
@@ -724,7 +724,7 @@ public class WorldContainerSources {
         }
     }
 
-    public static boolean isSupportedContainer(World world, BlockPos pos) {
+    public static boolean isSupportedContainer(Level world, BlockPos pos) {
         Block block = world.getBlockState(pos).getBlock();
         return block instanceof ShulkerBoxBlock
                 || block instanceof ChestBlock
@@ -740,16 +740,16 @@ public class WorldContainerSources {
 
     private static boolean isCoolingDownAfterFailure(ItemStack required) {
         return !lastFailedStack.isEmpty()
-                && lastFailedStack.isOf(required.getItem())
+                && lastFailedStack.is(required.getItem())
                 && System.currentTimeMillis() - lastFailureTsMs < FAILURE_RETRY_DELAY_MS;
     }
 
-    private static String getContextKey(MinecraftClient client) {
-        if (client == null || client.world == null) {
+    private static String getContextKey(Minecraft client) {
+        if (client == null || client.level == null) {
             return null;
         }
 
-        String dimension = client.world.getRegistryKey().getValue().toString();
+        String dimension = client.level.getRegistryKey().getValue().toString();
         String worldKey = "unknown";
 
         if (client.isInSingleplayer()) {
@@ -759,7 +759,7 @@ public class WorldContainerSources {
                 worldKey = "singleplayer";
             }
         } else {
-            ServerInfo serverInfo = client.getCurrentServerEntry();
+            ServerData serverInfo = client.getCurrentServerEntry();
             if (serverInfo != null) {
                 String addressOrName = serverInfo.address != null && !serverInfo.address.isBlank()
                         ? serverInfo.address

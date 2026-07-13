@@ -5,7 +5,7 @@ import fi.dy.masa.litematica.materials.MaterialListBase;
 import me.fallenbreath.conditionalmixin.api.annotation.Condition;
 import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.client.WorldContainerMaterialListCache;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,6 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class GuiMaterialListMixin {
     @Inject(method = "<init>", at = @At("RETURN"), remap = false)
     private void requestLinkedContainerCounts(MaterialListBase materialList, CallbackInfo ci) {
-        WorldContainerMaterialListCache.requestRefresh(MinecraftClient.getInstance());
+        WorldContainerMaterialListCache.requestRefresh(Minecraft.getInstance());
     }
 }

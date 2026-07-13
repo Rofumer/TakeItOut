@@ -69,33 +69,33 @@ public class Takeitout {
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
     private static boolean allowAllItemsTake = true;
 
-    public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPayload {
-        public static final CustomPayload.Id<GetShulkerStackPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "getstack"));
+    public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<GetShulkerStackPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "getstack"));
 
-        public static final PacketCodec<RegistryByteBuf, GetShulkerStackPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.INTEGER,
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetShulkerStackPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.INT,
                         GetShulkerStackPayload::slot,
-                        PacketCodecs.INTEGER,
+                        ByteBufCodecs.INT,
                         GetShulkerStackPayload::shulker,
-                        PacketCodecs.BOOLEAN,
+                        ByteBufCodecs.BOOL,
                         GetShulkerStackPayload::singleItemMode,
                         GetShulkerStackPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
     public record WorldContainerSource(String dimension, long position) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerSource> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerSource> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
                         WorldContainerSource::dimension,
-                        PacketCodecs.LONG,
+                        ByteBufCodecs.LONG,
                         WorldContainerSource::position,
                         WorldContainerSource::new
                 );
@@ -126,233 +126,232 @@ public class Takeitout {
         }
     }
 
-    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps) implements CustomPayload {
-        public static final CustomPayload.Id<GetWorldContainerStackPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_stack"));
+    public record GetWorldContainerStackPayload(List<WorldContainerSource> sources, ItemStack stack, boolean singleItemMode, boolean fromUi, List<WorldContainerSource> dumps)
+            implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<GetWorldContainerStackPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "get_world_container_stack"));
 
-        public static final PacketCodec<RegistryByteBuf, GetWorldContainerStackPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetWorldContainerStackPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
                         GetWorldContainerStackPayload::sources,
-                        ItemStack.PACKET_CODEC,
+                        ItemStack.STREAM_CODEC,
                         GetWorldContainerStackPayload::stack,
-                        PacketCodecs.BOOLEAN,
+                        ByteBufCodecs.BOOL,
                         GetWorldContainerStackPayload::singleItemMode,
-                        PacketCodecs.BOOLEAN,
+                        ByteBufCodecs.BOOL,
                         GetWorldContainerStackPayload::fromUi,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
                         GetWorldContainerStackPayload::dumps,
                         GetWorldContainerStackPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record WorldContainerStackResponsePayload(ItemStack stack, boolean success) implements CustomPayload {
-        public static final CustomPayload.Id<WorldContainerStackResponsePayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "world_container_stack_response"));
+    public record WorldContainerStackResponsePayload(ItemStack stack, boolean success) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<WorldContainerStackResponsePayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "world_container_stack_response"));
 
-        public static final PacketCodec<RegistryByteBuf, WorldContainerStackResponsePayload> CODEC =
-                PacketCodec.tuple(
-                        ItemStack.PACKET_CODEC,
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerStackResponsePayload> CODEC =
+                StreamCodec.composite(
+                        ItemStack.STREAM_CODEC,
                         WorldContainerStackResponsePayload::stack,
-                        PacketCodecs.BOOLEAN,
+                        ByteBufCodecs.BOOL,
                         WorldContainerStackResponsePayload::success,
                         WorldContainerStackResponsePayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
     public record WorldContainerItemCount(ItemStack stack, int count) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerItemCount> CODEC =
-                PacketCodec.tuple(
-                        ItemStack.PACKET_CODEC,
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerItemCount> CODEC =
+                StreamCodec.composite(
+                        ItemStack.STREAM_CODEC,
                         WorldContainerItemCount::stack,
-                        PacketCodecs.INTEGER,
+                        ByteBufCodecs.INT,
                         WorldContainerItemCount::count,
                         WorldContainerItemCount::new
                 );
     }
 
     public record WorldContainerContents(WorldContainerSource source, List<WorldContainerItemCount> items) {
-        public static final PacketCodec<RegistryByteBuf, WorldContainerContents> CODEC =
-                PacketCodec.tuple(
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerContents> CODEC =
+                StreamCodec.composite(
                         WorldContainerSource.CODEC,
                         WorldContainerContents::source,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
                         WorldContainerContents::items,
                         WorldContainerContents::new
                 );
     }
 
-    public record GetWorldContainerItemsPayload(List<WorldContainerSource> sources) implements CustomPayload {
-        public static final CustomPayload.Id<GetWorldContainerItemsPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "get_world_container_items"));
+    public record GetWorldContainerItemsPayload(List<WorldContainerSource> sources) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<GetWorldContainerItemsPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "get_world_container_items"));
 
-        public static final PacketCodec<RegistryByteBuf, GetWorldContainerItemsPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetWorldContainerItemsPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
                         GetWorldContainerItemsPayload::sources,
                         GetWorldContainerItemsPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record WorldContainerItemsPayload(
-            List<WorldContainerItemCount> items,
-            List<WorldContainerContents> containers
-    ) implements CustomPayload {
-        public static final CustomPayload.Id<WorldContainerItemsPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "world_container_items"));
+    public record WorldContainerItemsPayload(List<WorldContainerItemCount> items, List<WorldContainerContents> containers)
+            implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<WorldContainerItemsPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "world_container_items"));
 
-        public static final PacketCodec<RegistryByteBuf, WorldContainerItemsPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerItemsPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerItemCount.CODEC),
                         WorldContainerItemsPayload::items,
-                        PacketCodecs.collection(ArrayList::new, WorldContainerContents.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerContents.CODEC),
                         WorldContainerItemsPayload::containers,
                         WorldContainerItemsPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements CustomPayload {
-        public static final CustomPayload.Id<DumpInventoryPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "dump_inventory"));
+    public record DumpInventoryPayload(List<WorldContainerSource> dumps) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<DumpInventoryPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "dump_inventory"));
 
-        public static final PacketCodec<RegistryByteBuf, DumpInventoryPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+        public static final StreamCodec<RegistryFriendlyByteBuf, DumpInventoryPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
                         DumpInventoryPayload::dumps,
                         DumpInventoryPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPayload {
-        public static final CustomPayload.Id<ServerConfigSyncPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "server_config_sync"));
+    public record ServerConfigSyncPayload(int linkedContainerScanLimit) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ServerConfigSyncPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "server_config_sync"));
 
-        public static final PacketCodec<RegistryByteBuf, ServerConfigSyncPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.VAR_INT,
+        public static final StreamCodec<RegistryFriendlyByteBuf, ServerConfigSyncPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.VAR_INT,
                         ServerConfigSyncPayload::linkedContainerScanLimit,
                         ServerConfigSyncPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
     public record SharedSourceEntry(long position, boolean linked) {
-        public static final PacketCodec<RegistryByteBuf, SharedSourceEntry> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.LONG,
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedSourceEntry> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.LONG,
                         SharedSourceEntry::position,
-                        PacketCodecs.BOOLEAN,
+                        ByteBufCodecs.BOOL,
                         SharedSourceEntry::linked,
                         SharedSourceEntry::new
                 );
     }
 
     public record SharedGroupDimension(String dimension, List<SharedSourceEntry> sources) {
-        public static final PacketCodec<RegistryByteBuf, SharedGroupDimension> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupDimension> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
                         SharedGroupDimension::dimension,
-                        PacketCodecs.collection(ArrayList::new, SharedSourceEntry.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, SharedSourceEntry.CODEC),
                         SharedGroupDimension::sources,
                         SharedGroupDimension::new
                 );
     }
 
     public record SharedGroupEntry(String id, String name, String authorName, String authorId, List<SharedGroupDimension> dimensions) {
-        public static final PacketCodec<RegistryByteBuf, SharedGroupEntry> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupEntry> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
                         SharedGroupEntry::id,
-                        PacketCodecs.STRING,
+                        ByteBufCodecs.STRING_UTF8,
                         SharedGroupEntry::name,
-                        PacketCodecs.STRING,
+                        ByteBufCodecs.STRING_UTF8,
                         SharedGroupEntry::authorName,
-                        PacketCodecs.STRING,
+                        ByteBufCodecs.STRING_UTF8,
                         SharedGroupEntry::authorId,
-                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
                         SharedGroupEntry::dimensions,
                         SharedGroupEntry::new
                 );
     }
 
-    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements CustomPayload {
-        public static final CustomPayload.Id<PublishGroupPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "publish_group"));
+    public record PublishGroupPayload(String name, List<SharedGroupDimension> dimensions) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<PublishGroupPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "publish_group"));
 
-        public static final PacketCodec<RegistryByteBuf, PublishGroupPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
+        public static final StreamCodec<RegistryFriendlyByteBuf, PublishGroupPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
                         PublishGroupPayload::name,
-                        PacketCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupDimension.CODEC),
                         PublishGroupPayload::dimensions,
                         PublishGroupPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record UnpublishGroupPayload(String groupId) implements CustomPayload {
-        public static final CustomPayload.Id<UnpublishGroupPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "unpublish_group"));
+    public record UnpublishGroupPayload(String groupId) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<UnpublishGroupPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "unpublish_group"));
 
-        public static final PacketCodec<RegistryByteBuf, UnpublishGroupPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.STRING,
+        public static final StreamCodec<RegistryFriendlyByteBuf, UnpublishGroupPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.STRING_UTF8,
                         UnpublishGroupPayload::groupId,
                         UnpublishGroupPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
 
-    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) implements CustomPayload {
-        public static final CustomPayload.Id<SharedGroupsListPayload> ID =
-                new CustomPayload.Id<>(Identifier.of("takeitout", "shared_groups_list"));
+    public record SharedGroupsListPayload(List<SharedGroupEntry> groups) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SharedGroupsListPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "shared_groups_list"));
 
-        public static final PacketCodec<RegistryByteBuf, SharedGroupsListPayload> CODEC =
-                PacketCodec.tuple(
-                        PacketCodecs.collection(ArrayList::new, SharedGroupEntry.CODEC),
+        public static final StreamCodec<RegistryFriendlyByteBuf, SharedGroupsListPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, SharedGroupEntry.CODEC),
                         SharedGroupsListPayload::groups,
                         SharedGroupsListPayload::new
                 );
 
         @Override
-        public Id<? extends CustomPayload> getId() {
+        public Type<? extends CustomPacketPayload> type() {
             return ID;
         }
     }
@@ -409,7 +408,7 @@ public class Takeitout {
         }
     }
 
-    private static void handlePublishGroupPayload(ServerPlayerEntity player, PublishGroupPayload payload) {
+    private static void handlePublishGroupPayload(ServerPlayer player, PublishGroupPayload payload) {
         String name = payload.name();
         if (name == null || name.isBlank() || name.length() > 64) {
             return;
@@ -426,7 +425,7 @@ public class Takeitout {
 
         long playerGroupCount = groups.stream().filter(g -> g.authorId().equals(playerId)).count();
         if (playerGroupCount >= MAX_GROUPS_PER_PLAYER) {
-            player.sendMessage(Text.literal("TakeItOut: shared group limit reached (" + MAX_GROUPS_PER_PLAYER + ")"), false);
+            player.sendSystemMessage(Component.literal("TakeItOut: shared group limit reached (" + MAX_GROUPS_PER_PLAYER + ")"), false);
             return;
         }
 
@@ -434,10 +433,10 @@ public class Takeitout {
         groups.add(new SharedGroupEntry(groupId, name, playerName, playerId, payload.dimensions()));
         saveSharedGroups(groups);
         broadcastSharedGroups(getServerFromPlayer(player), groups);
-        player.sendMessage(Text.literal("TakeItOut: group \"" + name + "\" shared on server"), false);
+        player.sendSystemMessage(Component.literal("TakeItOut: group \"" + name + "\" shared on server"), false);
     }
 
-    private static void handleUnpublishGroupPayload(ServerPlayerEntity player, UnpublishGroupPayload payload) {
+    private static void handleUnpublishGroupPayload(ServerPlayer player, UnpublishGroupPayload payload) {
         String groupId = payload.groupId();
         if (groupId == null || groupId.isBlank()) {
             return;
@@ -450,7 +449,7 @@ public class Takeitout {
         if (removed) {
             saveSharedGroups(groups);
             broadcastSharedGroups(getServerFromPlayer(player), groups);
-            player.sendMessage(Text.literal("TakeItOut: group removed from server"), false);
+            player.sendSystemMessage(Component.literal("TakeItOut: group removed from server"), false);
         }
     }
 
@@ -541,8 +540,8 @@ public class Takeitout {
         }
     }
 
-    private static net.minecraft.server.MinecraftServer getServerFromPlayer(ServerPlayerEntity player) {
-        if (player.getEntityWorld() instanceof ServerWorld serverWorld) {
+    private static net.minecraft.server.MinecraftServer getServerFromPlayer(ServerPlayer player) {
+        if (player.level() instanceof ServerLevel serverWorld) {
             return serverWorld.getServer();
         }
         return null;
@@ -558,7 +557,7 @@ public class Takeitout {
         }
     }
 
-    private static void handleGetShulkerStack(ServerPlayerEntity player, GetShulkerStackPayload payload) {
+    private static void handleGetShulkerStack(ServerPlayer player, GetShulkerStackPayload payload) {
         int slotInShulker = payload.slot();
         int shulkerSlot = payload.shulker();
         boolean singleItemMode = payload.singleItemMode();
@@ -572,7 +571,7 @@ public class Takeitout {
             return;
         }
 
-        ItemStack shulker = player.getInventory().getStack(shulkerSlot);
+        ItemStack shulker = player.getInventory().getItem(shulkerSlot);
         if (shulker.isEmpty() || !isShulkerItem(shulker)) {
             LOGGER.warn(
                     "GetShulkerStack aborted: player={}, reason=not_shulker, shulkerSlot={}, stack={}",
@@ -612,9 +611,9 @@ public class Takeitout {
         }
 
         ItemStack remainingInShulker = stackInShulker.copy();
-        remainingInShulker.decrement(extracted.getCount());
+        remainingInShulker.shrink(extracted.getCount());
 
-        ItemStack currentMainHand = player.getStackInHand(Hand.MAIN_HAND).copy();
+        ItemStack currentMainHand = player.getItemInHand(InteractionHand.MAIN_HAND).copy();
 
         LOGGER.debug(
                 "GetShulkerStack request: player={}, shulkerSlot={}, shulkerInnerSlot={}, selectedSlot={}, singleItemMode={}, currentHand={}, extracted={}",
@@ -632,7 +631,7 @@ public class Takeitout {
             itemStacks.set(slotInShulker, remainingInShulker.isEmpty() ? ItemStack.EMPTY : remainingInShulker);
             setShulkerContents(shulker, itemStacks);
 
-            player.setStackInHand(Hand.MAIN_HAND, extracted);
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
 
             LOGGER.debug(
@@ -646,13 +645,13 @@ public class Takeitout {
         }
 
         // 2. Если есть свободный слот — старый предмет из руки кладём туда
-        int freeSlot = player.getInventory().getEmptySlot();
+        int freeSlot = player.getInventory().getFreeSlot();
         if (freeSlot != -1) {
             itemStacks.set(slotInShulker, remainingInShulker.isEmpty() ? ItemStack.EMPTY : remainingInShulker);
             setShulkerContents(shulker, itemStacks);
 
-            player.getInventory().setStack(freeSlot, currentMainHand);
-            player.setStackInHand(Hand.MAIN_HAND, extracted);
+            player.getInventory().setItem(freeSlot, currentMainHand);
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
 
             LOGGER.debug(
@@ -675,7 +674,7 @@ public class Takeitout {
             if (leftover.isEmpty()) {
                 setShulkerContents(shulker, itemStacks);
 
-                player.setStackInHand(Hand.MAIN_HAND, extracted);
+                player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
 
                 LOGGER.debug(
@@ -694,7 +693,7 @@ public class Takeitout {
         //    Только если весь слот из шалкера забирается полностью
         if (remainingInShulker.isEmpty()) {
             for (int i = Math.min(36, player.getInventory().size()) - 1; i >= 0; --i) {
-                ItemStack item = player.getInventory().getStack(i);
+                ItemStack item = player.getInventory().getItem(i);
 
                 if (!canReplaceInventoryItem(item)) {
                     continue;
@@ -703,8 +702,8 @@ public class Takeitout {
                 itemStacks.set(slotInShulker, item.copy());
                 setShulkerContents(shulker, itemStacks);
 
-                player.getInventory().setStack(i, currentMainHand);
-                player.setStackInHand(Hand.MAIN_HAND, extracted);
+                player.getInventory().setItem(i, currentMainHand);
+                player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
 
                 LOGGER.debug(
@@ -731,7 +730,7 @@ public class Takeitout {
         );
     }
 
-    private static void handleGetWorldContainerStack(ServerPlayerEntity player, GetWorldContainerStackPayload payload) {
+    private static void handleGetWorldContainerStack(ServerPlayer player, GetWorldContainerStackPayload payload) {
         ItemStack requested = payload.stack();
         if (requested == null || requested.isEmpty() || payload.sources() == null) {
             return;
@@ -755,7 +754,7 @@ public class Takeitout {
             checked++;
 
             BlockPos pos = BlockPos.fromLong(source.position());
-            Inventory inventory = getWorldContainerInventory(player, source);
+            Container inventory = getWorldContainerInventory(player, source);
             if (inventory == null) {
                 invalidSourceCount++;
                 continue;
@@ -785,7 +784,7 @@ public class Takeitout {
         if (!isShulkerItem(requested)) {
             int bestShulkerSlot = -1;
             int bestShulkerCount = 0;
-            Inventory bestShulkerInventory = null;
+            Container bestShulkerInventory = null;
             BlockPos bestShulkerPos = null;
 
             int scanned = 0;
@@ -795,21 +794,21 @@ public class Takeitout {
                 }
                 scanned++;
 
-                Inventory inventory = getWorldContainerInventory(player, source);
+                Container inventory = getWorldContainerInventory(player, source);
                 if (inventory == null) {
                     continue;
                 }
 
                 BlockPos pos = BlockPos.fromLong(source.position());
                 for (int i = 0; i < inventory.size(); i++) {
-                    ItemStack stack = inventory.getStack(i);
+                    ItemStack stack = inventory.getItem(i);
                     if (stack == null || stack.isEmpty() || !isShulkerItem(stack)) {
                         continue;
                     }
 
                     int count = 0;
                     for (ItemStack shulkerItem : copyContainerContents(stack)) {
-                        if (!shulkerItem.isEmpty() && shulkerItem.isOf(requested.getItem())) {
+                        if (!shulkerItem.isEmpty() && shulkerItem.is(requested.getItem())) {
                             count += shulkerItem.getCount();
                         }
                     }
@@ -849,7 +848,7 @@ public class Takeitout {
         );
     }
 
-    private static void handleGetWorldContainerItems(ServerPlayerEntity player, GetWorldContainerItemsPayload payload) {
+    private static void handleGetWorldContainerItems(ServerPlayer player, GetWorldContainerItemsPayload payload) {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
         if (payload.sources() == null) {
@@ -865,7 +864,7 @@ public class Takeitout {
             }
             checked++;
 
-            Inventory inventory = getWorldContainerInventory(player, source);
+            Container inventory = getWorldContainerInventory(player, source);
             List<WorldContainerItemCount> containerItems = new ArrayList<>();
             if (inventory == null) {
                 containers.add(new WorldContainerContents(source, containerItems));
@@ -873,7 +872,7 @@ public class Takeitout {
             }
 
             for (int slot = 0; slot < inventory.size(); slot++) {
-                ItemStack stack = inventory.getStack(slot);
+                ItemStack stack = inventory.getItem(slot);
                 if (stack == null || stack.isEmpty()) {
                     continue;
                 }
@@ -888,13 +887,13 @@ public class Takeitout {
         PacketDistributor.sendToPlayer(player, new WorldContainerItemsPayload(items, containers));
     }
 
-    private static void handleDumpInventoryPayload(ServerPlayerEntity player, DumpInventoryPayload payload) {
+    private static void handleDumpInventoryPayload(ServerPlayer player, DumpInventoryPayload payload) {
         if (payload.dumps() == null || payload.dumps().isEmpty()) {
             return;
         }
 
         for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
-            ItemStack stack = player.getInventory().getStack(i);
+            ItemStack stack = player.getInventory().getItem(i);
             if (!canReplaceInventoryItem(stack)) {
                 continue;
             }
@@ -904,7 +903,7 @@ public class Takeitout {
                 if (remaining.isEmpty()) {
                     break;
                 }
-                Inventory dumpInventory = getWorldContainerInventory(player, dump);
+                Container dumpInventory = getWorldContainerInventory(player, dump);
                 if (dumpInventory == null) {
                     continue;
                 }
@@ -913,7 +912,7 @@ public class Takeitout {
             }
 
             if (remaining.getCount() != stack.getCount()) {
-                player.getInventory().setStack(i, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
+                player.getInventory().setItem(i, remaining.isEmpty() ? ItemStack.EMPTY : remaining);
             }
         }
 
@@ -926,7 +925,7 @@ public class Takeitout {
 
         for (int i = 0; i < items.size(); i++) {
             WorldContainerItemCount existing = items.get(i);
-            if (ItemStack.areItemsAndComponentsEqual(existing.stack(), keyStack)) {
+            if (ItemStack.isSameItemSameComponents(existing.stack(), keyStack)) {
                 items.set(i, new WorldContainerItemCount(existing.stack(), existing.count() + stack.getCount()));
                 return;
             }
@@ -936,8 +935,8 @@ public class Takeitout {
     }
 
     private static boolean extractFromWorldContainer(
-            ServerPlayerEntity player,
-            Inventory inventory,
+            ServerPlayer player,
+            Container inventory,
             BlockPos pos,
             int slot,
             boolean singleItemMode,
@@ -947,7 +946,7 @@ public class Takeitout {
             return false;
         }
 
-        ItemStack stackInContainer = inventory.getStack(slot);
+        ItemStack stackInContainer = inventory.getItem(slot);
         if (stackInContainer == null || stackInContainer.isEmpty()) {
             return false;
         }
@@ -958,61 +957,61 @@ public class Takeitout {
         }
 
         ItemStack remainingInContainer = stackInContainer.copy();
-        remainingInContainer.decrement(extracted.getCount());
-        ItemStack currentMainHand = player.getStackInHand(Hand.MAIN_HAND).copy();
+        remainingInContainer.shrink(extracted.getCount());
+        ItemStack currentMainHand = player.getItemInHand(InteractionHand.MAIN_HAND).copy();
 
         if (currentMainHand.isEmpty()) {
-            inventory.setStack(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+            inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
             syncWorldContainer(player, inventory);
-            player.setStackInHand(Hand.MAIN_HAND, extracted);
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
             return true;
         }
 
-        if (ItemStack.areItemsAndComponentsEqual(currentMainHand, extracted)
+        if (ItemStack.isSameItemSameComponents(currentMainHand, extracted)
                 && currentMainHand.getCount() < currentMainHand.getMaxCount()) {
             int canAdd = Math.min(currentMainHand.getMaxCount() - currentMainHand.getCount(), extracted.getCount());
             ItemStack actualRemaining = stackInContainer.copy();
-            actualRemaining.decrement(canAdd);
-            inventory.setStack(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
+            actualRemaining.shrink(canAdd);
+            inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
             syncWorldContainer(player, inventory);
-            currentMainHand.increment(canAdd);
-            player.setStackInHand(Hand.MAIN_HAND, currentMainHand);
+            currentMainHand.grow(canAdd);
+            player.setItemInHand(InteractionHand.MAIN_HAND, currentMainHand);
             syncPlayerInventory(player);
             return true;
         }
 
         for (int i = 0; i < Math.min(36, player.getInventory().size()); i++) {
-            ItemStack invStack = player.getInventory().getStack(i);
-            if (ItemStack.areItemsAndComponentsEqual(invStack, extracted)
+            ItemStack invStack = player.getInventory().getItem(i);
+            if (ItemStack.isSameItemSameComponents(invStack, extracted)
                     && invStack.getCount() < invStack.getMaxCount()) {
                 int canAdd = Math.min(invStack.getMaxCount() - invStack.getCount(), extracted.getCount());
                 ItemStack actualRemaining = stackInContainer.copy();
-                actualRemaining.decrement(canAdd);
-                inventory.setStack(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
+                actualRemaining.shrink(canAdd);
+                inventory.setItem(slot, actualRemaining.isEmpty() ? ItemStack.EMPTY : actualRemaining);
                 syncWorldContainer(player, inventory);
-                invStack.increment(canAdd);
-                player.getInventory().setStack(i, invStack);
+                invStack.grow(canAdd);
+                player.getInventory().setItem(i, invStack);
                 syncPlayerInventory(player);
                 return true;
             }
         }
 
-        int freeSlot = player.getInventory().getEmptySlot();
+        int freeSlot = player.getInventory().getFreeSlot();
         if (freeSlot != -1) {
-            inventory.setStack(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+            inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
             syncWorldContainer(player, inventory);
-            player.getInventory().setStack(freeSlot, currentMainHand);
-            player.setStackInHand(Hand.MAIN_HAND, extracted);
+            player.getInventory().setItem(freeSlot, currentMainHand);
+            player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
             return true;
         }
 
-        inventory.setStack(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
+        inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
         if (canReplaceInventoryItem(currentMainHand)) {
-            Inventory insertTarget = null;
+            Container insertTarget = null;
             for (WorldContainerSource dumpSource : dumps) {
-                Inventory dumpInv = getWorldContainerInventory(player, dumpSource);
+                Container dumpInv = getWorldContainerInventory(player, dumpSource);
                 if (dumpInv != null && canInsertIntoInventory(dumpInv, currentMainHand)) {
                     insertTarget = dumpInv;
                     break;
@@ -1024,7 +1023,7 @@ public class Takeitout {
             if (insertTarget != null) {
                 ItemStack leftover = insertIntoInventory(insertTarget, currentMainHand);
                 if (!leftover.isEmpty()) {
-                    inventory.setStack(slot, stackInContainer);
+                    inventory.setItem(slot, stackInContainer);
                     return false;
                 }
 
@@ -1032,31 +1031,31 @@ public class Takeitout {
                 if (insertTarget != inventory) {
                     syncWorldContainer(player, insertTarget);
                 }
-                player.setStackInHand(Hand.MAIN_HAND, extracted);
+                player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
                 return true;
             }
         }
 
-        inventory.setStack(slot, stackInContainer);
+        inventory.setItem(slot, stackInContainer);
 
         if (remainingInContainer.isEmpty()) {
             for (int i = Math.min(36, player.getInventory().size()) - 1; i >= 0; --i) {
-                ItemStack item = player.getInventory().getStack(i);
+                ItemStack item = player.getInventory().getItem(i);
                 if (!canReplaceInventoryItem(item)) {
                     continue;
                 }
 
                 boolean dumped = false;
                 for (WorldContainerSource dumpSource : dumps) {
-                    Inventory dumpInv = getWorldContainerInventory(player, dumpSource);
+                    Container dumpInv = getWorldContainerInventory(player, dumpSource);
                     if (dumpInv != null && canInsertIntoInventory(dumpInv, item)) {
                         insertIntoInventory(dumpInv, item);
                         syncWorldContainer(player, dumpInv);
-                        inventory.setStack(slot, ItemStack.EMPTY);
+                        inventory.setItem(slot, ItemStack.EMPTY);
                         syncWorldContainer(player, inventory);
-                        player.getInventory().setStack(i, currentMainHand);
-                        player.setStackInHand(Hand.MAIN_HAND, extracted);
+                        player.getInventory().setItem(i, currentMainHand);
+                        player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                         syncPlayerInventory(player);
                         dumped = true;
                         break;
@@ -1070,10 +1069,10 @@ public class Takeitout {
                     continue;
                 }
 
-                inventory.setStack(slot, item.copy());
+                inventory.setItem(slot, item.copy());
                 syncWorldContainer(player, inventory);
-                player.getInventory().setStack(i, currentMainHand);
-                player.setStackInHand(Hand.MAIN_HAND, extracted);
+                player.getInventory().setItem(i, currentMainHand);
+                player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
                 return true;
             }
@@ -1101,7 +1100,7 @@ public class Takeitout {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, remaining)) {
+            if (!ItemStack.isSameItemSameComponents(existing, remaining)) {
                 continue;
             }
 
@@ -1112,8 +1111,8 @@ public class Takeitout {
                 continue;
             }
 
-            existing.increment(canMove);
-            remaining.decrement(canMove);
+            existing.grow(canMove);
+            remaining.shrink(canMove);
         }
 
         // Потом ищем пустые слоты
@@ -1129,22 +1128,22 @@ public class Takeitout {
             moved.setCount(move);
 
             itemStacks.set(i, moved);
-            remaining.decrement(move);
+            remaining.shrink(move);
         }
 
         return remaining;
     }
 
-    private static boolean canInsertIntoInventory(Inventory inventory, ItemStack toInsert) {
+    private static boolean canInsertIntoInventory(Container inventory, ItemStack toInsert) {
         int remaining = toInsert.getCount();
 
         for (int i = 0; i < inventory.size() && remaining > 0; i++) {
-            ItemStack existing = inventory.getStack(i);
+            ItemStack existing = inventory.getItem(i);
             if (existing == null || existing.isEmpty()) {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, toInsert)) {
+            if (!ItemStack.isSameItemSameComponents(existing, toInsert)) {
                 continue;
             }
 
@@ -1153,7 +1152,7 @@ public class Takeitout {
         }
 
         for (int i = 0; i < inventory.size() && remaining > 0; i++) {
-            ItemStack existing = inventory.getStack(i);
+            ItemStack existing = inventory.getItem(i);
             if (existing != null && !existing.isEmpty()) {
                 continue;
             }
@@ -1168,16 +1167,16 @@ public class Takeitout {
         return remaining <= 0;
     }
 
-    private static ItemStack insertIntoInventory(Inventory inventory, ItemStack toInsert) {
+    private static ItemStack insertIntoInventory(Container inventory, ItemStack toInsert) {
         ItemStack remaining = toInsert.copy();
 
         for (int i = 0; i < inventory.size() && !remaining.isEmpty(); i++) {
-            ItemStack existing = inventory.getStack(i);
+            ItemStack existing = inventory.getItem(i);
             if (existing == null || existing.isEmpty()) {
                 continue;
             }
 
-            if (!ItemStack.areItemsAndComponentsEqual(existing, remaining)) {
+            if (!ItemStack.isSameItemSameComponents(existing, remaining)) {
                 continue;
             }
 
@@ -1187,12 +1186,12 @@ public class Takeitout {
                 continue;
             }
 
-            existing.increment(canMove);
-            remaining.decrement(canMove);
+            existing.grow(canMove);
+            remaining.shrink(canMove);
         }
 
         for (int i = 0; i < inventory.size() && !remaining.isEmpty(); i++) {
-            ItemStack existing = inventory.getStack(i);
+            ItemStack existing = inventory.getItem(i);
             if (existing != null && !existing.isEmpty()) {
                 continue;
             }
@@ -1204,25 +1203,25 @@ public class Takeitout {
             int move = Math.min(remaining.getCount(), Math.min(remaining.getMaxCount(), inventory.getMaxCount(remaining)));
             ItemStack moved = remaining.copy();
             moved.setCount(move);
-            inventory.setStack(i, moved);
-            remaining.decrement(move);
+            inventory.setItem(i, moved);
+            remaining.shrink(move);
         }
 
         return remaining;
     }
 
-    private static int getSlotWithStack(Inventory inventory, ItemStack stackReference) {
+    private static int getSlotWithStack(Container inventory, ItemStack stackReference) {
         for (int i = 0; i < inventory.size(); ++i) {
-            ItemStack stack = inventory.getStack(i);
-            if (stack != null && !stack.isEmpty() && ItemStack.areItemsAndComponentsEqual(stack, stackReference)) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack != null && !stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, stackReference)) {
                 return i;
             }
         }
         return -1;
     }
 
-    private static Inventory getWorldContainerInventory(ServerPlayerEntity player, WorldContainerSource source) {
-        ServerWorld world = getSourceWorld(player, source);
+    private static Container getWorldContainerInventory(ServerPlayer player, WorldContainerSource source) {
+        ServerLevel world = getSourceWorld(player, source);
         if (world == null) {
             return null;
         }
@@ -1230,13 +1229,13 @@ public class Takeitout {
         BlockPos pos = BlockPos.fromLong(source.position());
         BlockState state = world.getBlockState(pos);
         Block block = state.getBlock();
-        Inventory inventory = null;
+        Container inventory = null;
 
         if (block instanceof ChestBlock chestBlock) {
             inventory = ChestBlock.getInventory(chestBlock, state, world, pos, true);
         } else if (block instanceof ShulkerBoxBlock || block instanceof BarrelBlock) {
             BlockEntity blockEntity = world.getBlockEntity(pos);
-            if (blockEntity instanceof Inventory blockInventory) {
+            if (blockEntity instanceof Container blockInventory) {
                 inventory = blockInventory;
             }
         }
@@ -1248,12 +1247,12 @@ public class Takeitout {
         return inventory;
     }
 
-    private static ServerWorld getSourceWorld(ServerPlayerEntity player, WorldContainerSource source) {
+    private static ServerLevel getSourceWorld(ServerPlayer player, WorldContainerSource source) {
         if (source == null || source.dimension() == null || source.dimension().isBlank()) {
             return null;
         }
 
-        String playerDimension = player.getEntityWorld().getRegistryKey().getValue().toString();
+        String playerDimension = player.level().dimension().location().toString();
         if (linkedContainerExchangeMode == LinkedContainerExchangeMode.DISABLED) {
             LOGGER.warn(
                     "World container source blocked by server config: player={}, reason=disabled, playerDimension={}, sourceDimension={}, pos={}",
@@ -1289,17 +1288,17 @@ public class Takeitout {
 
         Identifier dimensionId;
         try {
-            dimensionId = Identifier.of(source.dimension());
+            dimensionId = Identifier.parse(source.dimension());
         } catch (Exception ignored) {
             return null;
         }
 
-        RegistryKey<net.minecraft.world.World> worldKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
-        if (!(player.getEntityWorld() instanceof ServerWorld playerWorld)) {
+        ResourceKey<net.minecraft.world.level.Level> worldKey = ResourceKey.create(Registries.DIMENSION, dimensionId);
+        if (!(player.level() instanceof ServerLevel playerWorld)) {
             return null;
         }
 
-        return playerWorld.getServer().getWorld(worldKey);
+        return playerWorld.getServer().getLevel(worldKey);
     }
 
     private static boolean isDimensionAllowedForExchange(String dimension) {
@@ -1427,7 +1426,7 @@ public class Takeitout {
         }
     }
 
-    private static boolean isValidInventorySlot(ServerPlayerEntity player, int slot) {
+    private static boolean isValidInventorySlot(ServerPlayer player, int slot) {
         return slot >= 0 && slot < player.getInventory().size();
     }
 
@@ -1486,13 +1485,13 @@ public class Takeitout {
                 && !(blockItem.getBlock() instanceof EnderChestBlock);
     }
 
-    private static void syncPlayerInventory(ServerPlayerEntity player) {
+    private static void syncPlayerInventory(ServerPlayer player) {
         player.getInventory().markDirty();
-        player.playerScreenHandler.sendContentUpdates();
+        player.containerMenu.sendContentUpdates();
         player.currentScreenHandler.sendContentUpdates();
     }
 
-    private static void syncWorldContainer(ServerPlayerEntity player, Inventory inventory) {
+    private static void syncWorldContainer(ServerPlayer player, Container inventory) {
         inventory.markDirty();
         player.currentScreenHandler.sendContentUpdates();
     }

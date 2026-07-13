@@ -7,10 +7,10 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,37 +40,37 @@ public final class WorldContainerDumps {
     private WorldContainerDumps() {
     }
 
-    public static boolean toggle(MinecraftClient client, BlockPos pos) {
-        if (client == null || client.player == null || client.world == null || pos == null) {
+    public static boolean toggle(Minecraft client, BlockPos pos) {
+        if (client == null || client.player == null || client.level == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        BlockPos immutable = pos.toImmutable();
-        if (!DUMPS.containsKey(immutable) && !WorldContainerSources.isSupportedContainer(client.world, immutable)) {
+        BlockPos immutable = pos.immutable();
+        if (!DUMPS.containsKey(immutable) && !WorldContainerSources.isSupportedContainer(client.level, immutable)) {
             return false;
         }
 
         return setEnabled(client, immutable, !DUMPS.getOrDefault(immutable, false));
     }
 
-    public static boolean setEnabled(MinecraftClient client, BlockPos pos, boolean enabled) {
+    public static boolean setEnabled(Minecraft client, BlockPos pos, boolean enabled) {
         if (client == null || client.player == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        BlockPos immutable = pos.toImmutable();
+        BlockPos immutable = pos.immutable();
         if (!DUMPS.containsKey(immutable) && !enabled) {
             return false;
         }
 
         DUMPS.put(immutable, enabled);
 
-        client.player.sendMessage(
-                Text.literal("TakeItOut dump " + (enabled ? "marked" : "unmarked") + " (" + dumpCountSnapshot() + ")"),
+        client.player.displayClientMessage(
+                Component.literal("TakeItOut dump " + (enabled ? "marked" : "unmarked") + " (" + dumpCountSnapshot() + ")"),
                 true
         );
         LOGGER.info("Dump container {}: pos={}, total={}", enabled ? "marked" : "unmarked", immutable, dumpCountSnapshot());
@@ -78,17 +78,17 @@ public final class WorldContainerDumps {
         return true;
     }
 
-    public static boolean delete(MinecraftClient client, BlockPos pos) {
+    public static boolean delete(Minecraft client, BlockPos pos) {
         if (client == null || client.player == null || pos == null) {
             return false;
         }
 
         updateContext(client);
 
-        boolean deleted = DUMPS.remove(pos.toImmutable()) != null;
+        boolean deleted = DUMPS.remove(pos.immutable()) != null;
         if (deleted) {
-            client.player.sendMessage(
-                    Text.literal("TakeItOut dump deleted (" + dumpCountSnapshot() + ")"),
+            client.player.displayClientMessage(
+                    Component.literal("TakeItOut dump deleted (" + dumpCountSnapshot() + ")"),
                     true
             );
             LOGGER.info("Dump container deleted: pos={}, total={}", pos, dumpCountSnapshot());
@@ -98,7 +98,7 @@ public final class WorldContainerDumps {
         return deleted;
     }
 
-    public static boolean deleteAll(MinecraftClient client) {
+    public static boolean deleteAll(Minecraft client) {
         if (client == null || client.player == null || currentWorldKey == null) {
             return false;
         }
@@ -110,8 +110,8 @@ public final class WorldContainerDumps {
         }
 
         DUMPS.clear();
-        client.player.sendMessage(
-                Text.literal("TakeItOut: all dump containers deleted"),
+        client.player.displayClientMessage(
+                Component.literal("TakeItOut: all dump containers deleted"),
                 true
         );
         LOGGER.info("All dump containers deleted: world={}, group={}", currentWorldKey, currentGroupName);
@@ -158,7 +158,7 @@ public final class WorldContainerDumps {
         return count;
     }
 
-    public static void updateContext(MinecraftClient client) {
+    public static void updateContext(Minecraft client) {
         String nextContextKey = getContextKey(client);
         String nextWorldKey = nextContextKey != null ? extractWorldKey(nextContextKey) : null;
         if (Objects.equals(currentContextKey, nextContextKey)) {
@@ -223,12 +223,12 @@ public final class WorldContainerDumps {
         currentGroupName = WorldContainerSources.DEFAULT_GROUP;
     }
 
-    private static String getContextKey(MinecraftClient client) {
-        if (client == null || client.world == null) {
+    private static String getContextKey(Minecraft client) {
+        if (client == null || client.level == null) {
             return null;
         }
 
-        String dimension = client.world.getRegistryKey().getValue().toString();
+        String dimension = client.level.getRegistryKey().getValue().toString();
         String worldKey;
 
         if (client.isInSingleplayer()) {
@@ -238,7 +238,7 @@ public final class WorldContainerDumps {
                 worldKey = "singleplayer";
             }
         } else {
-            ServerInfo serverInfo = client.getCurrentServerEntry();
+            ServerData serverInfo = client.getCurrentServerEntry();
             if (serverInfo != null) {
                 String addressOrName = serverInfo.address != null && !serverInfo.address.isBlank()
                         ? serverInfo.address

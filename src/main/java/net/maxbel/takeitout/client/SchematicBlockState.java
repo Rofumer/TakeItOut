@@ -1,19 +1,19 @@
 package net.maxbel.takeitout.client;
 
 import fi.dy.masa.litematica.world.WorldSchematic;
-import net.minecraft.block.BlockState;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
 
 public class SchematicBlockState {
-    public final World world;
+    public final Level world;
     public final WorldSchematic schematic;
     public final BlockPos blockPos;
     public final BlockState targetState;
     public final BlockState currentState;
 
-    public SchematicBlockState(World world, WorldSchematic schematic, BlockPos blockPos) {
+    public SchematicBlockState(Level world, WorldSchematic schematic, BlockPos blockPos) {
         this.world = world;
         this.schematic = schematic;
         this.blockPos = blockPos;
@@ -22,7 +22,7 @@ public class SchematicBlockState {
     }
 
     public SchematicBlockState offset(Direction direction) {
-        return new SchematicBlockState(world, schematic, blockPos.offset(direction));
+        return new SchematicBlockState(world, schematic, blockPos.relative(direction));
     }
 
     @Override

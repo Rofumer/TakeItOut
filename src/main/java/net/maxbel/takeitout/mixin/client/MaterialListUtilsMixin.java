@@ -6,9 +6,9 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import me.fallenbreath.conditionalmixin.api.annotation.Condition;
 import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import net.maxbel.takeitout.client.WorldContainerMaterialListCache;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.player.Player;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,19 +25,19 @@ public class MaterialListUtilsMixin {
             Object2IntOpenHashMap<BlockState> total,
             Object2IntOpenHashMap<BlockState> missing,
             Object2IntOpenHashMap<BlockState> mismatched,
-            PlayerEntity player,
+            Player player,
             CallbackInfoReturnable<List<MaterialListEntry>> cir
     ) {
         WorldContainerMaterialListCache.addAvailableCounts(cir.getReturnValue());
         if (player != null) {
-            WorldContainerMaterialListCache.requestRefresh(MinecraftClient.getInstance());
+            WorldContainerMaterialListCache.requestRefresh(Minecraft.getInstance());
         }
     }
 
     @Inject(method = "updateAvailableCounts", at = @At("TAIL"), remap = false)
     private static void addLinkedContainersToUpdatedEntries(
             List<MaterialListEntry> materialList,
-            PlayerEntity player,
+            Player player,
             CallbackInfo ci
     ) {
         WorldContainerMaterialListCache.addAvailableCounts(materialList);

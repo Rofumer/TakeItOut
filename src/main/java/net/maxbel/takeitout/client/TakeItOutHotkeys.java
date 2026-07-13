@@ -3,11 +3,11 @@ package net.maxbel.takeitout.client;
 import fi.dy.masa.malilib.config.options.ConfigHotkey;
 import fi.dy.masa.malilib.hotkeys.KeyAction;
 import fi.dy.masa.malilib.hotkeys.KeybindSettings;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
 
 import java.util.List;
 
@@ -80,7 +80,7 @@ public final class TakeItOutHotkeys {
 
     public static void initCallbacks() {
         OPEN_CONFIG_GUI.getKeybind().setCallback((KeyAction action, fi.dy.masa.malilib.hotkeys.IKeybind key) -> {
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.currentScreen == null) {
                 client.setScreen(new TakeItOutSettingsScreen(null));
             }
@@ -88,12 +88,12 @@ public final class TakeItOutHotkeys {
         });
 
         AUTO_TAKE_OUT.getKeybind().setCallback((KeyAction action, fi.dy.masa.malilib.hotkeys.IKeybind key) -> {
-            TakeitoutClient.toggleAutoTakeout(MinecraftClient.getInstance());
+            TakeitoutClient.toggleAutoTakeout(Minecraft.getInstance());
             return true;
         });
 
         SINGLE_ITEM_MODE.getKeybind().setCallback((KeyAction action, fi.dy.masa.malilib.hotkeys.IKeybind key) -> {
-            TakeitoutClient.toggleSingleItemMode(MinecraftClient.getInstance());
+            TakeitoutClient.toggleSingleItemMode(Minecraft.getInstance());
             return true;
         });
 
@@ -102,7 +102,7 @@ public final class TakeItOutHotkeys {
                 return false;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.currentScreen != null || client.player == null || client.world == null) {
                 return false;
             }
@@ -113,12 +113,12 @@ public final class TakeItOutHotkeys {
                 return WorldContainerSources.toggle(client, hit.getBlockPos());
             }
 
-            client.player.sendMessage(Text.literal("Look at a chest, barrel or shulker box"), true);
+            client.player.displayClientMessage(Component.literal("Look at a chest, barrel or shulker box"), true);
             return false;
         });
 
         TOGGLE_CONTAINER_SOURCE_RENDER.getKeybind().setCallback((KeyAction action, fi.dy.masa.malilib.hotkeys.IKeybind key) -> {
-            TakeitoutClient.toggleContainerSourceRender(MinecraftClient.getInstance());
+            TakeitoutClient.toggleContainerSourceRender(Minecraft.getInstance());
             return true;
         });
 
@@ -127,7 +127,7 @@ public final class TakeItOutHotkeys {
                 return false;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.currentScreen != null || client.player == null || client.world == null) {
                 return false;
             }
@@ -138,7 +138,7 @@ public final class TakeItOutHotkeys {
                 return WorldContainerDumps.toggle(client, hit.getBlockPos());
             }
 
-            client.player.sendMessage(Text.literal("Look at a chest, barrel or shulker box"), true);
+            client.player.displayClientMessage(Component.literal("Look at a chest, barrel or shulker box"), true);
             return false;
         });
 
@@ -147,7 +147,7 @@ public final class TakeItOutHotkeys {
                 return false;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.currentScreen != null || client.player == null) {
                 return false;
             }
@@ -161,21 +161,21 @@ public final class TakeItOutHotkeys {
                 return false;
             }
 
-            MinecraftClient client = MinecraftClient.getInstance();
+            Minecraft client = Minecraft.getInstance();
             if (client.currentScreen != null || client.player == null || client.world == null) {
                 return false;
             }
 
             if (!(client.crosshairTarget instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
-                client.player.sendMessage(Text.literal("Box select: look at a block"), true);
+                client.player.displayClientMessage(Component.literal("Box select: look at a block"), true);
                 return false;
             }
 
-            BlockPos pos = hit.getBlockPos().toImmutable();
+            BlockPos pos = hit.getBlockPos().immutable();
 
             if (boxCorner1 == null) {
                 boxCorner1 = pos;
-                client.player.sendMessage(Text.literal(
+                client.player.displayClientMessage(Component.literal(
                         "Box select: first corner at " + pos.getX() + " " + pos.getY() + " " + pos.getZ()
                 ), true);
                 return true;

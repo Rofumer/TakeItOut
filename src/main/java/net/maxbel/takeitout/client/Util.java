@@ -1,20 +1,20 @@
 package net.maxbel.takeitout.client;
 
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.block.ShulkerBoxBlock;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 
 public class Util {
 
-    public static int getShulkerWithStack(PlayerInventory playerInventory, ItemStack stackReference) {
+    public static int getShulkerWithStack(Inventory playerInventory, ItemStack stackReference) {
         for (int i = 0; i < getSize(playerInventory); ++i) {
-            ItemStack item = playerInventory.getStack(i);
+            ItemStack item = playerInventory.getItem(i);
 
             // не шалкер — пропускаем
             if (!isShulkerItem(item)) {
@@ -28,9 +28,8 @@ public class Util {
                 if (isShulkerEmpty(item)) {
                     continue;
                 }
-                playerInventory.player.sendMessage(
-                        //Text.literal("Action prevented (Take It Out Mod): Stacked shulkers").formatted(Formatting.YELLOW),
-                        Text.translatable("takeitout.msg.stacked_shulker_skipped", i).formatted(Formatting.YELLOW),
+                playerInventory.player.displayClientMessage(
+                        Component.translatable("takeitout.msg.stacked_shulker_skipped", i).withStyle(ChatFormatting.YELLOW),
                         true // action bar
                 );
                 continue;
@@ -43,13 +42,9 @@ public class Util {
                     return i;
                 }
             } catch (Throwable t) {
-                // лог при желании
-                // LOGGER.debug("Failed to read shulker inventory at slot {}", i, t);
-
                 // и сообщение игроку в action bar
-                playerInventory.player.sendMessage(
-                        Text.literal("takeitout.msg.shulker_read_fail").formatted(Formatting.RED),
-                        //Text.translatable("takeitout.msg.shulker_read_fail", i).formatted(Formatting.RED),
+                playerInventory.player.displayClientMessage(
+                        Component.literal("takeitout.msg.shulker_read_fail").withStyle(ChatFormatting.RED),
                         true
                 );
             }
@@ -63,7 +58,7 @@ public class Util {
     }
 
     public static boolean isShulkerEmpty(ItemStack shulkerStack) {
-        ContainerComponent container = shulkerStack.get(DataComponentTypes.CONTAINER);
+        ItemContainerContents container = shulkerStack.get(DataComponents.CONTAINER);
         if (container == null) {
             return true;
         }
@@ -75,30 +70,30 @@ public class Util {
         return true;
     }
 
-    public static int getSlotWithNoShulker(Inventory inventory) {
+    public static int getSlotWithNoShulker(Container inventory) {
         for (int i = getSize(inventory)-1; i >= 0; --i) {
-            if(isShulkerItem(inventory.getStack(i))) return i;
+            if(isShulkerItem(inventory.getItem(i))) return i;
         }
         return -1;
     }
 
-    public static int getSlotWithStack(Inventory inventory, ItemStack stack) {
+    public static int getSlotWithStack(Container inventory, ItemStack stack) {
         for (int i = 0; i < getSize(inventory); ++i) {
-            if(inventory.getStack(i) == null) continue;
-            if (inventory.getStack(i).isEmpty() || !Util.areItemsEqual(stack, inventory.getStack(i))) continue;
+            if(inventory.getItem(i) == null) continue;
+            if (inventory.getItem(i).isEmpty() || !Util.areItemsEqual(stack, inventory.getItem(i))) continue;
             return i;
         }
         return -1;
     }
 
     public static boolean areItemsEqual(ItemStack stack1, ItemStack stack2) {
-        return stack1.getItem() == stack2.getItem() && ItemStack.areItemsEqual((ItemStack)stack1, (ItemStack)stack2);
+        return stack1.getItem() == stack2.getItem() && ItemStack.isSameItem(stack1, stack2);
     }
 
-    public static int getSize(Inventory inventory) {
-        if (inventory instanceof PlayerInventory) {
-            return Math.min(36, inventory.size());
+    public static int getSize(Container inventory) {
+        if (inventory instanceof Inventory) {
+            return Math.min(36, inventory.getContainerSize());
         }
-        return inventory.size();
+        return inventory.getContainerSize();
     }
 }

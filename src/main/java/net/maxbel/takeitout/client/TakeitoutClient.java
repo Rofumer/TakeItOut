@@ -47,7 +47,7 @@ public class TakeitoutClient {
     private static final Path SETTINGS_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-client.json");
     public static final int DEFAULT_CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF22C55E;
 
-    private static KeyBinding openSettingsKeyBinding;
+    private static KeyMapping openSettingsKeyBinding;
     public static boolean AUTOTAKEOUT;
     public static boolean TAKE_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
@@ -58,7 +58,7 @@ public class TakeitoutClient {
     public static final List<Takeitout.WorldContainerItemCount> WORLD_CONTAINER_ITEMS = new ArrayList<>();
     public static final Map<String, List<Takeitout.WorldContainerItemCount>> WORLD_CONTAINER_ITEMS_BY_SOURCE = new LinkedHashMap<>();
     private static int awaitingStackTicks;
-    private static ClientWorld lastSourceWorld;
+    private static ClientLevel lastSourceWorld;
 
     // id категории
 
@@ -94,7 +94,7 @@ public class TakeitoutClient {
 
         openSettingsKeyBinding = new KeyMapping(
                 "key.takeitout.open_settings",
-                InputUtil.Type.KEYSYM,
+                com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_UNKNOWN,
                 category
         );
@@ -184,59 +184,56 @@ public class TakeitoutClient {
         }
     }
 
-    public static void toggleAutoTakeout(MinecraftClient client) {
+    public static void toggleAutoTakeout(Minecraft client) {
         AUTOTAKEOUT = !AUTOTAKEOUT;
         awaitingStack = ItemStack.EMPTY;
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendMessage(
-                    Text.translatable(AUTOTAKEOUT ? "message.takeitout.on" : "message.takeitout.off"),
-                    false
+            client.player.sendSystemMessage(
+                    Component.translatable(AUTOTAKEOUT ? "message.takeitout.on" : "message.takeitout.off")
             );
         }
     }
 
-    public static void toggleSingleItemMode(MinecraftClient client) {
+    public static void toggleSingleItemMode(Minecraft client) {
         TAKE_SINGLE_ITEM_MODE = !TAKE_SINGLE_ITEM_MODE;
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendMessage(
-                    Text.translatable(
+            client.player.sendSystemMessage(
+                    Component.translatable(
                             TAKE_SINGLE_ITEM_MODE
                                     ? "message.takeitout.single_item_mode.on"
                                     : "message.takeitout.single_item_mode.off"
-                    ),
-                    false
+                    )
             );
         }
     }
 
-    public static void toggleContainerSourceRender(MinecraftClient client) {
+    public static void toggleContainerSourceRender(Minecraft client) {
         RENDER_CONTAINER_SOURCES = !RENDER_CONTAINER_SOURCES;
         saveSettings();
 
         if (client.player != null) {
-            client.player.sendMessage(
-                    Text.translatable(
+            client.player.sendSystemMessage(
+                    Component.translatable(
                             RENDER_CONTAINER_SOURCES
                                     ? "message.takeitout.container_source_render.on"
                                     : "message.takeitout.container_source_render.off"
-                    ),
-                    false
+                    )
             );
         }
     }
 
-    public static void dumpNow(MinecraftClient client) {
+    public static void dumpNow(Minecraft client) {
         if (client.player == null) {
             return;
         }
 
         List<Takeitout.WorldContainerSource> dumps = WorldContainerDumps.getDumpReferencesSnapshot();
         if (dumps.isEmpty()) {
-            client.player.sendMessage(Text.literal("TakeItOut: no dump containers marked"), true);
+            client.player.displayClientMessage(Component.literal("TakeItOut: no dump containers marked"), true);
             return;
         }
 
@@ -257,12 +254,12 @@ public class TakeitoutClient {
         CONTAINER_SOURCE_OUTLINE_COLOR = 0xFF000000 | (color & 0x00FFFFFF);
     }
 
-    public static int getSlotWithItem(ClientPlayerEntity player, Item item) {
-        PlayerInventory inventory = player.getInventory();
+    public static int getSlotWithItem(LocalPlayer player, Item item) {
+        Inventory inventory = player.getInventory();
 
-        for (int i = 0; i < inventory.size(); ++i) {
-            if (inventory.getStack(i).isOf(item)) return i;
-            if (!inventory.getStack(i).isEmpty() && ItemStack.areItemsEqual(inventory.getStack(i), item.getDefaultStack())) {
+        for (int i = 0; i < inventory.getContainerSize(); ++i) {
+            if (inventory.getItem(i).is(item)) return i;
+            if (!inventory.getItem(i).isEmpty() && ItemStack.isSameItem(inventory.getItem(i), item.getDefaultInstance())) {
                 return i;
             }
         }
@@ -322,19 +319,19 @@ public class TakeitoutClient {
 
             WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
             if (worldSchematic == null) return false;
-            MinecraftClient mc = MinecraftClient.getInstance();
-            PlayerAbilities abilities = mc.player.getAbilities();
-            if (!abilities.allowModifyWorld)
+            Minecraft mc = Minecraft.getInstance();
+            Abilities abilities = mc.player.getAbilities();
+            if (!abilities.mayBuild)
                 return false;
             BlockHitResult result = RayTraceUtils.traceToSchematicWorld(mc.player, 3, true, true);
             if (result != null) {
                 if (result.getBlockPos() != null) {
-                    SchematicBlockState state = new SchematicBlockState(mc.player.getEntityWorld(), worldSchematic, result.getBlockPos());
+                    SchematicBlockState state = new SchematicBlockState(mc.player.level(), worldSchematic, result.getBlockPos());
                     if (state.currentState != null && state.targetState.equals(state.currentState)) {
                         return false;
                     }
                     if (!state.targetState.isAir()
-                            && (state.currentState == null || state.currentState.isReplaceable())) {
+                            && (state.currentState == null || state.currentState.canBeReplaced())) {
                         if (getSlotWithItem(mc.player, state.targetState.getBlock().asItem()) == -1) {
                             WorldUtils.doSchematicWorldPickBlock(true, mc);
                             return true;

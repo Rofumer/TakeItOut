@@ -2,23 +2,23 @@ package net.maxbel.takeitout.client;
 
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.Takeitout;
-import net.minecraft.block.Block;
-import net.minecraft.block.ShulkerBoxBlock;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.util.collection.DefaultedList;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,7 +44,7 @@ public class TakeItOutSettingsScreen extends Screen {
     private Tab activeTab = Tab.ALL_ITEMS;
     private int scrollOffset;
     private BlockPos focusedContainer;
-    private TextFieldWidget searchField;
+    private EditBox searchField;
     private String searchQuery = "";
     private boolean confirmDeleteAll = false;
     private boolean confirmDeleteAllDumps = false;
@@ -55,10 +55,10 @@ public class TakeItOutSettingsScreen extends Screen {
     // Groups tab state
     private String groupInputMode = null;   // null, "create", or "rename"
     private String groupInputTarget = null; // old name when renaming
-    private TextFieldWidget groupNameField;
+    private EditBox groupNameField;
 
     public TakeItOutSettingsScreen(Screen parent) {
-        super(Text.literal("TakeItOut"));
+        super(Component.literal("TakeItOut"));
         this.parent = parent;
     }
 
@@ -68,7 +68,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int tabWidth = 80;
         int left = this.width / 2 - 270;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("All Items"), button -> {
+        addRenderableWidget(Button.builder(Component.literal("All Items"), button -> {
             activeTab = Tab.ALL_ITEMS;
             focusedContainer = null;
             scrollOffset = 0;
@@ -79,7 +79,7 @@ public class TakeItOutSettingsScreen extends Screen {
             requestItems();
         }).position(left, tabY).size(tabWidth, 20).build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Containers"), button -> {
+        addRenderableWidget(Button.builder(Component.literal("Containers"), button -> {
             activeTab = Tab.CONTAINERS;
             focusedContainer = null;
             scrollOffset = 0;
@@ -88,7 +88,7 @@ public class TakeItOutSettingsScreen extends Screen {
             requestItems();
         }).position(left + tabWidth + 4, tabY).size(tabWidth, 20).build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Groups"), button -> {
+        addRenderableWidget(Button.builder(Component.literal("Groups"), button -> {
             activeTab = Tab.GROUPS;
             focusedContainer = null;
             scrollOffset = 0;
@@ -97,22 +97,22 @@ public class TakeItOutSettingsScreen extends Screen {
             groupNameField.setVisible(false);
         }).position(left + (tabWidth + 4) * 2, tabY).size(tabWidth, 20).build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Settings"), button ->
-                this.client.setScreen(TakeItOutKeybindsScreen.create(this))
+        addRenderableWidget(Button.builder(Component.literal("Settings"), button ->
+                this.minecraft.setScreen(TakeItOutKeybindsScreen.create(this))
         ).position(left + (tabWidth + 4) * 3, tabY).size(tabWidth, 20).build());
 
         int auxLeft = left + (tabWidth + 4) * 4;
-        addDrawableChild(ButtonWidget.builder(Text.literal("Refresh"), button -> requestItems())
+        addRenderableWidget(Button.builder(Component.literal("Refresh"), button -> requestItems())
                 .position(auxLeft, tabY)
                 .size(72, 20)
                 .build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Look At"), button -> focusTargetedContainer())
+        addRenderableWidget(Button.builder(Component.literal("Look At"), button -> focusTargetedContainer())
                 .position(auxLeft + 76, tabY)
                 .size(72, 20)
                 .build());
 
-        addDrawableChild(ButtonWidget.builder(getSortButtonText(), button -> {
+        addRenderableWidget(Button.builder(getSortButtonText(), button -> {
                     TakeitoutClient.cycleItemSortMode();
                     button.setMessage(getSortButtonText());
                     scrollOffset = 0;
@@ -121,39 +121,39 @@ public class TakeItOutSettingsScreen extends Screen {
                 .size(96, 20)
                 .build());
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Done"), button -> this.client.setScreen(parent))
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> this.minecraft.setScreen(parent))
                 .position(this.width / 2 - 100, this.height - 28)
                 .size(200, 20)
                 .build());
 
         int listLeft = this.width / 2 - 155;
-        searchField = new TextFieldWidget(this.textRenderer, listLeft, 50, 310, 14, Text.literal("Search"));
+        searchField = new EditBox(this.font, listLeft, 50, 310, 14, Component.literal("Search"));
         searchField.setMaxLength(64);
-        searchField.setPlaceholder(Text.literal("Search..."));
+        searchField.setPlaceholder(Component.literal("Search..."));
         searchField.setChangedListener(text -> {
             searchQuery = text;
             scrollOffset = 0;
         });
         searchField.setVisible(activeTab == Tab.ALL_ITEMS);
-        addDrawableChild(searchField);
+        addRenderableWidget(searchField);
 
         int groupsListLeft = this.width / 2 - 215;
-        groupNameField = new TextFieldWidget(this.textRenderer, groupsListLeft + 8, LIST_TOP + 8, 240, 14, Text.literal("Group name"));
+        groupNameField = new EditBox(this.font, groupsListLeft + 8, LIST_TOP + 8, 240, 14, Component.literal("Group name"));
         groupNameField.setMaxLength(32);
-        groupNameField.setPlaceholder(Text.literal("Group name..."));
+        groupNameField.setPlaceholder(Component.literal("Group name..."));
         groupNameField.setVisible(false);
-        addDrawableChild(groupNameField);
+        addRenderableWidget(groupNameField);
 
         requestItems();
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         context.fill(0, 0, this.width, this.height, 0xAA101010);
 
         super.render(context, mouseX, mouseY, delta);
 
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 10, 0xFFFFFFFF);
+        context.drawCenteredString(this.font, this.title, this.width / 2, 10, 0xFFFFFFFF);
 
         if (activeTab == Tab.ALL_ITEMS) {
             renderAllItems(context, mouseX, mouseY);
@@ -243,7 +243,7 @@ public class TakeItOutSettingsScreen extends Screen {
         return super.mouseReleased(click);
     }
 
-    private void renderAllItems(DrawContext context, int mouseX, int mouseY) {
+    private void renderAllItems(GuiGraphics context, int mouseX, int mouseY) {
         List<Takeitout.WorldContainerItemCount> items = getSortedItems();
         int listLeft = this.width / 2 - 155;
         int listTop = LIST_TOP;
@@ -251,12 +251,12 @@ public class TakeItOutSettingsScreen extends Screen {
         int listBottom = this.height - LIST_BOTTOM_MARGIN;
 
         context.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
-        context.drawTextWithShadow(this.textRenderer, "Sources: " + WorldContainerSources.linkedSourceCountSnapshot(), listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
+        context.drawString(this.font, "Sources: " + WorldContainerSources.linkedSourceCountSnapshot(), listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
 
         if (items.isEmpty()) {
-            context.drawCenteredTextWithShadow(
-                    this.textRenderer,
-                    Text.literal(WorldContainerSources.linkedSourceCountSnapshot() == 0 ? "No linked containers" : "No items found"),
+            context.drawCenteredString(
+                    this.font,
+                    Component.literal(WorldContainerSources.linkedSourceCountSnapshot() == 0 ? "No linked containers" : "No items found"),
                     this.width / 2,
                     listTop + 36,
                     0xFFAAAAAA
@@ -284,35 +284,35 @@ public class TakeItOutSettingsScreen extends Screen {
             if (isShulkerStack(hoveredItem.stack())) {
                 renderShulkerContentsTooltip(context, hoveredItem.stack(), mouseX, mouseY);
             } else {
-                context.drawTooltip(this.textRenderer, List.of(
-                        Text.translatable("tooltip.takeitout.take_stack"),
-                        Text.translatable("tooltip.takeitout.take_single")
+                context.renderTooltip(this.font, List.of(
+                        Component.translatable("tooltip.takeitout.take_stack"),
+                        Component.translatable("tooltip.takeitout.take_single")
                 ), mouseX, mouseY);
             }
         }
     }
 
-    private void renderItemRow(DrawContext context, Takeitout.WorldContainerItemCount item, int x, int y, int mouseX, int mouseY) {
+    private void renderItemRow(GuiGraphics context, Takeitout.WorldContainerItemCount item, int x, int y, int mouseX, int mouseY) {
         ItemStack stack = item.stack();
         String count = "x" + item.count();
-        int countX = x + 294 - this.textRenderer.getWidth(count);
+        int countX = x + 294 - this.font.getWidth(count);
 
         boolean hovered = mouseX >= x - 8 && mouseX < x + 302 && mouseY >= y && mouseY < y + 22;
         if (hovered) {
             context.fill(x - 8, y, x + 302, y + 22, 0x33FFFFFF);
         }
 
-        context.drawItem(stack, x, y + 3);
-        context.drawTextWithShadow(this.textRenderer, stack.getName(), x + 24, y + 8, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, count, countX, y + 8, 0xFFA7F3D0);
+        context.renderItem(stack, x, y + 3);
+        context.drawString(this.font, stack.getName(), x + 24, y + 8, 0xFFFFFFFF);
+        context.drawString(this.font, count, countX, y + 8, 0xFFA7F3D0);
 
         if (isShulkerStack(stack)) {
             String summary = shulkerContentSummary(stack);
             if (!summary.isEmpty()) {
-                int nameEnd = x + 24 + this.textRenderer.getWidth(stack.getName()) + 4;
+                int nameEnd = x + 24 + this.font.getWidth(stack.getName()) + 4;
                 int maxWidth = countX - nameEnd - 4;
                 if (maxWidth > 0) {
-                    context.drawTextWithShadow(this.textRenderer, trim(summary, maxWidth), nameEnd, y + 8, 0xFF888888);
+                    context.drawString(this.font, trim(summary, maxWidth), nameEnd, y + 8, 0xFF888888);
                 }
             }
         }
@@ -353,8 +353,8 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private static List<ItemStack> copyShulkerContents(ItemStack shulker) {
-        DefaultedList<ItemStack> stacks = DefaultedList.ofSize(27, ItemStack.EMPTY);
-        ContainerComponent container = shulker.get(DataComponentTypes.CONTAINER);
+        NonNullList<ItemStack> stacks = NonNullList.withSize(27, ItemStack.EMPTY);
+        ItemContainerContents container = shulker.get(DataComponents.CONTAINER);
         if (container == null) {
             return stacks;
         }
@@ -370,7 +370,7 @@ public class TakeItOutSettingsScreen extends Screen {
         return stacks;
     }
 
-    private void renderShulkerContentsTooltip(DrawContext context, ItemStack shulker, int mouseX, int mouseY) {
+    private void renderShulkerContentsTooltip(GuiGraphics context, ItemStack shulker, int mouseX, int mouseY) {
         List<ItemStack> raw = copyShulkerContents(shulker);
         Map<String, ItemStack> byName = new LinkedHashMap<>();
         for (ItemStack s : raw) {
@@ -384,17 +384,17 @@ public class TakeItOutSettingsScreen extends Screen {
         }
         List<ItemStack> entries = new ArrayList<>(byName.values());
 
-        String line1 = Text.translatable("tooltip.takeitout.take_stack").getString();
-        String line2 = Text.translatable("tooltip.takeitout.take_single").getString();
+        String line1 = Component.translatable("tooltip.takeitout.take_stack").getString();
+        String line2 = Component.translatable("tooltip.takeitout.take_single").getString();
         int rows = Math.min(entries.size(), 10);
-        int width = Math.max(this.textRenderer.getWidth(line1), this.textRenderer.getWidth(line2)) + 12;
+        int width = Math.max(this.font.getWidth(line1), this.font.getWidth(line2)) + 12;
         for (int i = 0; i < rows; i++) {
             ItemStack s = entries.get(i);
             String cnt = "x" + s.getCount();
-            width = Math.max(width, 28 + this.textRenderer.getWidth(s.getName()) + this.textRenderer.getWidth(cnt) + 20);
+            width = Math.max(width, 28 + this.font.getWidth(s.getName()) + this.font.getWidth(cnt) + 20);
         }
         if (entries.size() > rows) {
-            width = Math.max(width, this.textRenderer.getWidth("+" + (entries.size() - rows) + " more") + 12);
+            width = Math.max(width, this.font.getWidth("+" + (entries.size() - rows) + " more") + 12);
         }
 
         int height = 18 + Math.max(1, rows) * 20 + (entries.size() > rows ? 10 : 0) + 28;
@@ -403,32 +403,32 @@ public class TakeItOutSettingsScreen extends Screen {
 
         context.fill(x, y, x + width, y + height, 0xEE101010);
         drawBorder(context, x, y, width, height, 0xFF9CA3AF);
-        context.drawTextWithShadow(this.textRenderer, "Contents", x + 6, y + 6, 0xFFA7F3D0);
+        context.drawString(this.font, "Contents", x + 6, y + 6, 0xFFA7F3D0);
 
         if (entries.isEmpty()) {
-            context.drawTextWithShadow(this.textRenderer, "Empty", x + 6, y + 24, 0xFFAAAAAA);
+            context.drawString(this.font, "Empty", x + 6, y + 24, 0xFFAAAAAA);
         } else {
             int rowY = y + 20;
             for (int i = 0; i < rows; i++) {
                 ItemStack s = entries.get(i);
                 String cnt = "x" + s.getCount();
-                context.drawItem(s, x + 6, rowY);
-                context.drawTextWithShadow(this.textRenderer, trim(s.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
-                context.drawTextWithShadow(this.textRenderer, cnt, x + width - this.textRenderer.getWidth(cnt) - 6, rowY + 5, 0xFFA7F3D0);
+                context.renderItem(s, x + 6, rowY);
+                context.drawString(this.font, trim(s.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
+                context.drawString(this.font, cnt, x + width - this.font.getWidth(cnt) - 6, rowY + 5, 0xFFA7F3D0);
                 rowY += 20;
             }
             if (entries.size() > rows) {
-                context.drawTextWithShadow(this.textRenderer, "+" + (entries.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+                context.drawString(this.font, "+" + (entries.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
             }
         }
 
         int actY = y + height - 26;
         context.fill(x, actY, x + width, actY + 1, 0x44FFFFFF);
-        context.drawTextWithShadow(this.textRenderer, line1, x + 6, actY + 4, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer, line2, x + 6, actY + 15, 0xFFFFFFFF);
+        context.drawString(this.font, line1, x + 6, actY + 4, 0xFFFFFFFF);
+        context.drawString(this.font, line2, x + 6, actY + 15, 0xFFFFFFFF);
     }
 
-    private void renderContainers(DrawContext context, int mouseX, int mouseY) {
+    private void renderContainers(GuiGraphics context, int mouseX, int mouseY) {
         List<WorldContainerSources.SourceEntry> sources = getVisibleContainerSources();
         List<WorldContainerDumps.DumpEntry> dumps = focusedContainer == null
                 ? WorldContainerDumps.getAllDumpsSnapshot()
@@ -439,8 +439,8 @@ public class TakeItOutSettingsScreen extends Screen {
         int listBottom = this.height - LIST_BOTTOM_MARGIN;
 
         context.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
-        context.drawTextWithShadow(
-                this.textRenderer,
+        context.drawString(
+                this.font,
                 trim(getContainersHeader(), listWidth - 96),
                 listLeft + 6,
                 listTop - HEADER_OFFSET,
@@ -456,14 +456,14 @@ public class TakeItOutSettingsScreen extends Screen {
                 context.fill(deleteAllBtnX, deleteAllBtnY, deleteAllBtnX + 80, deleteAllBtnY + 14,
                         deleteAllHovered ? 0xFFB91C1C : 0xFF7F1D1D);
                 drawBorder(context, deleteAllBtnX, deleteAllBtnY, 80, 14, 0xFFEF4444);
-                context.drawCenteredTextWithShadow(this.textRenderer, "Confirm?", deleteAllBtnX + 40, deleteAllBtnY + 3, 0xFFFFFFFF);
+                context.drawCenteredString(this.font, "Confirm?", deleteAllBtnX + 40, deleteAllBtnY + 3, 0xFFFFFFFF);
             } else {
                 drawSmallButton(context, deleteAllBtnX, deleteAllBtnY, 80, 14, "Delete All", deleteAllHovered);
             }
         }
 
         if (sources.isEmpty() && dumps.isEmpty()) {
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal("No containers"), this.width / 2, listTop + 36, 0xFFAAAAAA);
+            context.drawCenteredString(this.font, Component.literal("No containers"), this.width / 2, listTop + 36, 0xFFAAAAAA);
             return;
         }
 
@@ -484,7 +484,7 @@ public class TakeItOutSettingsScreen extends Screen {
         if (!dumps.isEmpty()) {
             if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
                 context.fill(listLeft + 8, y + 9, listLeft + listWidth - 8, y + 10, 0x44F97316);
-                context.drawTextWithShadow(this.textRenderer, trim("Dump Containers (" + dumps.size() + ")", listWidth - 100), listLeft + 8, y + 2, 0xFFF97316);
+                context.drawString(this.font, trim("Dump Containers (" + dumps.size() + ")", listWidth - 100), listLeft + 8, y + 2, 0xFFF97316);
 
                 int deleteAllDumpsBtnX = listLeft + listWidth - 84;
                 int deleteAllDumpsBtnY = y + 7;
@@ -494,12 +494,12 @@ public class TakeItOutSettingsScreen extends Screen {
                     context.fill(deleteAllDumpsBtnX, deleteAllDumpsBtnY, deleteAllDumpsBtnX + 80, deleteAllDumpsBtnY + 14,
                             deleteAllDumpsHovered ? 0xFFB91C1C : 0xFF7F1D1D);
                     drawBorder(context, deleteAllDumpsBtnX, deleteAllDumpsBtnY, 80, 14, 0xFFEF4444);
-                    context.drawCenteredTextWithShadow(this.textRenderer, "Confirm?", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
+                    context.drawCenteredString(this.font, "Confirm?", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
                 } else {
                     context.fill(deleteAllDumpsBtnX, deleteAllDumpsBtnY, deleteAllDumpsBtnX + 80, deleteAllDumpsBtnY + 14,
                             deleteAllDumpsHovered ? 0xFF92400E : 0xFF78350F);
                     drawBorder(context, deleteAllDumpsBtnX, deleteAllDumpsBtnY, 80, 14, 0xFFF97316);
-                    context.drawCenteredTextWithShadow(this.textRenderer, "Delete All", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
+                    context.drawCenteredString(this.font, "Delete All", deleteAllDumpsBtnX + 40, deleteAllDumpsBtnY + 3, 0xFFFFFFFF);
                 }
             }
             y += CONTAINER_ROW_HEIGHT;
@@ -524,7 +524,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private void renderDumpRow(
-            DrawContext context,
+            GuiGraphics context,
             WorldContainerDumps.DumpEntry dump,
             int x,
             int y,
@@ -537,7 +537,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
         BlockPos pos = dump.pos();
         String label = (dump.enabled() ? "Dump" : "Disabled") + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ();
-        context.drawTextWithShadow(this.textRenderer, trim(label, width - 132), x + 4, y + 7, dump.enabled() ? 0xFFFBBF24 : 0xFFAAAAAA);
+        context.drawString(this.font, trim(label, width - 132), x + 4, y + 7, dump.enabled() ? 0xFFFBBF24 : 0xFFAAAAAA);
 
         int markButtonX = x + width - 122;
         int deleteButtonX = x + width - 58;
@@ -547,19 +547,19 @@ public class TakeItOutSettingsScreen extends Screen {
                 hovered && mouseX >= deleteButtonX && mouseX < deleteButtonX + 54);
     }
 
-    private void renderContainerRow(DrawContext context, WorldContainerSources.SourceEntry source, int x, int y, int width, int mouseX, int mouseY) {
+    private void renderContainerRow(GuiGraphics context, WorldContainerSources.SourceEntry source, int x, int y, int width, int mouseX, int mouseY) {
         boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
         context.fill(x, y, x + width, y + 22, hovered ? 0x8822D3EE : 0x44000000);
 
         ItemStack icon = getContainerIcon(source);
         if (!icon.isEmpty()) {
-            context.drawItem(icon, x + 3, y + 3);
+            context.renderItem(icon, x + 3, y + 3);
         }
 
         BlockPos pos = source.pos();
         String status = source.linked() ? "Linked" : "Unlinked";
         String label = status + " | " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " | " + source.dimension();
-        context.drawTextWithShadow(this.textRenderer, trim(label, width - 160), x + 24, y + 7, source.linked() ? 0xFFFFFFFF : 0xFFAAAAAA);
+        context.drawString(this.font, trim(label, width - 160), x + 24, y + 7, source.linked() ? 0xFFFFFFFF : 0xFFAAAAAA);
 
         int linkButtonX = x + width - 122;
         int deleteButtonX = x + width - 58;
@@ -567,13 +567,13 @@ public class TakeItOutSettingsScreen extends Screen {
         drawSmallButton(context, deleteButtonX, y + 2, 54, 18, "Delete", hovered && mouseX >= deleteButtonX && mouseX < deleteButtonX + 54);
     }
 
-    private void renderContainerContentsTooltip(DrawContext context, WorldContainerSources.SourceEntry source, int mouseX, int mouseY) {
+    private void renderContainerContentsTooltip(GuiGraphics context, WorldContainerSources.SourceEntry source, int mouseX, int mouseY) {
         List<Takeitout.WorldContainerItemCount> items = getSortedItemsForSource(WorldContainerSources.sourceKey(source));
         int rows = Math.min(items.size(), 10);
         int width = 180;
         for (int i = 0; i < rows; i++) {
             Takeitout.WorldContainerItemCount item = items.get(i);
-            width = Math.max(width, 28 + this.textRenderer.getWidth(item.stack().getName()) + this.textRenderer.getWidth(" x" + item.count()) + 12);
+            width = Math.max(width, 28 + this.font.getWidth(item.stack().getName()) + this.font.getWidth(" x" + item.count()) + 12);
         }
 
         int height = 18 + Math.max(1, rows) * 20 + (items.size() > rows ? 10 : 0);
@@ -582,10 +582,10 @@ public class TakeItOutSettingsScreen extends Screen {
 
         context.fill(x, y, x + width, y + height, 0xEE101010);
         drawBorder(context, x, y, width, height, 0xFF22D3EE);
-        context.drawTextWithShadow(this.textRenderer, "Contents", x + 6, y + 6, 0xFFA7F3D0);
+        context.drawString(this.font, "Contents", x + 6, y + 6, 0xFFA7F3D0);
 
         if (items.isEmpty()) {
-            context.drawTextWithShadow(this.textRenderer, "Empty or unavailable", x + 6, y + 24, 0xFFAAAAAA);
+            context.drawString(this.font, "Empty or unavailable", x + 6, y + 24, 0xFFAAAAAA);
             return;
         }
 
@@ -593,21 +593,21 @@ public class TakeItOutSettingsScreen extends Screen {
         for (int i = 0; i < rows; i++) {
             Takeitout.WorldContainerItemCount item = items.get(i);
             ItemStack stack = item.stack();
-            context.drawItem(stack, x + 6, rowY);
-            context.drawTextWithShadow(this.textRenderer, trim(stack.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
+            context.renderItem(stack, x + 6, rowY);
+            context.drawString(this.font, trim(stack.getName().getString(), width - 62), x + 28, rowY + 5, 0xFFFFFFFF);
             String count = "x" + item.count();
-            context.drawTextWithShadow(this.textRenderer, count, x + width - this.textRenderer.getWidth(count) - 6, rowY + 5, 0xFFA7F3D0);
+            context.drawString(this.font, count, x + width - this.font.getWidth(count) - 6, rowY + 5, 0xFFA7F3D0);
             rowY += 20;
         }
 
         if (items.size() > rows) {
-            context.drawTextWithShadow(this.textRenderer, "+" + (items.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
+            context.drawString(this.font, "+" + (items.size() - rows) + " more", x + 6, rowY, 0xFFAAAAAA);
         }
     }
 
     // --- Groups tab ---
 
-    private void renderGroups(DrawContext context, int mouseX, int mouseY) {
+    private void renderGroups(GuiGraphics context, int mouseX, int mouseY) {
         List<String> groups = WorldContainerSources.getGroupNames();
         String activeGroup = WorldContainerSources.getCurrentGroupName();
         int listLeft = this.width / 2 - 215;
@@ -616,7 +616,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int listBottom = this.height - LIST_BOTTOM_MARGIN;
 
         context.fill(listLeft, listTop, listLeft + listWidth, listBottom, 0x66000000);
-        context.drawTextWithShadow(this.textRenderer, "Groups", listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
+        context.drawString(this.font, "Groups", listLeft + 6, listTop - HEADER_OFFSET, 0xFFA7F3D0);
 
         int newBtnX = listLeft + listWidth - 84;
         int newBtnY = listTop - 16;
@@ -645,7 +645,7 @@ public class TakeItOutSettingsScreen extends Screen {
         if (SharedGroupsClient.serverSupportsSharedGroups) {
             if (y > listTop - CONTAINER_ROW_HEIGHT && y < listBottom) {
                 context.fill(listLeft + 8, y + 10, listLeft + listWidth - 8, y + 11, 0x44FFD700);
-                context.drawTextWithShadow(this.textRenderer, "Server Groups (" + SharedGroupsClient.SHARED_GROUPS.size() + ")", listLeft + 8, y + 2, 0xFFFFD700);
+                context.drawString(this.font, "Server Groups (" + SharedGroupsClient.SHARED_GROUPS.size() + ")", listLeft + 8, y + 2, 0xFFFFD700);
             }
             y += CONTAINER_ROW_HEIGHT;
 
@@ -667,7 +667,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private void renderGroupRow(
-            DrawContext context,
+            GuiGraphics context,
             String group,
             String activeGroup,
             int x, int y, int width,
@@ -684,19 +684,19 @@ public class TakeItOutSettingsScreen extends Screen {
 
         if (isActive) {
             if (SharedGroupsClient.serverSupportsSharedGroups) {
-                String playerId = this.client != null && this.client.player != null
-                        ? this.client.player.getGameProfile().id().toString() : "";
+                String playerId = this.minecraft != null && this.minecraft.player != null
+                        ? this.minecraft.player.getGameProfile().id().toString() : "";
                 boolean alreadyShared = SharedGroupsClient.SHARED_GROUPS.stream()
                         .anyMatch(g -> g.authorId().equals(playerId) && g.name().equals(group));
                 int shareBtnX = x + width - 76;
-                context.drawTextWithShadow(this.textRenderer, trim("(active) " + group, width - 90), x + 8, y + 7, 0xFF22D3EE);
+                context.drawString(this.font, trim("(active) " + group, width - 90), x + 8, y + 7, 0xFF22D3EE);
                 drawSmallButton(context, shareBtnX, y + 2, 72, 18, alreadyShared ? "Update" : "Share",
                         hovered && mouseX >= shareBtnX && mouseX < shareBtnX + 72);
             } else {
-                context.drawTextWithShadow(this.textRenderer, trim("(active) " + group, width - 16), x + 8, y + 7, 0xFF22D3EE);
+                context.drawString(this.font, trim("(active) " + group, width - 16), x + 8, y + 7, 0xFF22D3EE);
             }
         } else {
-            context.drawTextWithShadow(this.textRenderer, trim(group, width - 202), x + 8, y + 7, 0xFFFFFFFF);
+            context.drawString(this.font, trim(group, width - 202), x + 8, y + 7, 0xFFFFFFFF);
             int switchBtnX = x + width - 194;
             int renameBtnX = x + width - 126;
             int deleteBtnX = x + width - 62;
@@ -712,14 +712,14 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private void renderSharedGroupRow(
-            DrawContext context,
+            GuiGraphics context,
             Takeitout.SharedGroupEntry shared,
             int x, int y, int width,
             int mouseX, int mouseY
     ) {
         boolean hovered = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + 22;
-        boolean isOwn = this.client != null && this.client.player != null
-                && shared.authorId().equals(this.client.player.getGameProfile().id().toString());
+        boolean isOwn = this.minecraft != null && this.minecraft.player != null
+                && shared.authorId().equals(this.minecraft.player.getGameProfile().id().toString());
 
         context.fill(x, y, x + width, y + 22, hovered ? 0x33FFD700 : 0x22FFD700);
 
@@ -727,7 +727,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int importBtnX = isOwn ? removeBtnX - 70 : x + width - 68;
 
         String label = shared.name() + " - " + shared.authorName();
-        context.drawTextWithShadow(this.textRenderer, trim(label, importBtnX - x - 8), x + 4, y + 7, 0xFFFFFFFF);
+        context.drawString(this.font, trim(label, importBtnX - x - 8), x + 4, y + 7, 0xFFFFFFFF);
         drawSmallButton(context, importBtnX, y + 2, 64, 18, "Import",
                 hovered && mouseX >= importBtnX && mouseX < importBtnX + 64);
         if (isOwn) {
@@ -807,7 +807,7 @@ public class TakeItOutSettingsScreen extends Screen {
                     int deleteBtnX = rowX + rowWidth - 62;
 
                     if (mouseX >= switchBtnX && mouseX < switchBtnX + 62) {
-                        WorldContainerSources.switchGroup(this.client, group);
+                        WorldContainerSources.switchGroup(this.minecraft, group);
                         requestItems();
                         return true;
                     }
@@ -833,8 +833,8 @@ public class TakeItOutSettingsScreen extends Screen {
             y += CONTAINER_ROW_HEIGHT; // skip server groups header row
             for (Takeitout.SharedGroupEntry shared : SharedGroupsClient.SHARED_GROUPS) {
                 if (mouseY >= y + 2 && mouseY < y + 20 && y >= listTop && y + 22 <= listBottom) {
-                    boolean isOwn = this.client != null && this.client.player != null
-                            && shared.authorId().equals(this.client.player.getGameProfile().id().toString());
+                    boolean isOwn = this.minecraft != null && this.minecraft.player != null
+                            && shared.authorId().equals(this.minecraft.player.getGameProfile().id().toString());
 
                     int rowX = listLeft + 8;
                     int rowWidth = listWidth - 16;
@@ -873,7 +873,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int y = listTop + 6 - scrollOffset;
         for (Takeitout.WorldContainerItemCount item : items) {
             if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
-                MinecraftClient client = MinecraftClient.getInstance();
+                Minecraft client = Minecraft.getInstance();
                 // LMB → full stack; RMB → single item
                 boolean singleItemMode = (button == 1);
                 WorldContainerSources.requestStack(client, item.stack(), singleItemMode, true);
@@ -904,7 +904,7 @@ public class TakeItOutSettingsScreen extends Screen {
                 confirmDeleteAllDumps = false;
                 if (confirmDeleteAll) {
                     confirmDeleteAll = false;
-                    if (WorldContainerSources.deleteAll(this.client)) {
+                    if (WorldContainerSources.deleteAll(this.minecraft)) {
                         requestItems();
                     }
                 } else {
@@ -922,7 +922,7 @@ public class TakeItOutSettingsScreen extends Screen {
                 confirmDeleteAll = false;
                 if (confirmDeleteAllDumps) {
                     confirmDeleteAllDumps = false;
-                    if (WorldContainerDumps.deleteAll(this.client)) {
+                    if (WorldContainerDumps.deleteAll(this.minecraft)) {
                         requestItems();
                     }
                 } else {
@@ -946,13 +946,13 @@ public class TakeItOutSettingsScreen extends Screen {
                     && mouseY >= y + 2
                     && mouseY < y + 20) {
                 if (mouseX >= linkButtonX && mouseX < linkButtonX + 58) {
-                    if (WorldContainerSources.setLinked(this.client, source, !source.linked())) {
+                    if (WorldContainerSources.setLinked(this.minecraft, source, !source.linked())) {
                         requestItems();
                     }
                     return true;
                 }
                 if (mouseX >= deleteButtonX && mouseX < deleteButtonX + 54) {
-                    if (WorldContainerSources.delete(this.client, source)) {
+                    if (WorldContainerSources.delete(this.minecraft, source)) {
                         requestItems();
                     }
                     return true;
@@ -969,11 +969,11 @@ public class TakeItOutSettingsScreen extends Screen {
                 int deleteButtonX = listLeft + 8 + listWidth - 16 - 58;
                 if (y >= listTop && y + 22 <= listBottom && mouseY >= y + 2 && mouseY < y + 20) {
                     if (mouseX >= markButtonX && mouseX < markButtonX + 58) {
-                        WorldContainerDumps.setEnabled(this.client, dump.pos(), !dump.enabled());
+                        WorldContainerDumps.setEnabled(this.minecraft, dump.pos(), !dump.enabled());
                         return true;
                     }
                     if (mouseX >= deleteButtonX && mouseX < deleteButtonX + 54) {
-                        if (WorldContainerDumps.delete(this.client, dump.pos())) {
+                        if (WorldContainerDumps.delete(this.minecraft, dump.pos())) {
                             requestItems();
                         }
                         return true;
@@ -987,21 +987,21 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private void focusTargetedContainer() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.world == null || !(client.crosshairTarget instanceof BlockHitResult hit)
                 || hit.getType() != HitResult.Type.BLOCK
                 || !WorldContainerSources.isSupportedContainer(client.world, hit.getBlockPos())) {
             if (client.player != null) {
-                client.player.sendMessage(Text.literal("Look at a chest, barrel or shulker box"), true);
+                client.player.displayClientMessage(Component.literal("Look at a chest, barrel or shulker box"), true);
             }
             return;
         }
 
-        focusedContainer = hit.getBlockPos().toImmutable();
+        focusedContainer = hit.getBlockPos().immutable();
         activeTab = Tab.CONTAINERS;
         scrollOffset = 0;
-        client.player.sendMessage(
-                Text.literal("Showing container at "
+        client.player.displayClientMessage(
+                Component.literal("Showing container at "
                         + focusedContainer.getX() + " "
                         + focusedContainer.getY() + " "
                         + focusedContainer.getZ()),
@@ -1011,7 +1011,7 @@ public class TakeItOutSettingsScreen extends Screen {
     }
 
     private void requestItems() {
-        MinecraftClient client = MinecraftClient.getInstance();
+        Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.world == null) {
             return;
         }
@@ -1100,7 +1100,7 @@ public class TakeItOutSettingsScreen extends Screen {
         return new int[]{thumbY, thumbHeight};
     }
 
-    private void renderScrollbar(DrawContext context, int listLeft, int listTop, int listWidth, int listBottom, int contentHeight) {
+    private void renderScrollbar(GuiGraphics context, int listLeft, int listTop, int listWidth, int listBottom, int contentHeight) {
         int listHeight = listBottom - listTop;
         if (contentHeight <= listHeight) return;
         int trackX = listLeft + listWidth - SCROLLBAR_WIDTH;
@@ -1165,35 +1165,35 @@ public class TakeItOutSettingsScreen extends Screen {
         );
     }
 
-    private Text getSortButtonText() {
-        return Text.literal("Sort: " + TakeitoutClient.ITEM_SORT_MODE.label());
+    private Component getSortButtonText() {
+        return Component.literal("Sort: " + TakeitoutClient.ITEM_SORT_MODE.label());
     }
 
     private ItemStack getContainerIcon(WorldContainerSources.SourceEntry source) {
-        if (this.client == null || this.client.world == null) {
+        if (this.minecraft == null || this.minecraft.world == null) {
             return ItemStack.EMPTY;
         }
 
-        String currentDimension = this.client.world.getRegistryKey().getValue().toString();
+        String currentDimension = this.minecraft.world.getRegistryKey().getValue().toString();
         if (!source.dimension().equals(currentDimension)) {
             return ItemStack.EMPTY;
         }
 
-        Block block = this.client.world.getBlockState(source.pos()).getBlock();
+        Block block = this.minecraft.world.getBlockState(source.pos()).getBlock();
         return block.asItem().getDefaultStack();
     }
 
     private String trim(String value, int width) {
-        return this.textRenderer.trimToWidth(value, width);
+        return this.font.trimToWidth(value, width);
     }
 
-    private void drawSmallButton(DrawContext context, int x, int y, int width, int height, String label, boolean hovered) {
+    private void drawSmallButton(GuiGraphics context, int x, int y, int width, int height, String label, boolean hovered) {
         context.fill(x, y, x + width, y + height, hovered ? 0xFF4B5563 : 0xFF2F2F2F);
         drawBorder(context, x, y, width, height, 0xFF9CA3AF);
-        context.drawCenteredTextWithShadow(this.textRenderer, label, x + width / 2, y + height / 2 - 4, 0xFFFFFFFF);
+        context.drawCenteredString(this.font, label, x + width / 2, y + height / 2 - 4, 0xFFFFFFFF);
     }
 
-    private void drawBorder(DrawContext context, int x, int y, int width, int height, int color) {
+    private void drawBorder(GuiGraphics context, int x, int y, int width, int height, int color) {
         context.fill(x, y, x + width, y + 1, color);
         context.fill(x, y + height - 1, x + width, y + height, color);
         context.fill(x, y, x + 1, y + height, color);
