@@ -5,7 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import fi.dy.masa.malilib.config.ConfigUtils;
 import fi.dy.masa.malilib.config.IConfigHandler;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,7 +15,7 @@ public final class TakeItOutConfigHandler implements IConfigHandler {
     public static final TakeItOutConfigHandler INSTANCE = new TakeItOutConfigHandler();
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout.json");
+    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout.json");
 
     private TakeItOutConfigHandler() {
     }

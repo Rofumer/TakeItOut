@@ -5,8 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.loader.api.FabricLoader;
+import net.maxbel.takeitout.client.TakeitoutClient;
+import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
@@ -33,7 +33,7 @@ import java.util.Objects;
 public final class WorldContainerSources {
     private static final Logger LOGGER = LoggerFactory.getLogger("takeitout/world-sources");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path SOURCES_PATH = FabricLoader.getInstance().getConfigDir().resolve("takeitout-world-sources.json");
+    private static final Path SOURCES_PATH = FMLPaths.CONFIGDIR.get().resolve("takeitout-world-sources.json");
     private static final long FAILURE_RETRY_DELAY_MS = 1500L;
     private static final String CONTEXTS_KEY = "contexts";
     private static final String ACTIVE_GROUP_KEY = "activeGroup";
@@ -502,7 +502,7 @@ public final class WorldContainerSources {
         if (isCoolingDownAfterFailure(required)) return false;
         LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}", required, sources.size(), singleItemMode);
         TakeitoutClient.awaitingStack = required.copyWithCount(1);
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
+        TakeitoutClient.sendToServer(new Takeitout.GetWorldContainerStackPayload(
                 sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
         ));
         return true;

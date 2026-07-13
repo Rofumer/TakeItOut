@@ -1,14 +1,15 @@
 package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.materials.MaterialCache;
+import me.fallenbreath.conditionalmixin.api.annotation.Condition;
+import me.fallenbreath.conditionalmixin.api.annotation.Restriction;
 import fi.dy.masa.litematica.util.RayTraceUtils;
 import fi.dy.masa.litematica.util.WorldUtils;
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.malilib.util.InventoryUtils;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.TakeitoutClient;
+import net.maxbel.takeitout.Takeitout;
 import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -39,6 +40,7 @@ import static net.maxbel.takeitout.client.ItemStackInventory.getInventoryFromShu
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
+@Restriction(require = @Condition(type = Condition.Type.MOD, value = "litematica"))
 @Mixin(value = WorldUtils.class, remap = false)
 public class LitematicaMixin {
 
@@ -400,7 +402,7 @@ public class LitematicaMixin {
                     logVerbose("[RMB_FLOW] shulker lookup result: shulkerSlot={}, innerSlot={}", shulkerSlot, inner);
 
                     if (inner != -1) {
-                        boolean canSend = ClientPlayNetworking.canSend(Takeitout.GetShulkerStackPayload.ID);
+                        boolean canSend = true;
                         logVerbose("[RMB_FLOW] shulker extract network available={}", canSend);
 
                         if (canSend) {
@@ -411,7 +413,7 @@ public class LitematicaMixin {
                                     slotToHotbarHuman(mc.player.getInventory().getSelectedSlot())
                             );
                             TakeitoutClient.awaitingStack = required.copyWithCount(1);
-                            ClientPlayNetworking.send(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
+                            TakeitoutClient.sendToServer(new Takeitout.GetShulkerStackPayload(inner, shulkerSlot, TakeitoutClient.SHULKER_SINGLE_ITEM_MODE));
                         } else {
                             LOGGER.debug("[RMB_FLOW] cannot request shulker extract: payload channel unavailable");
                         }
