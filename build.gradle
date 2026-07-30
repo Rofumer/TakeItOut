@@ -51,7 +51,7 @@ dependencies {
     implementation files('libs/26.2-1.3-beta.3.jar')
 
     implementation "com.terraformersmc:modmenu:${project.modmenu_version}"
-    modCompileOnly "maven.modrinth:LVN9ygNV:KpVLPOJk"
+    compileOnly "maven.modrinth:LVN9ygNV:KpVLPOJk"
 }
 
 processResources {
