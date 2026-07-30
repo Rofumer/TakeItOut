@@ -1349,14 +1349,36 @@ public class Takeitout implements ModInitializer {
     }
 
     private static void logLedgerRemove(ServerPlayer player, WorldContainerSource source, ItemStack stack) {
-        if (LEDGER_LOADED) {
-            LedgerCompat.logItemRemove(player, BlockPos.of(source.position()), stack);
+        if (!LEDGER_LOADED || source == null || stack == null || stack.isEmpty()) {
+            return;
+        }
+
+        ServerLevel world = getSourceWorld(player, source);
+        if (world == null) {
+            return;
+        }
+
+        try {
+            LedgerCompat.logItemRemove(player, world, BlockPos.of(source.position()), stack);
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.warn("Failed to log a TakeItOut item removal to Ledger", e);
         }
     }
 
     private static void logLedgerInsert(ServerPlayer player, WorldContainerSource source, ItemStack stack) {
-        if (LEDGER_LOADED) {
-            LedgerCompat.logItemInsert(player, BlockPos.of(source.position()), stack);
+        if (!LEDGER_LOADED || source == null || stack == null || stack.isEmpty()) {
+            return;
+        }
+
+        ServerLevel world = getSourceWorld(player, source);
+        if (world == null) {
+            return;
+        }
+
+        try {
+            LedgerCompat.logItemInsert(player, world, BlockPos.of(source.position()), stack);
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.warn("Failed to log a TakeItOut item insertion to Ledger", e);
         }
     }
 }
