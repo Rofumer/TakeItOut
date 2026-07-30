@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.maxbel.takeitout.compat.LedgerCompat;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -61,6 +62,7 @@ public class Takeitout implements ModInitializer {
     private static final String LINKED_CONTAINER_SCAN_LIMIT_KEY = "linked_container_scan_limit";
     private static final String ALLOW_ALL_ITEMS_TAKE_KEY = "allow_all_items_take";
     private static final int DEFAULT_LINKED_CONTAINER_SCAN_LIMIT = 64;
+    private static final boolean LEDGER_LOADED = FabricLoader.getInstance().isModLoaded("ledger");
     private static final Set<String> ALLOWED_EXCHANGE_DIMENSIONS = new HashSet<>();
     private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
@@ -630,7 +632,7 @@ public class Takeitout implements ModInitializer {
             }
 
             int slot = getSlotWithStack(inventory, requested);
-            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
+            if (slot != -1 && extractFromWorldContainer(player, inventory, source, slot, payload.singleItemMode(), payload.dumps())) {
                 ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
@@ -656,7 +658,7 @@ public class Takeitout implements ModInitializer {
             int bestShulkerCount = 0;
             Container bestShulkerInventory = null;
             BlockPos bestShulkerPos = null;
-
+            WorldContainerSource bestShulkerSource = null;
             int scanned = 0;
             for (WorldContainerSource source : payload.sources()) {
                 if (scanned >= scanLimit) break;
@@ -683,11 +685,12 @@ public class Takeitout implements ModInitializer {
                         bestShulkerSlot = i;
                         bestShulkerInventory = inventory;
                         bestShulkerPos = pos;
+                        bestShulkerSource = source;
                     }
                 }
             }
 
-            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
+            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerSource, bestShulkerSlot, true, payload.dumps())) {
                 ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
                 LOGGER.debug(
                         "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
@@ -774,7 +777,12 @@ public class Takeitout implements ModInitializer {
                 if (dumpInventory == null) {
                     continue;
                 }
+                ItemStack beforeInsert = remaining.copy();
                 remaining = insertIntoContainer(dumpInventory, remaining);
+                int insertedCount = beforeInsert.getCount() - remaining.getCount();
+                if (insertedCount > 0) {
+                    logLedgerInsert(player, dump, beforeInsert.copyWithCount(insertedCount));
+                }
                 syncWorldContainer(player, dumpInventory);
             }
 
@@ -808,11 +816,12 @@ public class Takeitout implements ModInitializer {
     private static boolean extractFromWorldContainer(
             ServerPlayer player,
             Container inventory,
-            BlockPos pos,
+            WorldContainerSource source,
             int slot,
             boolean singleItemMode,
             List<WorldContainerSource> dumps
     ) {
+        BlockPos pos = BlockPos.of(source.position());
         if (slot < 0 || slot >= inventory.getContainerSize()) {
             return false;
         }
@@ -836,6 +845,7 @@ public class Takeitout implements ModInitializer {
             syncWorldContainer(player, inventory);
             player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
+            logLedgerRemove(player, source, extracted);
             return true;
         }
 
@@ -849,6 +859,7 @@ public class Takeitout implements ModInitializer {
             currentMainHand.grow(canAdd);
             player.setItemInHand(InteractionHand.MAIN_HAND, currentMainHand);
             syncPlayerInventory(player);
+            logLedgerRemove(player, source, extracted.copyWithCount(canAdd));
             return true;
         }
 
@@ -864,6 +875,7 @@ public class Takeitout implements ModInitializer {
                 invStack.grow(canAdd);
                 player.getInventory().setItem(i, invStack);
                 syncPlayerInventory(player);
+                logLedgerRemove(player, source, extracted.copyWithCount(canAdd));
                 return true;
             }
         }
@@ -875,21 +887,25 @@ public class Takeitout implements ModInitializer {
             player.getInventory().setItem(freeSlot, currentMainHand);
             player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
             syncPlayerInventory(player);
+            logLedgerRemove(player, source, extracted);
             return true;
         }
 
         inventory.setItem(slot, remainingInContainer.isEmpty() ? ItemStack.EMPTY : remainingInContainer);
         if (canReplaceInventoryItem(currentMainHand)) {
             Container insertTarget = null;
+            WorldContainerSource insertTargetSource = null;
             for (WorldContainerSource dumpSource : dumps) {
                 Container dumpInv = getWorldContainerInventory(player, dumpSource);
                 if (dumpInv != null && canInsertIntoContainer(dumpInv, currentMainHand)) {
                     insertTarget = dumpInv;
+                    insertTargetSource = dumpSource;
                     break;
                 }
             }
             if (insertTarget == null && canInsertIntoContainer(inventory, currentMainHand)) {
                 insertTarget = inventory;
+                insertTargetSource = source;
             }
             if (insertTarget != null) {
                 ItemStack leftover = insertIntoContainer(insertTarget, currentMainHand);
@@ -903,6 +919,8 @@ public class Takeitout implements ModInitializer {
                 }
                 player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
+                logLedgerRemove(player, source, extracted);
+                logLedgerInsert(player, insertTargetSource, currentMainHand);
                 return true;
             }
         }
@@ -926,6 +944,8 @@ public class Takeitout implements ModInitializer {
                         player.getInventory().setItem(i, currentMainHand);
                         player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                         syncPlayerInventory(player);
+                        logLedgerRemove(player, source, extracted);
+                        logLedgerInsert(player, dumpSource, item);
                         return true;
                     }
                 }
@@ -939,6 +959,8 @@ public class Takeitout implements ModInitializer {
                 player.getInventory().setItem(i, currentMainHand);
                 player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
+                logLedgerRemove(player, source, extracted);
+                logLedgerInsert(player, source, item);
                 return true;
             }
         }
@@ -1324,5 +1346,17 @@ public class Takeitout implements ModInitializer {
     private static void syncWorldContainer(ServerPlayer player, Container inventory) {
         inventory.setChanged();
         player.containerMenu.broadcastChanges();
+    }
+
+    private static void logLedgerRemove(ServerPlayer player, WorldContainerSource source, ItemStack stack) {
+        if (LEDGER_LOADED) {
+            LedgerCompat.logItemRemove(player, BlockPos.of(source.position()), stack);
+        }
+    }
+
+    private static void logLedgerInsert(ServerPlayer player, WorldContainerSource source, ItemStack stack) {
+        if (LEDGER_LOADED) {
+            LedgerCompat.logItemInsert(player, BlockPos.of(source.position()), stack);
+        }
     }
 }
