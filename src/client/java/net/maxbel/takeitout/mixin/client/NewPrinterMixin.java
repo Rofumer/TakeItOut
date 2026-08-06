@@ -2,7 +2,7 @@ package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.world.SchematicWorldHandler;
 import fi.dy.masa.litematica.world.WorldSchematic;
-import me.aleksilassila.litematica.printer.handler.ClientPlayerTickManager;
+import me.aleksilassila.litematica.printer.handler.ModuleManager;
 import me.aleksilassila.litematica.printer.printer.PrinterBox;
 import me.aleksilassila.litematica.printer.printer.SchematicBlockContext;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -23,7 +23,7 @@ import static net.maxbel.takeitout.client.TakeitoutClient.awaitingStack;
 import static net.maxbel.takeitout.client.Util.getShulkerWithStack;
 import static net.maxbel.takeitout.client.Util.getSlotWithStack;
 
-@Mixin(ClientPlayerTickManager.class)
+@Mixin(ModuleManager.class)
 public class NewPrinterMixin {
 
     @Inject(method = "tick", at = @At("HEAD"), remap = false, cancellable = true)
@@ -49,7 +49,7 @@ public class NewPrinterMixin {
             return;
         }
 
-        PrinterBox box = ClientPlayerTickManager.PRINT.getBoxRef().get();
+        PrinterBox box = ModuleManager.PRINT.getBox().get();
         if (box == null) {
             return;
         }
