@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.maxbel.takeitout.compat.SophisticatedBackpacksCompat;
 import net.neoforged.fml.loading.FMLPaths;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.world.level.block.BarrelBlock;
@@ -500,7 +501,7 @@ public class WorldContainerSources {
         }
 
         List<Takeitout.WorldContainerSource> sources = getLinkedSourceReferencesSnapshot();
-        if (sources.isEmpty()) {
+        if (sources.isEmpty() && !SophisticatedBackpacksCompat.isLoaded()) {
             LOGGER.warn("World container request skipped: required={}, reason=no_sources", required);
             return false;
         }
@@ -705,9 +706,12 @@ public class WorldContainerSources {
 
     public static boolean isSupportedContainer(Level world, BlockPos pos) {
         Block block = world.getBlockState(pos).getBlock();
-        return block instanceof ShulkerBoxBlock
+        if (block instanceof ShulkerBoxBlock
                 || block instanceof ChestBlock
-                || block instanceof BarrelBlock;
+                || block instanceof BarrelBlock) {
+            return true;
+        }
+        return SophisticatedBackpacksCompat.isLoaded() && SophisticatedBackpacksCompat.isBackpackBlock(block);
     }
 
     private static String scanLimitWarningSuffix(boolean linked, int linkedCount) {

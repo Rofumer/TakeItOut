@@ -50,3 +50,17 @@ type = "optional"
 versionRange = "[*,)"
 ordering = "NONE"
 side = "CLIENT"
+
+[[dependencies.takeitout]]
+modId = "sophisticatedbackpacks"
+type = "optional"
+versionRange = "[*,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.takeitout]]
+modId = "curios"
+type = "optional"
+versionRange = "[*,)"
+ordering = "NONE"
+side = "BOTH"

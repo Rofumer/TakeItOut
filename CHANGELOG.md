@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.27
+
+### Added
+
+- Added optional Sophisticated Backpacks support: placed/wall-mounted backpacks can now be linked as world container sources, the same way chests, barrels, and shulker boxes are.
+- Extended item requests to also fall back to a matching Sophisticated Backpack carried in the player's own inventory (server-side scan, works in both singleplayer and multiplayer) when the item isn't found directly or in a linked container.
+- Extended the carried-backpack fallback to also check the offhand slot, worn armor slots (backpack equipped instead of a chestplate), and, if Curios API is installed, all equipped Curios slots.
+
 ## 1.1.18
 
 ### Added

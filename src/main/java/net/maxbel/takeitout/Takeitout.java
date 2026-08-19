@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import net.maxbel.takeitout.compat.CuriosCompat;
+import net.maxbel.takeitout.compat.SophisticatedBackpacksCompat;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -30,6 +32,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.HoeItem;
@@ -842,6 +845,44 @@ public class Takeitout {
             }
         }
 
+        // Third pass: item not found in world sources or shulkers — check the player's own carried Sophisticated Backpacks
+        // (main inventory, offhand, worn armor slots, and Curios slots if that mod is installed)
+        if (SophisticatedBackpacksCompat.isLoaded() && !isShulkerItem(requested) && !SophisticatedBackpacksCompat.isBackpackItem(requested)) {
+            List<ItemStack> candidates = new ArrayList<>();
+            for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()); i++) {
+                candidates.add(player.getInventory().getItem(i));
+            }
+            candidates.add(player.getOffhandItem());
+            for (EquipmentSlot equipmentSlot : EquipmentSlot.values()) {
+                if (equipmentSlot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR) {
+                    candidates.add(player.getItemBySlot(equipmentSlot));
+                }
+            }
+            if (CuriosCompat.isLoaded()) {
+                candidates.addAll(CuriosCompat.getEquippedStacks(player));
+            }
+
+            for (ItemStack invStack : candidates) {
+                if (invStack.isEmpty() || !SophisticatedBackpacksCompat.isBackpackItem(invStack)) continue;
+
+                Container backpackInventory = SophisticatedBackpacksCompat.asContainer(invStack);
+                if (backpackInventory == null) continue;
+
+                int slot = getSlotWithStack(backpackInventory, requested);
+                if (slot != -1 && extractFromWorldContainer(player, backpackInventory, null, slot, payload.singleItemMode(), payload.dumps())) {
+                    PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+                    LOGGER.debug(
+                            "GetWorldContainerStack carried-backpack success: player={}, requested={}, innerSlot={}, singleItemMode={}",
+                            player.getName().getString(),
+                            requested,
+                            slot,
+                            payload.singleItemMode()
+                    );
+                    return;
+                }
+            }
+        }
+
         PacketDistributor.sendToPlayer(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
@@ -1244,6 +1285,8 @@ public class Takeitout {
             if (blockEntity instanceof Container blockInventory) {
                 inventory = blockInventory;
             }
+        } else if (SophisticatedBackpacksCompat.isLoaded() && SophisticatedBackpacksCompat.isBackpackBlock(block)) {
+            inventory = SophisticatedBackpacksCompat.asContainer(world.getBlockEntity(pos));
         }
 
         if (inventory == null) {

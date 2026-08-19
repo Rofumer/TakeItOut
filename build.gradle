@@ -33,6 +33,10 @@ dependencies {
     modImplementation "maven.modrinth:forgematica:${project.forgematica_version}"
     modImplementation "maven.modrinth:tweakerge:${project.tweakerge_version}"
 
+    compileOnly "maven.modrinth:TyCTlI4b:${project.sophisticatedbackpacks_version}"
+    compileOnly "maven.modrinth:nmoqTijg:${project.sophisticatedcore_version}"
+    compileOnly "maven.modrinth:vvuO3ImH:${project.curios_version}"
+
     compileOnly "me.fallenbreath:conditional-mixin-neoforge:0.6.4"
 }
 
