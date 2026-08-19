@@ -26,3 +26,17 @@ description = '''This utility picks a block from a shulker'''
     versionRange = "[${minecraft_version},)"
     ordering = "NONE"
     side = "BOTH"
+
+[[dependencies.takeitout]]
+    modId = "sophisticatedbackpacks"
+    mandatory = false
+    versionRange = "[0,)"
+    ordering = "NONE"
+    side = "BOTH"
+
+[[dependencies.takeitout]]
+    modId = "curios"
+    mandatory = false
+    versionRange = "[0,)"
+    ordering = "NONE"
+    side = "BOTH"

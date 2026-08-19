@@ -38,6 +38,10 @@ dependencies {
     modImplementation "maven.modrinth:tweakerge:${project.tweakerge_version}"
     modImplementation "maven.modrinth:forgematicaprinter:${project.forgematicaprinter_version}"
 
+    modCompileOnly "maven.modrinth:TyCTlI4b:${project.sophisticatedbackpacks_version}"
+    modCompileOnly "maven.modrinth:nmoqTijg:${project.sophisticatedcore_version}"
+    modCompileOnly "maven.modrinth:vvuO3ImH:${project.curios_version}"
+
     modImplementation "me.fallenbreath:conditional-mixin-forge:${project.conditional_mixin_version}"
     include "me.fallenbreath:conditional-mixin-forge:${project.conditional_mixin_version}"
 }
