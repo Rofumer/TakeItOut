@@ -53,6 +53,38 @@ If Litematica Printer is installed, TakeItOut can automatically provide missing 
 
 If Tweakeroo is installed, TakeItOut extends `restockNewStackToHand`. When Tweakeroo cannot find the requested stack in the normal inventory, TakeItOut searches shulkers and extracts the matching item.
 
+## Linked World Containers
+
+Besides shulkers in your inventory, TakeItOut can pull items out of chests, barrels, and shulker boxes
+placed in the world. Link a container by looking at it and using the link hotkey, or manage links in the
+TakeItOut screen (`Containers` tab). Linked containers can be organized into groups, and groups can be
+shared with other players on the server.
+
+Containers can also be marked as **dump** containers. Dump containers are a manual, unaddressed
+mechanism: the dump hotkey sweeps your whole inventory into them, and they are also used as an overflow
+target when the mod has nowhere else to put the item it is displacing.
+
+### Return To Container When Full
+
+`Return To Container When Full` (off by default, in the TakeItOut settings screen) is the automatic,
+addressed counterpart to dumping. When your inventory is completely full and the mod needs one more
+material, it sends the material you took longest ago back into the exact container it originally came
+from, and takes the new material in the same server-side operation - so nothing can slip in between the
+two halves.
+
+Details:
+
+- The mod remembers, per session only, which linked container every item came from. Nothing is saved to
+  disk, and the memory is dropped when you change world or server.
+- Items in your hand, the item you are currently requesting, tools, shulker boxes, and ender chests are
+  never chosen for return.
+- Only whole stacks that fit completely into the target container are moved, so a slot is really freed.
+  Anything that does not fit stays in your inventory; nothing is ever dropped on the ground.
+- The server re-validates the target container and recomputes the amount itself, so the feature cannot be
+  abused by a modified client.
+- This feature needs a server running the same TakeItOut version (see below). Against an older server the
+  client silently keeps it switched off, and everything else keeps working.
+
 ## Server Requirement
 
 TakeItOut sends a serverbound packet to move items out of shulkers. Because of that, extraction requires server-side support:
@@ -62,6 +94,10 @@ TakeItOut sends a serverbound packet to move items out of shulkers. Because of t
 - On Paper, Purpur, Spigot, or Bukkit servers, use the TakeItOut companion plugin if you do not run Fabric server-side.
 
 Without server-side support, the client can detect the needed item, but it cannot actually move it from the shulker.
+
+`Return To Container When Full` needs a server with TakeItOut `1.1.28` or newer. The server announces
+support on join; if that announcement never arrives, the client keeps sending the original request packet
+and simply never returns anything, so an older server is not broken by an updated client (and vice versa).
 
 ## Compatibility
 

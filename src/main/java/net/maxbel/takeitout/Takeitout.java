@@ -353,17 +353,137 @@ public class Takeitout implements ModInitializer {
         }
     }
 
+    /**
+     * Extended variant of {@link GetWorldContainerStackPayload} that can ask the server to first put an
+     * already-taken item back into the container it originally came from, freeing an inventory slot.
+     *
+     * <p>This is a separate payload id on purpose: appending fields to the original payload would make
+     * old servers fail to decode it. Clients only send this variant after they saw
+     * {@link ServerFeaturesPayload}, so an old server never receives it.
+     *
+     * <p>An empty {@code returnTarget}, an empty {@code returnStack} or a non-positive {@code returnCount}
+     * all mean "return nothing"; the request then behaves exactly like the original payload.
+     * {@code returnStack} is sent with count 1 so item components survive the trip; the real amount is
+     * recomputed server-side and {@code returnCount} is only an upper bound.
+     */
+    public record GetWorldContainerStackV2Payload(
+            List<WorldContainerSource> sources,
+            ItemStack stack,
+            boolean singleItemMode,
+            boolean fromUi,
+            List<WorldContainerSource> dumps,
+            List<WorldContainerSource> returnTarget,
+            ItemStack returnStack,
+            int returnCount
+    ) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<GetWorldContainerStackV2Payload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "get_world_container_stack_v2"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, GetWorldContainerStackV2Payload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackV2Payload::sources,
+                        ItemStack.STREAM_CODEC,
+                        GetWorldContainerStackV2Payload::stack,
+                        ByteBufCodecs.BOOL,
+                        GetWorldContainerStackV2Payload::singleItemMode,
+                        ByteBufCodecs.BOOL,
+                        GetWorldContainerStackV2Payload::fromUi,
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackV2Payload::dumps,
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        GetWorldContainerStackV2Payload::returnTarget,
+                        ItemStack.OPTIONAL_STREAM_CODEC,
+                        GetWorldContainerStackV2Payload::returnStack,
+                        ByteBufCodecs.VAR_INT,
+                        GetWorldContainerStackV2Payload::returnCount,
+                        GetWorldContainerStackV2Payload::new
+                );
+
+        public WorldContainerSource returnTargetOrNull() {
+            return returnTarget == null || returnTarget.isEmpty() ? null : returnTarget.getFirst();
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
+    /**
+     * Answer to {@link GetWorldContainerStackV2Payload}. Sent only in reply to that payload, so an old
+     * client never has to decode it. {@code takenFrom} tells the client which container the item actually
+     * came from (needed to track where it has to go back later), {@code returnedCount} is how many items
+     * were really put back.
+     */
+    public record WorldContainerStackResponseV2Payload(
+            ItemStack stack,
+            boolean success,
+            List<WorldContainerSource> takenFrom,
+            int returnedCount
+    ) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<WorldContainerStackResponseV2Payload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "world_container_stack_response_v2"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorldContainerStackResponseV2Payload> CODEC =
+                StreamCodec.composite(
+                        ItemStack.STREAM_CODEC,
+                        WorldContainerStackResponseV2Payload::stack,
+                        ByteBufCodecs.BOOL,
+                        WorldContainerStackResponseV2Payload::success,
+                        ByteBufCodecs.collection(ArrayList::new, WorldContainerSource.CODEC),
+                        WorldContainerStackResponseV2Payload::takenFrom,
+                        ByteBufCodecs.VAR_INT,
+                        WorldContainerStackResponseV2Payload::returnedCount,
+                        WorldContainerStackResponseV2Payload::new
+                );
+
+        public WorldContainerSource takenFromOrNull() {
+            return takenFrom == null || takenFrom.isEmpty() ? null : takenFrom.getFirst();
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
+    /**
+     * Announces optional server-side features to the client on join. Servers running an older TakeItOut
+     * simply never send it, and the client then keeps the corresponding features switched off instead of
+     * sending payloads the server cannot decode.
+     */
+    public record ServerFeaturesPayload(boolean containerReturn) implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<ServerFeaturesPayload> ID =
+                new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("takeitout", "server_features"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, ServerFeaturesPayload> CODEC =
+                StreamCodec.composite(
+                        ByteBufCodecs.BOOL,
+                        ServerFeaturesPayload::containerReturn,
+                        ServerFeaturesPayload::new
+                );
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return ID;
+        }
+    }
+
     @Override
     public void onInitialize() {
         loadServerConfig();
 
         PayloadTypeRegistry.serverboundPlay().register(GetShulkerStackPayload.ID, GetShulkerStackPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerStackPayload.ID, GetWorldContainerStackPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerStackV2Payload.ID, GetWorldContainerStackV2Payload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(GetWorldContainerItemsPayload.ID, GetWorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DumpInventoryPayload.ID, DumpInventoryPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(PublishGroupPayload.ID, PublishGroupPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(UnpublishGroupPayload.ID, UnpublishGroupPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponsePayload.ID, WorldContainerStackResponsePayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(WorldContainerStackResponseV2Payload.ID, WorldContainerStackResponseV2Payload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ServerFeaturesPayload.ID, ServerFeaturesPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(WorldContainerItemsPayload.ID, WorldContainerItemsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ServerConfigSyncPayload.ID, ServerConfigSyncPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SharedGroupsListPayload.ID, SharedGroupsListPayload.CODEC);
@@ -373,6 +493,9 @@ public class Takeitout implements ModInitializer {
         );
         ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerStackPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetWorldContainerStackPayload(context.player(), payload))
+        );
+        ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerStackV2Payload.ID, (payload, context) ->
+                context.server().execute(() -> handleGetWorldContainerStackV2Payload(context.player(), payload))
         );
         ServerPlayNetworking.registerGlobalReceiver(GetWorldContainerItemsPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleGetWorldContainerItemsPayload(context.player(), payload))
@@ -389,6 +512,7 @@ public class Takeitout implements ModInitializer {
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             sender.sendPacket(new ServerConfigSyncPayload(linkedContainerScanLimit));
+            sender.sendPacket(new ServerFeaturesPayload(true));
             sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
         });
     }
@@ -600,23 +724,69 @@ public class Takeitout implements ModInitializer {
     }
 
     private static void handleGetWorldContainerStackPayload(ServerPlayer player, GetWorldContainerStackPayload payload) {
-        ItemStack requested = payload.stack();
-        if (requested == null || requested.isEmpty() || payload.sources() == null) {
+        handleWorldContainerStackRequest(
+                player,
+                payload.sources(),
+                payload.stack(),
+                payload.singleItemMode(),
+                payload.fromUi(),
+                payload.dumps(),
+                null,
+                ItemStack.EMPTY,
+                0,
+                false
+        );
+    }
+
+    private static void handleGetWorldContainerStackV2Payload(ServerPlayer player, GetWorldContainerStackV2Payload payload) {
+        handleWorldContainerStackRequest(
+                player,
+                payload.sources(),
+                payload.stack(),
+                payload.singleItemMode(),
+                payload.fromUi(),
+                payload.dumps(),
+                payload.returnTargetOrNull(),
+                payload.returnStack(),
+                payload.returnCount(),
+                true
+        );
+    }
+
+    private static void handleWorldContainerStackRequest(
+            ServerPlayer player,
+            List<WorldContainerSource> sources,
+            ItemStack requested,
+            boolean singleItemMode,
+            boolean fromUi,
+            List<WorldContainerSource> dumps,
+            WorldContainerSource returnTarget,
+            ItemStack returnStack,
+            int returnCount,
+            boolean extendedResponse
+    ) {
+        if (requested == null || requested.isEmpty() || sources == null) {
             return;
         }
 
-        if (payload.fromUi() && !allowAllItemsTake) {
+        List<WorldContainerSource> dumpList = dumps != null ? dumps : List.of();
+
+        if (fromUi && !allowAllItemsTake) {
             player.sendSystemMessage(Component.literal("TakeItOut: taking items via All Items tab is disabled on this server"));
-            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+            sendStackResponse(player, requested, false, null, 0, extendedResponse);
             return;
         }
+
+        // Return first, take second: both happen inside this single server-side operation, so vanilla
+        // inventory syncing can never race between freeing the slot and filling it again.
+        int returnedCount = returnItemsToContainer(player, returnTarget, returnStack, returnCount, requested);
 
         int checked = 0;
         int invalidSourceCount = 0;
         int emptySourceCount = 0;
         int failedExtractCount = 0;
         int scanLimit = linkedContainerScanLimit;
-        for (WorldContainerSource source : payload.sources()) {
+        for (WorldContainerSource source : sources) {
             if (checked >= scanLimit) {
                 break;
             }
@@ -630,15 +800,19 @@ public class Takeitout implements ModInitializer {
             }
 
             int slot = getSlotWithStack(inventory, requested);
-            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, payload.singleItemMode(), payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, singleItemMode, dumpList)) {
+                sendStackResponse(player, requested, true, source, returnedCount, extendedResponse);
+                if (returnedCount > 0) {
+                    syncPlayerInventory(player);
+                }
                 LOGGER.debug(
-                        "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}",
+                        "GetWorldContainerStack success: player={}, requested={}, pos={}, slot={}, singleItemMode={}, returned={}",
                         player.getName().getString(),
                         requested,
                         pos,
                         slot,
-                        payload.singleItemMode()
+                        singleItemMode,
+                        returnedCount
                 );
                 return;
             }
@@ -656,9 +830,10 @@ public class Takeitout implements ModInitializer {
             int bestShulkerCount = 0;
             Container bestShulkerInventory = null;
             BlockPos bestShulkerPos = null;
+            WorldContainerSource bestShulkerSource = null;
 
             int scanned = 0;
-            for (WorldContainerSource source : payload.sources()) {
+            for (WorldContainerSource source : sources) {
                 if (scanned >= scanLimit) break;
                 scanned++;
 
@@ -683,12 +858,16 @@ public class Takeitout implements ModInitializer {
                         bestShulkerSlot = i;
                         bestShulkerInventory = inventory;
                         bestShulkerPos = pos;
+                        bestShulkerSource = source;
                     }
                 }
             }
 
-            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, payload.dumps())) {
-                ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), true));
+            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, dumpList)) {
+                sendStackResponse(player, requested, true, bestShulkerSource, returnedCount, extendedResponse);
+                if (returnedCount > 0) {
+                    syncPlayerInventory(player);
+                }
                 LOGGER.debug(
                         "GetWorldContainerStack shulker fallback success: player={}, requested={}, pos={}, slot={}, itemCount={}",
                         player.getName().getString(),
@@ -701,18 +880,134 @@ public class Takeitout implements ModInitializer {
             }
         }
 
-        ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), false));
+        sendStackResponse(player, requested, false, null, returnedCount, extendedResponse);
+        if (returnedCount > 0) {
+            syncPlayerInventory(player);
+        }
         LOGGER.debug(
                 "GetWorldContainerStack miss: player={}, requested={}, sources={}, invalidSources={}, noMatchingStack={}, failedExtract={}",
                 player.getName().getString(),
                 requested,
-                Math.min(payload.sources().size(), scanLimit),
+                Math.min(sources.size(), scanLimit),
                 invalidSourceCount,
                 emptySourceCount,
                 failedExtractCount
         );
     }
 
+    private static void sendStackResponse(
+            ServerPlayer player,
+            ItemStack requested,
+            boolean success,
+            WorldContainerSource takenFrom,
+            int returnedCount,
+            boolean extendedResponse
+    ) {
+        if (extendedResponse) {
+            ServerPlayNetworking.send(player, new WorldContainerStackResponseV2Payload(
+                    requested.copyWithCount(1),
+                    success,
+                    takenFrom != null ? List.of(takenFrom) : List.of(),
+                    returnedCount
+            ));
+        } else {
+            ServerPlayNetworking.send(player, new WorldContainerStackResponsePayload(requested.copyWithCount(1), success));
+        }
+    }
+
+    /**
+     * Puts items matching {@code returnStack} from the player inventory back into {@code target}, freeing
+     * inventory slots for the item that is about to be taken. Everything the client sent is re-validated
+     * here: the target container goes through the same checks as any other linked source, and the amount
+     * is recomputed from the actual inventory - {@code requestedCount} is only an upper bound.
+     *
+     * @return how many items were actually moved into the container
+     */
+    private static int returnItemsToContainer(
+            ServerPlayer player,
+            WorldContainerSource target,
+            ItemStack returnStack,
+            int requestedCount,
+            ItemStack requested
+    ) {
+        if (target == null || returnStack == null || returnStack.isEmpty() || requestedCount <= 0) {
+            return 0;
+        }
+
+        ServerLevel world = getSourceWorld(player, target);
+        if (world == null) {
+            return 0;
+        }
+
+        BlockPos targetPos = BlockPos.of(target.position());
+        if (!world.hasChunkAt(targetPos)) {
+            LOGGER.debug(
+                    "Container return skipped: player={}, reason=chunk_not_loaded, pos={}",
+                    player.getName().getString(),
+                    targetPos
+            );
+            return 0;
+        }
+
+        Container container = getWorldContainerInventory(player, target);
+        if (container == null) {
+            return 0;
+        }
+
+        boolean componentSensitive = isShulkerItem(returnStack) || !returnStack.getComponentsPatch().isEmpty();
+        int selectedSlot = player.getInventory().getSelectedSlot();
+        int moved = 0;
+
+        for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()) && moved < requestedCount; i++) {
+            if (i == selectedSlot) {
+                // Never touch the item the player is holding: extractFromWorldContainer works on the main hand.
+                continue;
+            }
+
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack == null || stack.isEmpty() || !canReplaceInventoryItem(stack)) {
+                continue;
+            }
+
+            boolean matches = componentSensitive
+                    ? ItemStack.isSameItemSameComponents(stack, returnStack)
+                    : stack.is(returnStack.getItem()) && stack.getComponentsPatch().isEmpty();
+            if (!matches) {
+                continue;
+            }
+
+            // Never give away what was just asked for.
+            if (isShulkerItem(requested)
+                    ? ItemStack.isSameItemSameComponents(stack, requested)
+                    : stack.is(requested.getItem())) {
+                continue;
+            }
+
+            // Only move stacks that fit completely - a partial move would not free the slot.
+            if (!canInsertIntoContainer(container, stack)) {
+                continue;
+            }
+
+            int before = stack.getCount();
+            ItemStack leftover = insertIntoContainer(container, stack.copy());
+            moved += before - leftover.getCount();
+            // Whatever did not fit goes straight back into the same inventory slot, never on the ground.
+            player.getInventory().setItem(i, leftover.isEmpty() ? ItemStack.EMPTY : leftover);
+        }
+
+        if (moved > 0) {
+            syncWorldContainer(player, container);
+            LOGGER.debug(
+                    "Container return: player={}, item={}, moved={}, pos={}",
+                    player.getName().getString(),
+                    returnStack,
+                    moved,
+                    targetPos
+            );
+        }
+
+        return moved;
+    }
     private static void handleGetWorldContainerItemsPayload(ServerPlayer player, GetWorldContainerItemsPayload payload) {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
