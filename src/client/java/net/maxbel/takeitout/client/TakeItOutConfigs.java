@@ -18,8 +18,17 @@ public final class TakeItOutConfigs {
             false
     );
 
-    public static final List<ConfigColor> GENERIC_LIST = List.of(
-            CONTAINER_SOURCE_OUTLINE_COLOR
+    public static final ConfigBoolean RETURN_TO_CONTAINER_WHEN_FULL = new ConfigBoolean(
+            "returnToContainerWhenFull",
+            false
+    );
+
+    // Everything in this list is what TakeItOutConfigHandler reads and writes, so a config that is not
+    // here silently loses its value on restart.
+    public static final List<IConfigBase> GENERIC_LIST = List.of(
+            CONTAINER_SOURCE_OUTLINE_COLOR,
+            BOX_SELECT_CREATES_NEW_GROUP,
+            RETURN_TO_CONTAINER_WHEN_FULL
     );
 
     public static final List<IConfigBase> SETTINGS_LIST;
@@ -33,9 +42,12 @@ public final class TakeItOutConfigs {
         BOX_SELECT_CREATES_NEW_GROUP.setTranslatedName("Box Select Creates New Group");
         BOX_SELECT_CREATES_NEW_GROUP.setComment("When enabled, box-selecting a region creates a new group instead of adding to the current one.");
 
+        RETURN_TO_CONTAINER_WHEN_FULL.setPrettyName("Return To Container When Full");
+        RETURN_TO_CONTAINER_WHEN_FULL.setTranslatedName("Return To Container When Full");
+        RETURN_TO_CONTAINER_WHEN_FULL.setComment("When the inventory is full, send the oldest previously taken material back to the container it came from to free a slot. Requires a server running the same TakeItOut version.");
+
         List<IConfigBase> settings = new ArrayList<>();
         settings.addAll(GENERIC_LIST);
-        settings.add(BOX_SELECT_CREATES_NEW_GROUP);
         settings.addAll(TakeItOutHotkeys.HOTKEY_LIST);
         SETTINGS_LIST = List.copyOf(settings);
     }

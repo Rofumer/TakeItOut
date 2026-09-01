@@ -48,6 +48,7 @@ public final class WorldContainerSources {
     private static String currentWorldKey;
     private static String currentGroupName = DEFAULT_GROUP;
     private static boolean isDirty = false;
+    private static WorldContainerReturnTracker.Victim pendingReturn = null;
 
     private WorldContainerSources() {
     }
@@ -502,10 +503,55 @@ public final class WorldContainerSources {
         if (isCoolingDownAfterFailure(required)) return false;
         LOGGER.debug("World container request: required={}, sources={}, singleItemMode={}", required, sources.size(), singleItemMode);
         TakeitoutClient.awaitingStack = required.copyWithCount(1);
-        ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
-                sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
+
+        if (!TakeitoutClient.SERVER_SUPPORTS_CONTAINER_RETURN) {
+            // Old server: it cannot decode the extended payload, so keep using the original one and leave
+            // the return feature switched off instead of failing.
+            ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackPayload(
+                    sources, required.copyWithCount(1), singleItemMode, fromUi, WorldContainerDumps.getDumpReferencesSnapshot()
+            ));
+            return true;
+        }
+
+        WorldContainerReturnTracker.Victim victim = pickReturnVictim(client, required);
+        pendingReturn = victim;
+        ClientPlayNetworking.send(new Takeitout.GetWorldContainerStackV2Payload(
+                sources,
+                required.copyWithCount(1),
+                singleItemMode,
+                fromUi,
+                WorldContainerDumps.getDumpReferencesSnapshot(),
+                victim != null ? List.of(victim.source()) : List.of(),
+                victim != null ? victim.keyStack() : ItemStack.EMPTY,
+                victim != null ? victim.count() : 0
         ));
+        if (victim != null) {
+            LOGGER.debug(
+                    "World container return requested: item={}, count={}, target={}",
+                    victim.keyStack(),
+                    victim.count(),
+                    sourceKey(victim.source())
+            );
+        }
         return true;
+    }
+
+    /**
+     * Chooses which already-taken item should go back into its container to make room. Returns
+     * {@code null} whenever the feature is off, the inventory still has room, or nothing safe is tracked.
+     */
+    private static WorldContainerReturnTracker.Victim pickReturnVictim(Minecraft client, ItemStack required) {
+        if (!TakeItOutConfigs.RETURN_TO_CONTAINER_WHEN_FULL.getBooleanValue()) return null;
+        if (!WorldContainerReturnTracker.isInventoryFull(client.player)) return null;
+        if (WorldContainerReturnTracker.hasRoomForMore(client.player, required)) return null;
+        return WorldContainerReturnTracker.pickVictim(client.player, required);
+    }
+
+    /** Victim sent with the in-flight request, resolved when the server answers. */
+    public static WorldContainerReturnTracker.Victim consumePendingReturn() {
+        WorldContainerReturnTracker.Victim victim = pendingReturn;
+        pendingReturn = null;
+        return victim;
     }
 
     public static void recordResponse(ItemStack stack, boolean success) {
@@ -536,6 +582,8 @@ public final class WorldContainerSources {
 
         boolean worldChanged = !Objects.equals(currentWorldKey, nextWorldKey);
         SOURCES.clear();
+        WorldContainerReturnTracker.clear();
+        pendingReturn = null;
         currentContextKey = nextContextKey;
         lastFailedStack = ItemStack.EMPTY;
         lastFailureTsMs = 0L;
@@ -555,6 +603,8 @@ public final class WorldContainerSources {
 
     public static void clear() {
         SOURCES.clear();
+        WorldContainerReturnTracker.clear();
+        pendingReturn = null;
         currentContextKey = null;
         currentWorldKey = null;
         currentGroupName = DEFAULT_GROUP;
