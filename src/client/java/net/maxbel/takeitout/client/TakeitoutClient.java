@@ -47,6 +47,8 @@ public class TakeitoutClient implements ClientModInitializer {
     public static boolean SHULKER_SINGLE_ITEM_MODE;
     public static boolean RENDER_CONTAINER_SOURCES;
     public static int SERVER_SCAN_LIMIT = -1;
+    /** Set when the server announces itself via ServerFeaturesPayload; old servers never send it. */
+    public static boolean SERVER_SUPPORTS_CONTAINER_RETURN = false;
     public static ItemSortMode ITEM_SORT_MODE;
     public static int CONTAINER_SOURCE_OUTLINE_COLOR;
     public static ItemStack awaitingStack;
@@ -91,20 +93,29 @@ public class TakeitoutClient implements ClientModInitializer {
         WorldContainerSourceRenderer.register();
 
         ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerStackResponsePayload.ID, (payload, context) ->
+                context.client().execute(() -> handleStackResponse(context.client(), payload.stack(), payload.success()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerStackResponseV2Payload.ID, (payload, context) ->
                 context.client().execute(() -> {
-                    WorldContainerSources.recordResponse(payload.stack(), payload.success());
-                    if (!payload.success()
-                            && !awaitingStack.isEmpty()
-                            && awaitingStack.is(payload.stack().getItem())) {
-                        awaitingStack = ItemStack.EMPTY;
-                        awaitingStackTicks = 0;
-                        if (context.client().player != null) {
-                            context.client().player.sendOverlayMessage(
-                                    Component.translatable("message.takeitout.item_not_found", payload.stack().getDisplayName())
-                            );
-                        }
+                    Takeitout.WorldContainerSource takenFrom = payload.takenFromOrNull();
+                    WorldContainerReturnTracker.Victim victim = WorldContainerSources.consumePendingReturn();
+
+                    if (victim != null && payload.returnedCount() >= victim.count()) {
+                        // Everything we counted went home. On a partial return the entry is kept (with its
+                        // original timestamp) so the leftovers can follow later.
+                        WorldContainerReturnTracker.forgetReturned(victim.source(), victim.keyStack());
                     }
+                    if (payload.success() && takenFrom != null) {
+                        WorldContainerReturnTracker.recordTake(takenFrom, payload.stack());
+                    }
+
+                    handleStackResponse(context.client(), payload.stack(), payload.success());
                 })
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(Takeitout.ServerFeaturesPayload.ID, (payload, context) ->
+                context.client().execute(() -> SERVER_SUPPORTS_CONTAINER_RETURN = payload.containerReturn())
         );
 
         ClientPlayNetworking.registerGlobalReceiver(Takeitout.WorldContainerItemsPayload.ID, (payload, context) ->
@@ -144,8 +155,10 @@ public class TakeitoutClient implements ClientModInitializer {
                 awaitingStack = ItemStack.EMPTY;
                 awaitingStackTicks = 0;
                 TakeItOutHotkeys.clearBoxSelection();
+                WorldContainerReturnTracker.clear();
                 if (client.level == null) {
                     SharedGroupsClient.clear();
+                    SERVER_SUPPORTS_CONTAINER_RETURN = false;
                 }
             }
 
@@ -167,6 +180,19 @@ public class TakeitoutClient implements ClientModInitializer {
                 }
             }
         });
+    }
+
+    private static void handleStackResponse(Minecraft client, ItemStack stack, boolean success) {
+        WorldContainerSources.recordResponse(stack, success);
+        if (!success && !awaitingStack.isEmpty() && awaitingStack.is(stack.getItem())) {
+            awaitingStack = ItemStack.EMPTY;
+            awaitingStackTicks = 0;
+            if (client.player != null) {
+                client.player.sendOverlayMessage(
+                        Component.translatable("message.takeitout.item_not_found", stack.getDisplayName())
+                );
+            }
+        }
     }
 
     public static void toggleAutoTakeout(Minecraft client) {
