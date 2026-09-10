@@ -7,6 +7,7 @@ import me.aleksilassila.litematica.printer.printer.PrinterBox;
 import me.aleksilassila.litematica.printer.printer.SchematicBlockContext;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
+import net.maxbel.takeitout.client.PrinterFluidSupport;
 import net.maxbel.takeitout.client.TakeitoutClient;
 import net.maxbel.takeitout.client.WorldContainerSources;
 import net.minecraft.client.Minecraft;
@@ -41,6 +42,11 @@ public class NewPrinterMixin {
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {
+            return;
+        }
+
+        // Fluid removal consumes sand/gravel outside the material list, so it is refilled separately.
+        if (PrinterFluidSupport.tryRefill(mc)) {
             return;
         }
 
