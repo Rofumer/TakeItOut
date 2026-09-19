@@ -11,7 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.world.phys.BlockHitResult;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -33,11 +33,11 @@ public class MouseMixin {
             require = 0
     )
     private void takeitout$onButton(long window, MouseButtonInfo input, int action, CallbackInfo ci) {
-        if (input.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+        if (input.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
             return;
         }
 
-        if (action != GLFW.GLFW_PRESS) {
+        if (action != InputConstants.PRESS) {
             return;
         }
 

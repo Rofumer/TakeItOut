@@ -26,7 +26,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -83,8 +83,8 @@ public class TakeitoutClient implements ClientModInitializer {
 
         openSettingsKeyBinding = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.takeitout.open_settings",
-                com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_UNKNOWN,
+                InputConstants.Type.KEYBOARD,
+                InputConstants.UNKNOWN.getValue(),
                 category
         ));
 

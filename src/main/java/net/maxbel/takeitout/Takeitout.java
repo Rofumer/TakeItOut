@@ -24,11 +24,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.AxeItem;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.HoeItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ShovelItem;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
@@ -1301,9 +1299,9 @@ public class Takeitout implements ModInitializer {
             return false;
         }
 
-        if (item.getItem() instanceof HoeItem
-                || item.getItem() instanceof AxeItem
-                || item.getItem() instanceof ShovelItem) {
+        if (item.is(ItemTags.HOES)
+                || item.is(ItemTags.AXES)
+                || item.is(ItemTags.SHOVELS)) {
             return false;
         }
 

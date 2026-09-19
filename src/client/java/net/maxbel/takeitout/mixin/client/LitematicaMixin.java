@@ -17,7 +17,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.MushroomBlock;
-import net.minecraft.world.level.block.RedStoneWireBlock;
+import net.minecraft.world.level.block.RedstoneWireBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -494,7 +494,7 @@ public class LitematicaMixin {
                 && FENCE_WALL_IGNORED_PROPERTIES.contains(name))
                 || (targetState.getBlock() instanceof MushroomBlock
                 && MUSHROOM_BLOCK_IGNORED_PROPERTIES.contains(name))
-                || (targetState.getBlock() instanceof RedStoneWireBlock
+                || (targetState.getBlock() instanceof RedstoneWireBlock
                 && REDSTONE_WIRE_IGNORED_PROPERTIES.contains(name));
     }
 
