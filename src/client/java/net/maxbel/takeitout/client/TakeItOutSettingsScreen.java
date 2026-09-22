@@ -1,5 +1,6 @@
 package net.maxbel.takeitout.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -162,7 +163,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             int listLeft = getActiveListLeft();
             int listWidth = getActiveListWidth();
             int trackX = listLeft + listWidth - SCROLLBAR_WIDTH;
@@ -187,16 +188,17 @@ public class TakeItOutSettingsScreen extends Screen {
             }
         }
 
-        if (activeTab == Tab.CONTAINERS && event.button() == 0 && handleContainerClick((int) event.x(), (int) event.y())) {
+        if (activeTab == Tab.CONTAINERS && event.button() == InputConstants.MOUSE_BUTTON_LEFT && handleContainerClick((int) event.x(), (int) event.y())) {
             return true;
         }
 
-        if (activeTab == Tab.ALL_ITEMS && (event.button() == 0 || event.button() == 1)
+        if (activeTab == Tab.ALL_ITEMS
+                && (event.button() == InputConstants.MOUSE_BUTTON_LEFT || event.button() == InputConstants.MOUSE_BUTTON_RIGHT)
                 && handleAllItemsClick((int) event.x(), (int) event.y(), event.button())) {
             return true;
         }
 
-        if (activeTab == Tab.GROUPS && event.button() == 0 && handleGroupsClick((int) event.x(), (int) event.y())) {
+        if (activeTab == Tab.GROUPS && event.button() == InputConstants.MOUSE_BUTTON_LEFT && handleGroupsClick((int) event.x(), (int) event.y())) {
             return true;
         }
 
@@ -225,7 +227,7 @@ public class TakeItOutSettingsScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (scrollbarDragging && event.button() == 0) {
+        if (scrollbarDragging && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             scrollbarDragging = false;
             return true;
         }
@@ -813,7 +815,7 @@ public class TakeItOutSettingsScreen extends Screen {
         int y = listTop + 6 - scrollOffset;
         for (Takeitout.WorldContainerItemCount item : items) {
             if (mouseY >= y && mouseY < y + 22 && y >= listTop && y < listBottom) {
-                boolean singleItemMode = (button == 1);
+                boolean singleItemMode = (button == InputConstants.MOUSE_BUTTON_RIGHT);
                 WorldContainerSources.requestStack(this.minecraft, item.stack(), singleItemMode, true);
                 requestItems();
                 return true;
