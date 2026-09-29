@@ -40,7 +40,7 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-    implementation files('libs/litematica-fabric-26.3-0.29.0.jar')
+    implementation files('libs/litematica-fabric-26.3-0.29.1.jar')
     implementation files('libs/malilib-fabric-26.3-0.30.1.jar')
     implementation files('libs/tweakeroo-fabric-26.3-0.30.0.jar')
     implementation files('libs/litematica-printer-26.3-3.2.2.jar')

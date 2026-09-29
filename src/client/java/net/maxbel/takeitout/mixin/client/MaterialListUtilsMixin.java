@@ -2,11 +2,9 @@ package net.maxbel.takeitout.mixin.client;
 
 import fi.dy.masa.litematica.materials.MaterialListEntry;
 import fi.dy.masa.litematica.materials.MaterialListUtils;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.maxbel.takeitout.client.WorldContainerMaterialListCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -17,16 +15,12 @@ import java.util.List;
 
 @Mixin(value = MaterialListUtils.class, remap = false)
 public class MaterialListUtilsMixin {
+    // No target args captured: litematica 0.29.1 added entity-count maps to getMaterialList, and
+    // leaving them out keeps this handler valid for both the old and the new signature.
     @Inject(method = "getMaterialList", at = @At("RETURN"), remap = false)
-    private static void addLinkedContainersToCreatedEntries(
-            Object2IntOpenHashMap<BlockState> total,
-            Object2IntOpenHashMap<BlockState> missing,
-            Object2IntOpenHashMap<BlockState> mismatched,
-            Player player,
-            CallbackInfoReturnable<List<MaterialListEntry>> cir
-    ) {
+    private static void addLinkedContainersToCreatedEntries(CallbackInfoReturnable<List<MaterialListEntry>> cir) {
         WorldContainerMaterialListCache.addAvailableCounts(cir.getReturnValue());
-        if (player != null) {
+        if (Minecraft.getInstance().player != null) {
             WorldContainerMaterialListCache.requestRefresh(Minecraft.getInstance());
         }
     }
