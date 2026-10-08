@@ -45,8 +45,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -65,6 +67,13 @@ public class Takeitout implements ModInitializer {
     private static LinkedContainerExchangeMode linkedContainerExchangeMode = LinkedContainerExchangeMode.CROSS_DIMENSION;
     private static int linkedContainerScanLimit = DEFAULT_LINKED_CONTAINER_SCAN_LIMIT;
     private static boolean allowAllItemsTake = true;
+    /**
+     * Per player, per linked container: items that were not taken from that container but pushed into it to
+     * make room for a take (the held stack displaced into the source container). Lets a later return to a
+     * container that is full only because of such an item swap it back out. Session-only, dropped on
+     * disconnect.
+     */
+    private static final Map<UUID, Map<String, List<ItemStack>>> DISPLACED_ITEMS = new HashMap<>();
 
     public record GetShulkerStackPayload(int slot, int shulker, boolean singleItemMode) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<GetShulkerStackPayload> ID =
@@ -515,6 +524,9 @@ public class Takeitout implements ModInitializer {
             sender.sendPacket(new ServerFeaturesPayload(true));
             sender.sendPacket(new SharedGroupsListPayload(loadSharedGroups()));
         });
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                server.execute(() -> DISPLACED_ITEMS.remove(handler.getPlayer().getUUID()))
+        );
     }
 
     private static void handlePublishGroupPayload(ServerPlayer player, PublishGroupPayload payload) {
@@ -800,7 +812,7 @@ public class Takeitout implements ModInitializer {
             }
 
             int slot = getSlotWithStack(inventory, requested);
-            if (slot != -1 && extractFromWorldContainer(player, inventory, pos, slot, singleItemMode, dumpList)) {
+            if (slot != -1 && extractFromWorldContainer(player, source, inventory, pos, slot, singleItemMode, dumpList)) {
                 sendStackResponse(player, requested, true, source, returnedCount, extendedResponse);
                 if (returnedCount > 0) {
                     syncPlayerInventory(player);
@@ -863,7 +875,7 @@ public class Takeitout implements ModInitializer {
                 }
             }
 
-            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, dumpList)) {
+            if (bestShulkerSlot != -1 && extractFromWorldContainer(player, bestShulkerSource, bestShulkerInventory, bestShulkerPos, bestShulkerSlot, true, dumpList)) {
                 sendStackResponse(player, requested, true, bestShulkerSource, returnedCount, extendedResponse);
                 if (returnedCount > 0) {
                     syncPlayerInventory(player);
@@ -955,15 +967,12 @@ public class Takeitout implements ModInitializer {
         }
 
         boolean componentSensitive = isShulkerItem(returnStack) || !returnStack.getComponentsPatch().isEmpty();
-        int selectedSlot = player.getInventory().getSelectedSlot();
         int moved = 0;
 
+        // The held slot is included on purpose: on Pick Block the held material is usually the one being
+        // replaced. Returning it leaves the main hand empty, and extractFromWorldContainer then simply puts
+        // the new item there instead of pushing the old one into the source container.
         for (int i = 0; i < Math.min(36, player.getInventory().getContainerSize()) && moved < requestedCount; i++) {
-            if (i == selectedSlot) {
-                // Never touch the item the player is holding: extractFromWorldContainer works on the main hand.
-                continue;
-            }
-
             ItemStack stack = player.getInventory().getItem(i);
             if (stack == null || stack.isEmpty() || !canReplaceInventoryItem(stack)) {
                 continue;
@@ -985,6 +994,13 @@ public class Takeitout implements ModInitializer {
 
             // Only move stacks that fit completely - a partial move would not free the slot.
             if (!canInsertIntoContainer(container, stack)) {
+                // The container may be full only because an earlier take pushed a foreign item into it.
+                // For the held stack, swap places with that item: the held material goes home, the foreign
+                // item lands in the hand and the take below moves it on into the new source container.
+                if (i == player.getInventory().getSelectedSlot()
+                        && swapWithDisplaced(player, target, container, i, stack, requested)) {
+                    moved += stack.getCount();
+                }
                 continue;
             }
 
@@ -1008,6 +1024,95 @@ public class Takeitout implements ModInitializer {
 
         return moved;
     }
+    private static void recordDisplaced(ServerPlayer player, WorldContainerSource source, ItemStack stack) {
+        if (source == null || stack == null || stack.isEmpty()) {
+            return;
+        }
+        List<ItemStack> items = DISPLACED_ITEMS
+                .computeIfAbsent(player.getUUID(), uuid -> new HashMap<>())
+                .computeIfAbsent(displacedKey(source), key -> new ArrayList<>());
+        for (ItemStack existing : items) {
+            if (ItemStack.isSameItemSameComponents(existing, stack)) {
+                return;
+            }
+        }
+        items.add(stack.copyWithCount(1));
+    }
+
+    private static String displacedKey(WorldContainerSource source) {
+        return source.dimension() + "@" + source.position();
+    }
+
+    /**
+     * Swaps the inventory stack in {@code inventorySlot} with a stack in {@code container} that an earlier take
+     * displaced there. Both stacks only change places, so nothing can overflow.
+     */
+    private static boolean swapWithDisplaced(
+            ServerPlayer player,
+            WorldContainerSource target,
+            Container container,
+            int inventorySlot,
+            ItemStack stack,
+            ItemStack requested
+    ) {
+        Map<String, List<ItemStack>> perContainer = DISPLACED_ITEMS.get(player.getUUID());
+        if (perContainer == null) {
+            return false;
+        }
+        String key = displacedKey(target);
+        List<ItemStack> displaced = perContainer.get(key);
+        if (displaced == null || displaced.isEmpty()) {
+            return false;
+        }
+
+        for (int k = 0; k < container.getContainerSize(); k++) {
+            ItemStack inContainer = container.getItem(k);
+            if (inContainer == null || inContainer.isEmpty() || !canReplaceInventoryItem(inContainer)) {
+                continue;
+            }
+            if (inContainer.is(requested.getItem()) || !container.canPlaceItem(k, stack)) {
+                continue;
+            }
+
+            ItemStack record = null;
+            for (ItemStack candidate : displaced) {
+                if (ItemStack.isSameItemSameComponents(candidate, inContainer)) {
+                    record = candidate;
+                    break;
+                }
+            }
+            if (record == null) {
+                continue;
+            }
+
+            container.setItem(k, stack.copy());
+            player.getInventory().setItem(inventorySlot, inContainer.copy());
+            // Forget the record only once no stack of that item is left in the container.
+            boolean stillThere = false;
+            for (int j = 0; j < container.getContainerSize(); j++) {
+                if (ItemStack.isSameItemSameComponents(container.getItem(j), record)) {
+                    stillThere = true;
+                    break;
+                }
+            }
+            if (!stillThere) {
+                displaced.remove(record);
+                if (displaced.isEmpty()) {
+                    perContainer.remove(key);
+                }
+            }
+            LOGGER.debug(
+                    "Container return swap: player={}, returned={}, displacedOut={}, pos={}",
+                    player.getName().getString(),
+                    stack,
+                    inContainer,
+                    BlockPos.of(target.position())
+            );
+            return true;
+        }
+        return false;
+    }
+
     private static void handleGetWorldContainerItemsPayload(ServerPlayer player, GetWorldContainerItemsPayload payload) {
         List<WorldContainerItemCount> items = new ArrayList<>();
         List<WorldContainerContents> containers = new ArrayList<>();
@@ -1102,6 +1207,7 @@ public class Takeitout implements ModInitializer {
 
     private static boolean extractFromWorldContainer(
             ServerPlayer player,
+            WorldContainerSource source,
             Container inventory,
             BlockPos pos,
             int slot,
@@ -1195,6 +1301,8 @@ public class Takeitout implements ModInitializer {
                 syncWorldContainer(player, inventory);
                 if (insertTarget != inventory) {
                     syncWorldContainer(player, insertTarget);
+                } else {
+                    recordDisplaced(player, source, currentMainHand);
                 }
                 player.setItemInHand(InteractionHand.MAIN_HAND, extracted);
                 syncPlayerInventory(player);
@@ -1229,6 +1337,7 @@ public class Takeitout implements ModInitializer {
                     continue;
                 }
 
+                recordDisplaced(player, source, item);
                 inventory.setItem(slot, item.copy());
                 syncWorldContainer(player, inventory);
                 player.getInventory().setItem(i, currentMainHand);

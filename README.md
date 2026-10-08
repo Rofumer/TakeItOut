@@ -76,8 +76,12 @@ Details:
 
 - The mod remembers, per session only, which linked container every item came from. Nothing is saved to
   disk, and the memory is dropped when you change world or server.
-- Items in your hand, the item you are currently requesting, tools, shulker boxes, and ender chests are
-  never chosen for return.
+- The item you are currently requesting, tools, shulker boxes, and ender chests are never chosen for
+  return. The stack in your hand can be: when you Pick Block a new material, the one you were holding goes
+  back to its own container and the new one lands in your hand.
+- If that container is full only because the mod earlier pushed something else into it (for example the
+  stack you held when you took from it), the two swap places, and that item moves on into the container
+  the new material comes from.
 - Only whole stacks that fit completely into the target container are moved, so a slot is really freed.
   Anything that does not fit stays in your inventory; nothing is ever dropped on the ground.
 - The server re-validates the target container and recomputes the amount itself, so the feature cannot be
