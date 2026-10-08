@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.1.29
+
+### Added
+
+- Litematica Printer fluid removal is refilled automatically: when the printer runs out of the configured
+  fill blocks (sand by default) while drying fluids, TakeItOut takes more from a shulker in the inventory
+  or from linked world containers, trying every configured fill item.
+
+### Fixed
+
+- `Return To Container When Full` did nothing on a Pick Block swap: the held stack was never chosen for
+  return, so it went into the container the new material was taken from instead of back home.
+  - The stack in hand can now be returned; the new material then lands in the emptied hand.
+  - If the home container is full only because an earlier take pushed a foreign item into it (for example
+    the stack held at that moment), the held stack swaps places with that item, and the foreign item moves
+    on into the container the new material is taken from. These displaced items are remembered per player
+    for the session only.
+
 ## 1.1.28
 
 ### Added
@@ -10,11 +28,7 @@
   cannot race between the two.
   - The origin container of every taken item is tracked per session only; nothing is written to disk and
     the tracking is dropped on world/server change.
-  - The item being requested, tools, shulker boxes, and ender chests are never returned. The stack in hand
-    can be returned, so a Pick Block swap sends the held material home instead of into the new source.
-  - If the home container is full only because an earlier take pushed a foreign item into it, the held
-    stack swaps places with that item, and the foreign item moves on into the container the new material
-    is taken from.
+  - Items in hand, the item being requested, tools, shulker boxes, and ender chests are never returned.
   - Only stacks that fit completely into the target container are moved, so a slot is really freed;
     anything that does not fit stays in the inventory and is never dropped on the ground.
   - The server re-validates the target container (dimension rules, block type, loaded chunk) and
