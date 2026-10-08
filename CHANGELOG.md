@@ -10,7 +10,11 @@
   cannot race between the two.
   - The origin container of every taken item is tracked per session only; nothing is written to disk and
     the tracking is dropped on world/server change.
-  - Items in hand, the item being requested, tools, shulker boxes, and ender chests are never returned.
+  - The item being requested, tools, shulker boxes, and ender chests are never returned. The stack in hand
+    can be returned, so a Pick Block swap sends the held material home instead of into the new source.
+  - If the home container is full only because an earlier take pushed a foreign item into it, the held
+    stack swaps places with that item, and the foreign item moves on into the container the new material
+    is taken from.
   - Only stacks that fit completely into the target container are moved, so a slot is really freed;
     anything that does not fit stays in the inventory and is never dropped on the ground.
   - The server re-validates the target container (dimension rules, block type, loaded chunk) and

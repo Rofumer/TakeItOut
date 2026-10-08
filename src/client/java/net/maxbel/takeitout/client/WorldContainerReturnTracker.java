@@ -69,16 +69,17 @@ public final class WorldContainerReturnTracker {
             clear();
             return;
         }
-        ENTRIES.values().removeIf(entry -> countInInventory(player, entry.keyStack(), -1) <= 0);
+        ENTRIES.values().removeIf(entry -> countInInventory(player, entry.keyStack(), false) <= 0);
     }
 
     /**
      * Picks the item that should go back into its container to free a slot.
      *
      * <p>Preference order: oldest take first, then the smallest amount held (so the least useful material
-     * is given up). Items that must not be touched are skipped: the stack in the main hand, the item that
-     * is being requested right now, and anything the server-side {@code canReplaceInventoryItem} would
-     * reject anyway.
+     * is given up). The stack in the main hand is a valid candidate: on Pick Block the held material is
+     * usually exactly the one being replaced, and returning it simply leaves the hand empty for the new
+     * item. Skipped are the item that is being requested right now and anything the server-side
+     * {@code canReplaceInventoryItem} would reject anyway.
      *
      * @return the chosen victim, or {@code null} when there is nothing safe to return
      */
@@ -89,14 +90,13 @@ public final class WorldContainerReturnTracker {
         if (ENTRIES.isEmpty()) return null;
 
         String requestedKey = itemKey(requested);
-        int selectedSlot = player.getInventory().getSelectedSlot();
 
         Entry best = null;
         int bestCount = 0;
         for (Entry entry : new ArrayList<>(ENTRIES.values())) {
             if (entry.itemKey().equals(requestedKey)) continue;
 
-            int count = countInInventory(player, entry.keyStack(), selectedSlot);
+            int count = countInInventory(player, entry.keyStack(), true);
             if (count <= 0) continue;
 
             if (best == null || entry.seq() < best.seq() || (entry.seq() == best.seq() && count < bestCount)) {
@@ -139,17 +139,16 @@ public final class WorldContainerReturnTracker {
     /**
      * Counts returnable items matching {@code keyStack} in the 36 main slots.
      *
-     * @param excludedSlot slot to skip (the held one), or {@code -1} to count everything
+     * @param returnableOnly skip stacks the server would refuse to return, or {@code false} to count everything
      */
-    private static int countInInventory(LocalPlayer player, ItemStack keyStack, int excludedSlot) {
+    private static int countInInventory(LocalPlayer player, ItemStack keyStack, boolean returnableOnly) {
         boolean componentSensitive = isComponentSensitive(keyStack);
         int size = Math.min(36, player.getInventory().getContainerSize());
         int count = 0;
         for (int i = 0; i < size; i++) {
-            if (i == excludedSlot) continue;
             ItemStack stack = player.getInventory().getItem(i);
             if (stack.isEmpty()) continue;
-            if (excludedSlot != -1 && !canReplaceInventoryItem(stack)) continue;
+            if (returnableOnly && !canReplaceInventoryItem(stack)) continue;
 
             boolean matches = componentSensitive
                     ? ItemStack.isSameItemSameComponents(stack, keyStack)
