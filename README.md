@@ -99,7 +99,7 @@ TakeItOut sends a serverbound packet to move items out of shulkers. Because of t
 
 Without server-side support, the client can detect the needed item, but it cannot actually move it from the shulker.
 
-`Return To Container When Full` needs a server with TakeItOut `1.1.28` or newer. The server announces
+`Return To Container When Full` needs a server with TakeItOut `1.1.29` or newer. The server announces
 support on join; if that announcement never arrives, the client keeps sending the original request packet
 and simply never returns anything, so an older server is not broken by an updated client (and vice versa).
 

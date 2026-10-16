@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.28
+## 1.1.29
 
 ### Added
 
@@ -24,11 +24,21 @@
 - Added a server-features handshake packet. The server announces support on join; an updated client
   against an older server simply keeps the feature switched off and uses the original request packet, and
   an older client against an updated server is unaffected.
+- Litematica Printer fluid removal is refilled automatically: when the printer runs out of the configured
+  fill blocks (sand by default) while drying fluids, TakeItOut takes more from a shulker in the inventory
+  or from linked world containers, trying every configured fill item.
 
 ### Fixed
 
 - `Box Select Creates New Group` is now saved to `config/takeitout.json` and survives a restart. It was
   only listed in the settings screen, never in the list the config handler reads and writes.
+
+## 1.1.28
+
+### Fixed
+
+- Material lists could not be opened with Litematica 0.29.1, which changed the signature of
+  `MaterialListUtils.getMaterialList`. The integration now works with both the old and the new signature.
 
 ## 1.1.18
 

@@ -3,11 +3,9 @@ package net.maxbel.takeitout.client;
 import net.maxbel.takeitout.Takeitout;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.world.item.AxeItem;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.HoeItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ShovelItem;
 import net.minecraft.world.level.block.EnderChestBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 
@@ -186,9 +184,9 @@ public final class WorldContainerReturnTracker {
     private static boolean canReplaceInventoryItem(ItemStack item) {
         if (item == null || item.isEmpty()) return false;
 
-        if (item.getItem() instanceof HoeItem
-                || item.getItem() instanceof AxeItem
-                || item.getItem() instanceof ShovelItem) {
+        if (item.is(ItemTags.HOES)
+                || item.is(ItemTags.AXES)
+                || item.is(ItemTags.SHOVELS)) {
             return false;
         }
 
