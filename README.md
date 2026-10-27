@@ -49,6 +49,19 @@ Right-click schematic picking is disabled while Litematica Easy Place mode is en
 
 If Litematica Printer is installed, TakeItOut can automatically provide missing blocks from shulkers while the printer is running. While the mod is waiting for a requested stack to arrive, it temporarily blocks further printer ticks to prevent repeated or conflicting extraction requests.
 
+### Litematica-Printer-Hana
+
+[Litematica-Printer-Hana](https://modrinth.com/mod/litematica-printer-hana) has its own TakeItOut integration:
+the printer requests missing materials from shulkers and linked containers itself. Enable Auto Take Out and
+the printer does the rest.
+
+## Firework Refill
+
+With `Refill Fireworks` on (the default) and Auto Take Out enabled, using the last firework rocket in your main
+hand or off hand refills that hand from the inventory, a shulker box, or a linked container. This also works
+while flying with an elytra, where Tweakeroo hand restock cannot help: vanilla removes the rocket only on the
+server, after Tweakeroo has already checked the hand.
+
 ## Tweakeroo Integration
 
 If Tweakeroo is installed, TakeItOut extends `restockNewStackToHand`. When Tweakeroo cannot find the requested stack in the normal inventory, TakeItOut searches shulkers and extracts the matching item.

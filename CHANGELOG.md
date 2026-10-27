@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `Refill Fireworks` (on by default, needs Auto Take Out): when the last firework rocket in the main hand
+  or the off hand is used, the hand is refilled from the inventory, a shulker box in the inventory, or a
+  linked world container. Vanilla consumes the rocket only on the server, so Tweakeroo hand restock never
+  saw the hand go empty and could not refill it. Off-hand refills arrive in the main hand first and are
+  moved to the off hand; the item that was held goes back into the main hand.
+- Litematica-Printer-Hana support. Hana has its own TakeItOut integration and requests materials itself.
+
+### Fixed
+
+- The game no longer crashes on startup with Litematica-Printer-Hana installed. Hana uses the same mod id
+  as the BiliXWhite printer (`litematica-printer`), so TakeItOut applied its printer mixin to a class Hana
+  does not have. The printer mixins are now only applied when that printer's `ModuleManager` is present.
+
 ## 1.1.29
 
 ### Added

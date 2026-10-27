@@ -23,12 +23,18 @@ public final class TakeItOutConfigs {
             false
     );
 
+    public static final ConfigBoolean REFILL_FIREWORKS = new ConfigBoolean(
+            "refillFireworks",
+            true
+    );
+
     // Everything in this list is what TakeItOutConfigHandler reads and writes, so a config that is not
     // here silently loses its value on restart.
     public static final List<IConfigBase> GENERIC_LIST = List.of(
             CONTAINER_SOURCE_OUTLINE_COLOR,
             BOX_SELECT_CREATES_NEW_GROUP,
-            RETURN_TO_CONTAINER_WHEN_FULL
+            RETURN_TO_CONTAINER_WHEN_FULL,
+            REFILL_FIREWORKS
     );
 
     public static final List<IConfigBase> SETTINGS_LIST;
@@ -45,6 +51,10 @@ public final class TakeItOutConfigs {
         RETURN_TO_CONTAINER_WHEN_FULL.setPrettyName("Return To Container When Full");
         RETURN_TO_CONTAINER_WHEN_FULL.setTranslatedName("Return To Container When Full");
         RETURN_TO_CONTAINER_WHEN_FULL.setComment("When the inventory is full, send the oldest previously taken material back to the container it came from to free a slot. Requires a server running the same TakeItOut version.");
+
+        REFILL_FIREWORKS.setPrettyName("Refill Fireworks");
+        REFILL_FIREWORKS.setTranslatedName("Refill Fireworks");
+        REFILL_FIREWORKS.setComment("When the last firework rocket in a hand is used, refill that hand from the inventory, a shulker box or a linked container. Works for the off hand too. Requires Auto Take Out.");
 
         List<IConfigBase> settings = new ArrayList<>();
         settings.addAll(GENERIC_LIST);
