@@ -13,7 +13,8 @@
     "TweakerooMixin",
     "MixinClientPlayerEntity",
     "UpdatedSlot",
-    "MouseMixin"
+    "MouseMixin",
+    "MultiPlayerGameModeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

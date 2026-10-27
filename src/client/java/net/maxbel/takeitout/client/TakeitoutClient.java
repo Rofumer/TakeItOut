@@ -156,6 +156,7 @@ public class TakeitoutClient implements ClientModInitializer {
                 awaitingStackTicks = 0;
                 TakeItOutHotkeys.clearBoxSelection();
                 WorldContainerReturnTracker.clear();
+                FireworkRefill.clear();
                 if (client.level == null) {
                     SharedGroupsClient.clear();
                     SERVER_SUPPORTS_CONTAINER_RETURN = false;
@@ -173,6 +174,8 @@ public class TakeitoutClient implements ClientModInitializer {
             } else {
                 awaitingStackTicks = 0;
             }
+
+            FireworkRefill.tick(client);
 
             while (openSettingsKeyBinding.consumeClick()) {
                 if (client.gui.screen() == null) {

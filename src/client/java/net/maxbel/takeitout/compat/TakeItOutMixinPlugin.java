@@ -19,8 +19,20 @@ public class TakeItOutMixinPlugin implements IMixinConfigPlugin {
             "net.maxbel.takeitout.mixin.client.MouseMixin", () -> FabricLoader.getInstance().isModLoaded("litematica"),
             "net.maxbel.takeitout.mixin.client.TweakerooMixin", () -> FabricLoader.getInstance().isModLoaded("tweakeroo"),
             "net.maxbel.takeitout.mixin.client.PrinterMixin", () -> FabricLoader.getInstance().isModLoaded("litematica_printer"),
-            "net.maxbel.takeitout.mixin.client.NewPrinterMixin", () -> FabricLoader.getInstance().isModLoaded("litematica-printer"),
-            "net.maxbel.takeitout.mixin.client.FluidRemovalAccessor", () -> FabricLoader.getInstance().isModLoaded("litematica-printer"));
+            "net.maxbel.takeitout.mixin.client.NewPrinterMixin", TakeItOutMixinPlugin::isModuleManagerPrinter,
+            "net.maxbel.takeitout.mixin.client.FluidRemovalAccessor", TakeItOutMixinPlugin::isModuleManagerPrinter);
+
+    /**
+     * Both the BiliXWhite printer and its Hana fork use the mod id {@code litematica-printer}. Only the
+     * BiliXWhite one has {@code ModuleManager}; Hana has no such class and requests items from TakeItOut
+     * itself (by reflection), so our printer mixins must stay off there. The class file is looked up as a
+     * resource so it is not loaded this early.
+     */
+    public static boolean isModuleManagerPrinter() {
+        return FabricLoader.getInstance().isModLoaded("litematica-printer")
+                && TakeItOutMixinPlugin.class.getClassLoader()
+                .getResource("me/aleksilassila/litematica/printer/handler/ModuleManager.class") != null;
+    }
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
